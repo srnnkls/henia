@@ -1,0 +1,25 @@
+artifacts = ["skills", "commands", "agents"]
+
+[sources.test-source]
+repo = "local"
+ref = "main"
+
+[harness.claude]
+path = "/tmp/henia-test-claude"
+structure = "nested"
+
+[harness.claude.variables]
+model_strong = "opus"
+model_normal = "sonnet"
+model_weak = "haiku"
+
+[harness.claude.tools]
+bash = "Bash"
+read = "Read"
+write = "Write"
+
+[harness.claude.references.skill]
+output = "/{{.Name}}"
+
+[harness.claude.references.command]
+output = "/{{.Name}}"

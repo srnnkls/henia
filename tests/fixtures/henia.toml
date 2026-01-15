@@ -1,0 +1,45 @@
+artifacts = ["skills", "commands", "agents"]
+
+[sources.test-source]
+repo = "local"
+ref = "main"
+
+[harness.claude]
+path = "/tmp/henia-test-claude"
+structure = "nested"
+
+[harness.claude.variables]
+model_strong = "opus"
+model_normal = "sonnet"
+model_weak = "haiku"
+
+[harness.claude.tools]
+bash = "Bash"
+read = "Read"
+write = "Write"
+
+[harness.claude.references.skill]
+output = "/{{.Name}}"
+
+[harness.claude.references.command]
+output = "/{{.Name}}"
+
+[harness.opencode]
+path = "/tmp/henia-test-opencode"
+structure = "flat"
+generate_commands_from_skills = true
+
+[harness.opencode.keys]
+allowed_tools = "tools"
+
+[harness.opencode.variables]
+model_strong = "anthropic/claude-sonnet-4-5"
+model_weak = "anthropic/claude-haiku-4-5"
+
+[harness.opencode.tools]
+bash = "bash"
+read = "read"
+write = "write"
+
+[harness.opencode.references.skill]
+output = "@{{.Name}}"

@@ -1,0 +1,24 @@
+artifacts = ["skills", "commands", "agents"]
+
+[sources.test-source]
+repo = "local"
+ref = "main"
+
+[harness.opencode]
+path = "/tmp/henia-test-opencode"
+structure = "flat"
+
+[harness.opencode.keys]
+allowed_tools = "tools"
+
+[harness.opencode.variables]
+model_strong = "anthropic/claude-sonnet-4-5"
+model_weak = "anthropic/claude-haiku-4-5"
+
+[harness.opencode.tools]
+bash = "bash"
+read = "read"
+write = "write"
+
+[harness.opencode.references.skill]
+output = "@{{.Name}}"
