@@ -1,15 +1,33 @@
 # Henia
 
-Henia syncs AI coding assistant artifacts (skills, commands, agents) from git repositories to local harness directories.
+Henia syncs AI coding assistant artifacts (skills, commands, agents) from git repositories to local harness directories, with powerful transformation capabilities to adapt artifacts for different AI coding assistants.
 
 ## What is Henia?
 
-Henia is a deployment tool that fetches AI artifacts from git repositories using [phora](https://github.com/srnnkls/phora) and deploys them to various AI coding assistant harnesses (Claude Code, OpenCode, Codex, etc.). It handles:
+Henia is a deployment tool that fetches AI artifacts from git repositories using [phora](https://github.com/srnnkls/phora) and deploys them to various AI coding assistant harnesses (Claude Code, OpenCode, Codex, etc.).
+
+**Core Capabilities:**
 
 - **Fetching**: Clone and update git repositories containing artifacts
 - **Discovery**: Find skills, commands, and agents in source repositories
-- **Transformation**: Map keys/values, substitute variables, and transform references for different harnesses
+- **Transformation**: Process artifacts through a multi-layer pipeline
 - **Deployment**: Write artifacts to harness-specific directory structures
+
+**Transformation Pipeline:**
+
+Henia transforms artifacts through multiple layers, each using specialized engines:
+
+1. **Data Layer** (Planned): CUE-based validation, schemas, and computation with `%cue` blocks
+2. **Control Flow Layer**: Go template execution for conditionals, loops, and variable substitution
+3. **Semantic Markup Layer** (Planned): Goldmark-based directives (`:::block{attrs}`, `:inline[text]{attrs}`) with format-specific rendering
+4. **Reference Layer**: Transform artifact references (`$skill`, `/command`, `@agent`, `!tool`)
+
+This architecture enables:
+- **Portable artifacts**: Write once, deploy to multiple harnesses with different syntax requirements
+- **Data validation**: Ensure artifact frontmatter meets schemas and constraints
+- **Conditional content**: Include/exclude sections based on target harness or environment
+- **Semantic markup**: Use directives that render as XML tags for Claude, pass-through for others
+- **Cross-references**: Link between skills, commands, and agents with harness-specific output
 
 ## Installation
 
@@ -284,7 +302,18 @@ Agent content here.
 
 ## Transformations
 
-Henia applies transformations to adapt artifacts for different harnesses:
+Henia processes artifacts through a powerful multi-layer transformation pipeline, enabling portable artifacts that adapt to different AI coding assistants.
+
+### Transformation Architecture
+
+The pipeline consists of four layers, executed in order:
+
+1. **Data Layer** (Planned) - CUE validation and computation
+2. **Control Flow Layer** - Go template execution
+3. **Semantic Markup Layer** (Planned) - Goldmark directive rendering
+4. **Reference Layer** - Artifact reference transformation
+
+Each layer uses a specialized engine for its purpose, ensuring clean separation of concerns.
 
 ### Variable Substitution
 
@@ -379,6 +408,167 @@ Run `!bash` to execute tests.
 ```markdown
 Use `/code-review` after implementation.
 Run `Bash` to execute tests.
+```
+
+### Data Validation with CUE (Planned)
+
+The CUE layer enables data validation, schemas, and computation using the CUE language:
+
+**`%cue` blocks:**
+```markdown
+---
+name: my-skill
+enabled: false
+---
+
+%cue {{
+// Validate and compute values
+enabled: true  // Override frontmatter
+models: {
+  strong: "opus"
+  weak: "haiku"
+}
+}}
+
+# My Skill
+
+Use model: {{.models.strong}}
+```
+
+**Features:**
+- **Schema validation**: Ensure frontmatter meets constraints
+- **Value computation**: Calculate derived values from inputs
+- **Unification**: Merge multiple CUE blocks with conflict detection
+- **Context access**: Reference harness configuration via `config` namespace
+- **Type safety**: Strong typing with CUE's type system
+
+**CUE evaluation:**
+- Multiple `%cue` blocks are unified in document order
+- CUE values override frontmatter keys on conflict
+- Final unified value becomes template context
+- Validation errors report clear constraint violations
+
+### Semantic Markup with Directives (Planned)
+
+The Goldmark layer enables semantic markup that renders differently per harness:
+
+**Block directives:**
+```markdown
+:::instruction{priority="critical"}
+Always write tests before implementation.
+:::
+
+:::example{lang="python"}
+def test_feature():
+    assert feature() == expected
+:::
+```
+
+**Inline directives:**
+```markdown
+Use :term[TDD]{abbr="Test-Driven Development"} for all features.
+Configure :config[timeout]{unit="seconds" default="30"} appropriately.
+```
+
+**Format-specific rendering:**
+
+For Claude harness with `format = "xml"`:
+```markdown
+<instruction priority="critical">
+Always write tests before implementation.
+</instruction>
+
+Use <term abbr="Test-Driven Development">TDD</term> for all features.
+```
+
+For default harness with `format = "directives"`:
+```markdown
+:::instruction{priority="critical"}
+Always write tests before implementation.
+:::
+
+Use :term[TDD]{abbr="Test-Driven Development"} for all features.
+```
+
+**Benefits:**
+- **Semantic richness**: Add meaning to content with typed directives
+- **Format adaptation**: XML tags for Claude, passthrough for others
+- **Standard syntax**: CommonMark-compatible directive syntax
+- **Nested content**: Directives can contain markdown and other directives
+
+### Pipeline Integration
+
+The complete transformation flow:
+
+```
+1. Parse frontmatter (YAML) → extract metadata
+2. Evaluate CUE blocks → validate and compute values
+3. Execute Go templates → conditional content, variable substitution
+4. Render directives → format-specific output (XML or passthrough)
+5. Transform references → harness-specific syntax
+6. Apply key/value mappings → normalize frontmatter
+```
+
+**Example end-to-end:**
+
+**Source artifact:**
+```markdown
+---
+name: code-test
+model: "{{.model_strong}}"
+---
+
+%cue {{
+required_tools: ["bash", "read", "write"]
+}}
+
+# Code Test
+
+:::instruction{priority="high"}
+Use :term[TDD]{abbr="Test-Driven Development"} workflow.
+:::
+
+See `$code-review` skill after implementation.
+```
+
+**Claude output (format="xml"):**
+```markdown
+---
+name: code-test
+model: opus
+allowed_tools:
+  - Bash
+  - Read
+  - Write
+---
+
+# Code Test
+
+<instruction priority="high">
+Use <term abbr="Test-Driven Development">TDD</term> workflow.
+</instruction>
+
+See `/code-review` skill after implementation.
+```
+
+**OpenCode output (format="directives"):**
+```markdown
+---
+name: code-test
+model: anthropic/claude-sonnet-4-5
+tools:
+  - bash
+  - read
+  - write
+---
+
+# Code Test
+
+:::instruction{priority="high"}
+Use :term[TDD]{abbr="Test-Driven Development"} workflow.
+:::
+
+See `@code-review` skill after implementation.
 ```
 
 ## Directory Structures
@@ -519,10 +709,13 @@ mise run test
    - Collect resources for directory-based artifacts
 
 3. **Transform Phase**:
-   - Apply variable substitution
-   - Map frontmatter keys and values
-   - Transform inline references
-   - Generate commands from skills (if enabled)
+   - **Parse frontmatter**: Extract YAML metadata from artifacts
+   - **CUE evaluation** (planned): Validate data and compute derived values
+   - **Template execution**: Go templates for conditionals and variable substitution
+   - **Directive rendering** (planned): Goldmark-based semantic markup transformation
+   - **Reference transformation**: Convert artifact references to harness-specific syntax
+   - **Key/value mapping**: Normalize frontmatter for target harness
+   - **Command generation**: Auto-generate commands from user-invocable skills (if enabled)
 
 4. **Deploy Phase**:
    - Create harness directory structure
@@ -544,6 +737,23 @@ Henia includes default configurations for popular AI coding assistants:
 See `internal/defaults/henia.toml` for default harness configurations.
 
 ## Advanced Features
+
+### Transformation Pipeline Status
+
+**Currently Implemented:**
+- ✓ Go template execution with variable substitution
+- ✓ Frontmatter key/value mapping
+- ✓ Reference transformation (`$skill`, `/command`, `@agent`, `!tool`)
+- ✓ Multiple source support
+- ✓ Harness-specific configuration
+
+**Planned (In Development):**
+- ⏳ CUE data layer for validation and computation (`%cue` blocks)
+- ⏳ Goldmark semantic markup with directives (`:::block{attrs}`, `:inline[text]{attrs}`)
+- ⏳ Format-specific rendering (XML for Claude, passthrough for others)
+- ⏳ Enhanced type support in template context (`map[string]any` instead of `map[string]string`)
+
+See the [Transformations](#transformations) section for detailed examples of both current and planned features.
 
 ### Generate Commands from Skills
 
