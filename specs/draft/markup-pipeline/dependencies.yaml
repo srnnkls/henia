@@ -1,0 +1,114 @@
+spec: markup-pipeline
+
+dependencies:
+  # Phase 1: CUE Preprocessing
+  MPL-003:
+    depends_on: [MPL-001]
+    reason: Need CUE dependency before creating preprocess package
+  MPL-004:
+    depends_on: [MPL-003]
+    reason: Need package structure before implementing extraction
+  MPL-005:
+    depends_on: [MPL-003]
+    reason: Need package structure before implementing evaluation
+  MPL-006:
+    depends_on: [MPL-004, MPL-005]
+    reason: Tests require both extraction and evaluation implementations
+
+  # Phase 2: Fenced Div Parsers
+  MPL-007:
+    depends_on: [MPL-002]
+    reason: Need goldmark dependency before creating fenceddiv package
+  MPL-008:
+    depends_on: [MPL-007]
+    reason: Need package structure before defining AST nodes
+  MPL-009:
+    depends_on: [MPL-008]
+    reason: Block parser needs AST node types
+  MPL-010:
+    depends_on: [MPL-008]
+    reason: Inline parser needs AST node types
+  MPL-011:
+    depends_on: [MPL-009, MPL-010]
+    reason: Extension registration needs both parsers
+  MPL-012:
+    depends_on: [MPL-009, MPL-010, MPL-011]
+    reason: Tests require parsers and extension
+
+  # Phase 3: Renderers
+  MPL-013:
+    depends_on: [MPL-008]
+    reason: XML renderer needs AST node types
+  MPL-014:
+    depends_on: [MPL-008]
+    reason: Pass-through renderer needs AST node types
+  MPL-015:
+    depends_on: [MPL-013, MPL-014]
+    reason: Tests require both renderers
+
+  # Phase 4: Transform Integration
+  MPL-017:
+    depends_on: [MPL-016]
+    reason: Transformer fields need config struct updated first
+  MPL-018:
+    depends_on: [MPL-006, MPL-017]
+    reason: Integration needs CUE preprocessing working and Transformer updated
+  MPL-019:
+    depends_on: [MPL-011, MPL-015, MPL-017]
+    reason: Integration needs goldmark working and Transformer updated
+  MPL-020:
+    depends_on: [MPL-019]
+    reason: Renderer selection needs goldmark integration complete
+
+  # Phase 5: Integration Testing
+  MPL-022:
+    depends_on: [MPL-020, MPL-021]
+    reason: Testing needs full pipeline and fixtures
+  MPL-023:
+    depends_on: [MPL-022]
+    reason: Verification needs real skill tests
+  MPL-024:
+    depends_on: [MPL-022]
+    reason: Verification needs real skill tests
+
+# Parallelization opportunities
+parallel_groups:
+  - name: "Dependencies (independent)"
+    tasks: [MPL-001, MPL-002]
+    reason: Both dependency additions can happen simultaneously
+
+  - name: "Parsers (after AST nodes)"
+    tasks: [MPL-009, MPL-010]
+    reason: Both parsers can be implemented in parallel once AST is defined
+
+  - name: "Renderers (after AST nodes)"
+    tasks: [MPL-013, MPL-014]
+    reason: Both renderers can be implemented in parallel once AST is defined
+
+  - name: "Output verification (after integration)"
+    tasks: [MPL-023, MPL-024]
+    reason: Both verification tests can run in parallel
+
+# Critical path
+critical_path:
+  - MPL-001  # Add CUE dependency
+  - MPL-003  # Create preprocess package
+  - MPL-004  # Implement CUE extraction
+  - MPL-005  # Implement CUE evaluation
+  - MPL-006  # Test CUE
+  - MPL-002  # Add goldmark dependency
+  - MPL-007  # Create fenceddiv package
+  - MPL-008  # Define AST nodes
+  - MPL-009  # Implement block parser
+  - MPL-011  # Create extension
+  - MPL-012  # Test parsers
+  - MPL-013  # Implement XML renderer
+  - MPL-015  # Test renderers
+  - MPL-016  # Update config
+  - MPL-017  # Update transformer
+  - MPL-018  # Integrate CUE
+  - MPL-019  # Integrate goldmark
+  - MPL-020  # Wire renderer selection
+  - MPL-021  # Create fixtures
+  - MPL-022  # Test with real files
+  - MPL-023  # Verify XML output

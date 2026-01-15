@@ -1,0 +1,76 @@
+# Configuration Schema for Henia
+# Location: henia.toml
+
+[output]
+# Default output format if not specified per harness
+# Options: "directives" (default), "xml", "json", "yaml"
+default_format = "directives"
+
+# Harness definitions
+[harness.claude]
+# Deployment path (supports ~ expansion)
+path = "~/.claude"
+
+# Directory structure: "flat" or "nested" (default)
+structure = "nested"
+
+# Output format for this harness
+# Options: "directives" (pass-through), "xml" (transform to XML)
+format = "xml"
+
+# Generate command files from skills
+generate_commands_from_skills = false
+
+# Artifact types to deploy
+artifacts = ["skills", "commands", "agents"]
+
+# Frontmatter key mappings (rename keys)
+[harness.claude.keys]
+source_key = "target_key"
+
+# Frontmatter value mappings (rename values)
+[harness.claude.values]
+key_name = { "old_value" = "new_value" }
+
+# Per-artifact mappings
+[harness.claude.artifact_mappings.skills]
+keys = { source = "target" }
+values = { key = { old = "new" } }
+
+# Template variables (available in Go templates and CUE context)
+[harness.claude.variables]
+model = "sonnet"
+region = "us-east"
+show_intro = true
+models = ["sonnet", "opus", "haiku"]
+
+# Tool reference mappings (`!tool` -> replacement)
+[harness.claude.tools]
+gh = "gh"
+kubectl = "kubectl"
+
+# Reference transformations (`$skill`, `@agent`, etc.)
+[harness.claude.references.skill]
+output = "[{{ .Name }}](#{{ .Name }})"
+
+[harness.claude.references.command]
+output = "/{{ .Name }}"
+
+# Include/exclude patterns
+[harness.claude]
+include = ["**/*.md"]
+exclude = ["**/draft/**", "**/archive/**"]
+
+# Example: Default harness with pass-through
+[harness.cursor]
+path = "~/.cursor"
+format = "directives"  # Explicit pass-through (default behavior)
+
+[harness.cursor.variables]
+model = "claude"
+
+# CUE Context Structure (available in %cue blocks):
+# - Frontmatter keys: top-level
+# - config.harness.name: harness name
+# - config.harness.format: output format
+# - config.harness.variables: variables map

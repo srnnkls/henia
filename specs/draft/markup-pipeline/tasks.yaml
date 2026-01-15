@@ -1,0 +1,157 @@
+spec: markup-pipeline
+code: MPL
+next_id: 18
+tasks:
+  - id: MPL-001
+    content: Add CUE dependency to go.mod
+    status: pending
+    active_form: Adding CUE dependency to go.mod
+  - id: MPL-002
+    content: Add goldmark dependency to go.mod
+    status: pending
+    active_form: Adding goldmark dependency to go.mod
+  - id: MPL-003
+    content: Create internal/preprocess/ package structure
+    status: pending
+    active_form: Creating internal/preprocess/ package structure
+  - id: MPL-004
+    content: Implement CUE block extraction (line-oriented, bufio.Scanner)
+    status: pending
+    active_form: Implementing CUE block extraction
+  - id: MPL-005
+    content: Implement CUE evaluation with frontmatter + config context
+    status: pending
+    active_form: Implementing CUE evaluation
+  - id: MPL-006
+    content: Write tests for CUE extraction and evaluation
+    status: pending
+    active_form: Writing tests for CUE extraction and evaluation
+  - id: MPL-007
+    content: Create internal/fenceddiv/ package structure
+    status: pending
+    active_form: Creating internal/fenceddiv/ package structure
+  - id: MPL-008
+    content: Define AST node types (FencedDivNode, InlineDirectiveNode)
+    status: pending
+    active_form: Defining AST node types
+  - id: MPL-009
+    content: Implement block fenced div parser (:::name{attrs})
+    status: pending
+    active_form: Implementing block fenced div parser
+  - id: MPL-010
+    content: Implement inline directive parser (:name[content]{attrs})
+    status: pending
+    active_form: Implementing inline directive parser
+  - id: MPL-011
+    content: Create goldmark extension registration
+    status: pending
+    active_form: Creating goldmark extension registration
+  - id: MPL-012
+    content: Write tests for both parsers
+    status: pending
+    active_form: Writing tests for both parsers
+  - id: MPL-013
+    content: Implement XML renderer (handles both block and inline)
+    status: pending
+    active_form: Implementing XML renderer
+  - id: MPL-014
+    content: Implement pass-through renderer (handles both block and inline)
+    status: pending
+    active_form: Implementing pass-through renderer
+  - id: MPL-015
+    content: Write tests for both renderers
+    status: pending
+    active_form: Writing tests for both renderers
+  - id: MPL-016
+    content: Add Format field to Harness config
+    status: pending
+    active_form: Adding Format field to Harness config
+  - id: MPL-017
+    content: Add GlobalConfig and OutputFormat fields to Transformer
+    status: pending
+    active_form: Adding GlobalConfig and OutputFormat fields to Transformer
+  - id: MPL-018
+    content: Integrate CUE preprocessing in transform pipeline
+    status: pending
+    active_form: Integrating CUE preprocessing in transform pipeline
+  - id: MPL-019
+    content: Integrate goldmark rendering in transform pipeline
+    status: pending
+    active_form: Integrating goldmark rendering in transform pipeline
+  - id: MPL-020
+    content: Wire up renderer selection based on Format
+    status: pending
+    active_form: Wiring up renderer selection based on Format
+  - id: MPL-021
+    content: Create end-to-end test fixtures
+    status: pending
+    active_form: Creating end-to-end test fixtures
+  - id: MPL-022
+    content: Test with real skill files (templates + directives)
+    status: pending
+    active_form: Testing with real skill files
+  - id: MPL-023
+    content: Verify XML output for Claude harness
+    status: pending
+    active_form: Verifying XML output for Claude harness
+  - id: MPL-024
+    content: Verify pass-through output for default harness
+    status: pending
+    active_form: Verifying pass-through output for default harness
+
+meta:
+  created: 2026-01-15
+  last_updated: 2026-01-15
+  progress: 0/24
+
+phases:
+  - name: "Phase 1: CUE Preprocessing"
+    task_ids: [MPL-001, MPL-003, MPL-004, MPL-005, MPL-006]
+    checkpoint:
+      description: CUE extraction and evaluation working
+      criteria:
+        - Multi-block extraction preserves order
+        - CUE context includes frontmatter and config
+        - Validation errors include helpful messages
+        - Tests pass
+      verified: false
+  - name: "Phase 2: Fenced Div Parsers"
+    task_ids: [MPL-002, MPL-007, MPL-008, MPL-009, MPL-010, MPL-011, MPL-012]
+    checkpoint:
+      description: Goldmark parsers working for both block and inline directives
+      criteria:
+        - Block parser handles :::name{attrs} syntax
+        - Inline parser handles :name[content]{attrs} syntax
+        - Both handle quoted attributes
+        - Tests pass with edge cases
+      verified: false
+  - name: "Phase 3: Renderers"
+    task_ids: [MPL-013, MPL-014, MPL-015]
+    checkpoint:
+      description: XML and pass-through renderers working
+      criteria:
+        - XML renderer handles both node types
+        - Pass-through renderer preserves original syntax
+        - Attribute escaping works correctly
+        - Tests pass
+      verified: false
+  - name: "Phase 4: Transform Integration"
+    task_ids: [MPL-016, MPL-017, MPL-018, MPL-019, MPL-020]
+    checkpoint:
+      description: Full pipeline integrated
+      criteria:
+        - CUE runs before templates
+        - Templates run before goldmark
+        - References run after goldmark
+        - Backwards compatibility maintained
+      verified: false
+  - name: "Phase 5: Integration Testing"
+    task_ids: [MPL-021, MPL-022, MPL-023, MPL-024]
+    checkpoint:
+      description: End-to-end testing complete
+      criteria:
+        - Real skill files process correctly
+        - XML output verified for Claude
+        - Pass-through verified for default
+        - Performance acceptable (<100ms)
+      verified: false
