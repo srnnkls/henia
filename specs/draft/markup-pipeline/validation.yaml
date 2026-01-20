@@ -1,6 +1,6 @@
 spec: markup-pipeline
 created: 2026-01-15
-last_updated: 2026-01-15
+last_updated: 2026-01-20
 review_status: complete
 review_date: 2026-01-15
 
@@ -38,21 +38,10 @@ markers:
     context: Goldmark renders to HTML by default, need custom TextRenderer for markdown output
     assigned_doc: context.md
     section: Goldmark Extension Strategy
-    resolution: Added MarkdownRenderer pattern in context.md and resources/implementation.md
+    resolution: Added MarkdownRenderer pattern in context.md
     resolved_by: spec-review
     resolved_at: 2026-01-15
   - id: M002
-    status: resolved
-    severity: critical
-    area: data_model
-    description: CUE→template binding merge strategy needs specification
-    context: CUE values should override frontmatter keys on conflict
-    assigned_doc: spec.md
-    section: Data Layer (CUE)
-    resolution: Added merge strategy section with examples to spec.md Data Layer
-    resolved_by: spec-review
-    resolved_at: 2026-01-15
-  - id: M003
     status: resolved
     severity: high
     area: behavior
@@ -63,18 +52,7 @@ markers:
     resolution: Added Attribute Syntax Grammar section with rules and examples
     resolved_by: spec-review
     resolved_at: 2026-01-15
-  - id: M004
-    status: resolved
-    severity: high
-    area: data_model
-    description: Type mismatch - ExecuteTemplate signature needs update
-    context: Change from map[string]string to map[string]any
-    assigned_doc: context.md
-    section: Integration Points
-    resolution: Updated type signature in context.md and implementation patterns
-    resolved_by: spec-review
-    resolved_at: 2026-01-15
-  - id: M005
+  - id: M003
     status: resolved
     severity: high
     area: behavior
@@ -85,25 +63,24 @@ markers:
     resolution: Added XML Output Contract with example showing mixed output
     resolved_by: spec-review
     resolved_at: 2026-01-15
-  - id: M006
+  - id: M004
     status: resolved
-    severity: high
-    area: constraints
-    description: CUE import policy needs specification
-    context: Allow stdlib imports only, no external modules
+    severity: medium
+    area: scope
+    description: CUE layer removed - transforms handled by schema-transform spec
+    context: Inline computation blocks unnecessary; harness transforms use Starlark
     assigned_doc: spec.md
-    section: Dependencies
-    resolution: Added CUE Security Policy section with allowed/disallowed imports
-    resolved_by: spec-review
-    resolved_at: 2026-01-15
+    section: Out of Scope
+    resolution: Removed CUE layer, added reference to schema-transform spec
+    resolved_by: spec-clarify
+    resolved_at: 2026-01-20
 
 # Complexity tracking
 complexity:
-  cyclomatic: medium
-  integration_points: 3
-  external_dependencies: 2
+  cyclomatic: low
+  integration_points: 2
+  external_dependencies: 1
   risk_areas:
-    - CUE runtime memory management
     - Goldmark parser edge cases
     - Template + directive interaction
 
@@ -111,7 +88,7 @@ complexity:
 gates:
   architecture_review:
     status: pending
-    description: Three-layer separation verified
+    description: Two-layer separation verified
     criteria:
       - Each layer uses dedicated engine
       - No overlap between layers
@@ -122,7 +99,6 @@ gates:
     status: pending
     description: External dependencies acceptable
     criteria:
-      - CUE runtime stable and maintained
       - Goldmark widely used and tested
       - No security vulnerabilities
     verified: false
@@ -148,34 +124,24 @@ gates:
 # Test coverage requirements
 test_coverage:
   unit_tests:
-    - CUE block extraction (empty, single, multiple, malformed)
-    - CUE evaluation (valid, invalid, conflicts, config namespace)
     - Block parser (valid, nested, malformed, edge cases)
     - Inline parser (valid, nested, malformed, edge cases)
     - XML renderer (block, inline, attributes, escaping)
     - Pass-through renderer (block, inline, preservation)
 
   integration_tests:
-    - Full pipeline (CUE → templates → goldmark → references)
+    - Full pipeline (templates → goldmark → references)
     - Format selection (xml vs directives)
-    - Config namespace in CUE context
     - Backwards compatibility with existing artifacts
 
   end_to_end_tests:
-    - Real skill files with all layers
+    - Real skill files with templates and directives
     - Claude harness XML output
     - Default harness pass-through
     - Performance verification
 
 # Edge cases requiring explicit tests
 edge_cases:
-  cue:
-    - Empty %cue blocks
-    - Multiple blocks with unification conflicts
-    - Invalid CUE syntax
-    - Reserved config key in frontmatter
-    - Frontmatter types (string, bool, int, array, map)
-
   goldmark:
     - Nested fenced divs (multiple levels)
     - Escaped syntax (\:::, \:name)
@@ -196,12 +162,10 @@ migration:
   backwards_compatibility:
     - Configs without Format field work
     - Existing Variable templates work
-    - Artifacts without %cue blocks work
     - Artifacts without directives work
 
   gradual_adoption:
     - Can add Format to one harness at a time
-    - Can start using %cue incrementally
     - Can migrate directives incrementally
     - Old and new syntax coexist
 
@@ -226,59 +190,14 @@ success_metrics:
 # Known limitations (acceptable trade-offs)
 limitations:
   - Attributes must always use quotes (no unquoted values)
-  - CUE blocks must use %cue {{ }} syntax (not configurable)
   - Directive names must be valid Go identifiers
   - No custom attribute transformations in v1
 
 # Open questions
 open_questions: []
 
-# Clarification sessions
-clarification_sessions:
-  - id: S001
-    timestamp: 2026-01-15T00:00:00Z
-    source: spec-review
-    reviewers: [claude-opus, openai-gpt5.2-pro, google-gemini-3-pro]
-    gate_results:
-      completeness: fail
-      consistency: pass
-      feasibility: fail
-      clarity: fail
-    questions:
-      - id: Q001
-        area: integration
-        question: How should goldmark produce markdown output instead of HTML?
-        answer: Custom TextRenderer - create goldmark renderer that outputs markdown syntax
-        doc_updates:
-          - file: context.md
-            section: Goldmark Extension Strategy
-            action: add_implementation_note
-      - id: Q002
-        area: data_model
-        question: How should CUE results bind to template context?
-        answer: Merge strategy - CUE values override frontmatter keys on conflict
-        doc_updates:
-          - file: spec.md
-            section: Data Layer (CUE)
-            action: clarify_binding
-      - id: Q003
-        area: integration
-        question: What should XML renderer do with standard markdown?
-        answer: Pass through as markdown - only directives convert to XML
-        doc_updates:
-          - file: spec.md
-            section: XML Rendering
-            action: add_passthrough_rule
-      - id: Q004
-        area: constraints
-        question: Should CUE evaluation allow imports?
-        answer: Allow stdlib - CUE stdlib imports OK, but no external modules
-        doc_updates:
-          - file: spec.md
-            section: Dependencies
-            action: add_security_constraint
-    issues_found:
-      critical: 3
-      high: 7
-      medium: 6
-    recommendation: Address critical and high issues before implementation
+# Notes
+notes: |
+  2026-01-20: Removed CUE layer. Harness-specific frontmatter transforms
+  are now handled by the schema-transform spec using Starlark.
+  This spec focuses solely on Goldmark directive parsing and rendering.

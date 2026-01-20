@@ -4,10 +4,11 @@
 
 **Source:** `~/.claude/plans/markup-pipeline.md`
 
-The original plan establishes a three-layer architecture where each layer uses a specialized, best-in-class engine:
-- CUE for data validation and computation
+The plan establishes a two-layer architecture:
 - Go templates for control flow (existing)
 - Goldmark for semantic markup parsing and rendering
+
+**Note:** Harness-specific frontmatter transforms are handled separately by the [Harness Transform Pipeline](../schema-transform/spec.md) using Starlark.
 
 The key architectural insight: Henia should not invent new languages. Instead, it normalizes author-friendly syntax and delegates semantics to proven engines.
 
@@ -66,7 +67,6 @@ In the new pipeline, reference transformation runs **after** goldmark rendering,
 
 ### 1. Layer Separation
 Each layer has a single responsibility and uses a specialized engine:
-- **Data layer**: CUE handles validation, schemas, constraints
 - **Control flow layer**: Go templates handle conditionals, loops, composition
 - **Semantic markup layer**: Goldmark handles parsing, AST, rendering
 
@@ -74,23 +74,15 @@ No overlap. No custom languages.
 
 ### 2. Processing Order
 ```
-CUE (data) → Go templates (control) → Goldmark (markup) → References (transform)
+Go templates (control) → Goldmark (markup) → References (transform)
 ```
 
 This order ensures:
-- CUE provides validated data to templates
 - Templates can conditionally include/exclude directives
 - Directives render after template expansion
 - References transform the final output
 
-### 3. CUE Context Model
-CUE receives:
-- **Frontmatter** (top-level keys) - user data
-- **Config** (namespaced) - harness/global configuration
-
-This separation prevents collision and allows CUE to reference both user data and system configuration.
-
-### 4. Output Format Model
+### 3. Output Format Model
 Simple string-based format selection:
 - `"directives"` (default) - pass through unchanged
 - `"xml"` - transform to XML tags
@@ -98,7 +90,7 @@ Simple string-based format selection:
 
 No complex renderer configuration. Just a format string per harness.
 
-### 5. Goldmark Extension Strategy
+### 4. Goldmark Extension Strategy
 Use goldmark's official extension API:
 - `parser.WithBlockParsers()` for block fenced divs
 - `parser.WithInlineParsers()` for inline directives
@@ -132,14 +124,10 @@ Goldmark renders to HTML by default. To produce markdown output with transformed
 
 ### Transform Pipeline Enhancement
 Current `transform.go:90-131` needs:
-1. CUE preprocessing before line 121 (template execution)
-   - Extract `%cue` blocks
-   - Evaluate with frontmatter + config
-   - Use result as template context instead of Variables
-2. Goldmark rendering after line 124 (template execution)
+1. Goldmark rendering after template execution
    - Parse with fenced div extension
    - Render based on Format field
-3. Keep reference transformation at line 126 (after goldmark)
+2. Keep reference transformation after goldmark
 
 ### Configuration Extension
 `config.go:18-31` Harness struct needs:
@@ -149,34 +137,8 @@ Current `transform.go:90-131` needs:
 ### Transformer Enhancement
 `internal/transform/transform.go:17-24` needs:
 - Add `OutputFormat string` field
-- Add `GlobalConfig map[string]any` field for CUE context
-
-**ExecuteTemplate Type Signature Change:**
-- **Current:** `ExecuteTemplate(content string, vars map[string]string) (string, error)`
-- **New:** `ExecuteTemplate(content string, vars map[string]any) (string, error)`
-- **Reason:** CUE evaluation produces `map[string]any` with nested structures (maps, arrays, numbers, bools)
-- Go's `text/template` natively handles `interface{}` values with dot notation (e.g., `.config.harness.name`)
-- This change is **backwards compatible**: existing string-only variables still work
 
 ## Data Model
-
-### CUE Context Structure
-```go
-// Passed to CUE evaluation
-type CUEContext struct {
-    // Top-level: frontmatter keys
-    // Example: enabled, env, models
-
-    // Namespaced: system config
-    config struct {
-        harness struct {
-            name      string
-            format    string
-            variables map[string]any
-        }
-    }
-}
-```
 
 ### AST Node Types
 ```go
@@ -200,12 +162,6 @@ Simple. Just name, content (inline only), and attributes.
 
 ## Edge Cases
 
-### CUE Edge Cases
-- Empty `%cue` blocks - Skip evaluation, no-op
-- Multiple blocks with conflicts - Unification error with helpful message
-- Invalid CUE syntax - Parse error with line/column
-- Reserved `config` key in frontmatter - Validation error
-
 ### Goldmark Edge Cases
 - Nested fenced divs - Goldmark handles correctly
 - Escaped syntax `\:::` - Goldmark escaping rules apply
@@ -221,7 +177,6 @@ Simple. Just name, content (inline only), and attributes.
 ## Testing Strategy
 
 ### Unit Tests
-- `internal/preprocess/cue_test.go` - CUE extraction and evaluation
 - `internal/fenceddiv/parser_test.go` - Block and inline parsing
 - `internal/fenceddiv/renderer_test.go` - XML and pass-through rendering
 
@@ -239,23 +194,19 @@ Simple. Just name, content (inline only), and attributes.
 Backwards compatibility guaranteed:
 - Configs without `Format` field work unchanged (default to pass-through)
 - Existing Variable-based templates continue working
-- CUE is opt-in (only runs if `%cue` blocks present)
 - Artifacts without directives render unchanged
 
 Gradual adoption path:
 1. Add `format = "xml"` to specific harnesses
-2. Start using `%cue` blocks in new artifacts
-3. Migrate to fenced divs incrementally
-4. Keep existing artifacts unchanged until ready
+2. Migrate to fenced divs incrementally
+3. Keep existing artifacts unchanged until ready
 
 ## Dependencies
 
 ### New Dependencies
-- `cuelang.org/go` - CUE language runtime (mature, actively maintained)
 - `github.com/yuin/goldmark` - Markdown parser (used by Hugo, Gitea, etc.)
 
-### Why These Dependencies
-- **CUE**: Best-in-class data validation, constraint language, used by Kubernetes, Istio
-- **Goldmark**: Standard Go markdown parser, proper AST, extension API
+### Why This Dependency
+- **Goldmark**: Standard Go markdown parser, proper AST, extension API, actively maintained
 
 No NIH syndrome. Use proven tools.
