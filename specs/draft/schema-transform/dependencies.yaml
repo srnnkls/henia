@@ -1,0 +1,98 @@
+# Dependencies: harness-transform
+# Machine + human readable DAG for parallel dispatch
+
+phases:
+  - id: foundation
+    name: Foundation
+    tasks:
+      - id: HTP-001
+        file: internal/canonical/canonical.go
+        depends_on: []
+      - id: HTP-002
+        file: internal/canonical/canonical.go
+        depends_on: [HTP-001]
+      - id: HTP-003
+        file: internal/config/merge.go
+        depends_on: []
+
+  - id: starlark
+    name: Starlark Runtime
+    tasks:
+      - id: HTP-004
+        file: go.mod
+        depends_on: []
+      - id: HTP-005
+        file: internal/starlark/vm.go
+        depends_on: [HTP-004]
+      - id: HTP-006
+        file: internal/starlark/lib.go
+        depends_on: [HTP-005]
+      - id: HTP-007
+        file: internal/starlark/resolve.go
+        depends_on: [HTP-005]
+
+  - id: transforms
+    name: Built-in Transforms
+    tasks:
+      - id: HTP-008
+        file: harnesses/claude/transform.star
+        depends_on: [HTP-006]
+      - id: HTP-009
+        file: harnesses/opencode/transform.star
+        depends_on: [HTP-006]
+      - id: HTP-010
+        file: internal/harness/opencode.go
+        depends_on: [HTP-009]
+      - id: HTP-011
+        file: internal/harness/output.go
+        depends_on: [HTP-008, HTP-009]
+
+  - id: integration
+    name: Integration
+    tasks:
+      - id: HTP-012
+        file: internal/transform/transform.go
+        depends_on: [HTP-007, HTP-011]
+      - id: HTP-013
+        file: internal/transform/strict.go
+        depends_on: [HTP-012]
+      - id: HTP-014
+        file: internal/transform/legacy.go
+        depends_on: [HTP-012]
+
+  - id: testing
+    name: Testing
+    tasks:
+      - id: HTP-015
+        file: internal/canonical/canonical_test.go
+        depends_on: [HTP-002]
+      - id: HTP-016
+        file: internal/starlark/starlark_test.go
+        depends_on: [HTP-006]
+      - id: HTP-017
+        file: internal/transform/transform_test.go
+        depends_on: [HTP-012]
+      - id: HTP-018
+        file: tests/golden/harness_test.go
+        depends_on: [HTP-013]
+
+# Computed parallel batches
+batches:
+  - batch: 1
+    tasks: [HTP-001, HTP-003, HTP-004]  # All independent foundation tasks
+  - batch: 2
+    tasks: [HTP-002, HTP-005]            # Depend on batch 1
+  - batch: 3
+    tasks: [HTP-006, HTP-007, HTP-015]   # Depend on batch 2
+  - batch: 4
+    tasks: [HTP-008, HTP-009, HTP-016]   # Depend on batch 3
+  - batch: 5
+    tasks: [HTP-010, HTP-011]            # Depend on batch 4
+  - batch: 6
+    tasks: [HTP-012]                     # Depend on batch 5
+  - batch: 7
+    tasks: [HTP-013, HTP-014, HTP-017]   # Depend on batch 6
+  - batch: 8
+    tasks: [HTP-018]                     # Depend on batch 7
+
+actions: []

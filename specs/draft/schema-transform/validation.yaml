@@ -1,0 +1,517 @@
+# Validation: harness-transform
+# Machine + human readable validation tracking
+
+metadata:
+  issue_type: Feature
+  created: 2026-01-18
+  questions_used: 5
+  questions_limit: 5
+  approach: "TOML config + Starlark scripts (pivoted from CUE)"
+  source: spec-review
+
+ambiguity_scan:
+  scope:
+    status: clear
+    gaps: []
+  behavior:
+    status: clear
+    gaps: []
+  data_model:
+    status: clear
+    gaps: []
+  constraints:
+    status: clear
+    gaps: []
+  edge_cases:
+    status: clear
+    gaps: []
+  integration:
+    status: clear
+    gaps: []
+  terminology:
+    status: clear
+    gaps: []
+
+taxonomy_coverage:
+  scope:
+    status: covered
+    source: spec-review
+  behavior:
+    status: covered
+    source: spec-review
+  data_model:
+    status: covered
+    source: plan_context
+  constraints:
+    status: covered
+    source: spec-review
+  edge_cases:
+    status: covered
+    source: spec-clarify
+  integration:
+    status: covered
+    source: plan_context
+  terminology:
+    status: covered
+    source: plan_context
+
+clarification_log:
+  - id: C001
+    area: scope
+    question: "Should this be a separate spec or integrated into markup-pipeline?"
+    answer: "Separate spec - distinct architectural concern"
+    impact_uncertainty: High
+    integration: spec.md#goal
+  - id: C002
+    area: architecture
+    question: "CUE vs simpler approach for fixed schemas?"
+    answer: "CUE rejected - overkill for fixed, tiny schemas. Use Starlark."
+    impact_uncertainty: High
+    integration: context.md#ad-1
+  - id: C003
+    area: architecture
+    question: "Where should customization live?"
+    answer: "TOML handles declarative config (90%), Starlark handles logic"
+    impact_uncertainty: Medium
+    integration: context.md#ad-2
+  - id: C004
+    area: behavior
+    question: "Script resolution order?"
+    answer: "3-level: project > user > embedded (first match wins)"
+    impact_uncertainty: Medium
+    integration: spec.md#harness-discovery
+  - id: C005
+    area: integration
+    question: "Separation of concerns?"
+    answer: "Starlark decides 'what', Go decides 'how' (rendering, I/O)"
+    impact_uncertainty: Medium
+    integration: context.md#ad-4
+
+clarification_sessions:
+  - id: S001
+    timestamp: 2026-01-18T18:30:00Z
+    source: spec-review
+    reviewers: [claude-opus, opencode-gpt5.2-pro, opencode-gemini3-pro]
+    questions:
+      - id: Q001
+        question: "Is CUE the right tool for this problem?"
+        answer: "No - problem is deterministic mapping between fixed schemas, not arbitrary transformation"
+        area: architecture
+        doc_updates:
+          - file: spec.md
+            section: goal
+            action: modified
+          - file: context.md
+            section: ad-1
+            action: added
+      - id: Q002
+        question: "What handles the OpenCode write/patch => edit coupling?"
+        answer: "Starlark script logic, not declarative config"
+        area: behavior
+        doc_updates:
+          - file: spec.md
+            section: acceptance-criteria
+            action: added
+  - id: S002
+    timestamp: 2026-01-20T12:00:00Z
+    source: spec-clarify
+    questions:
+      - id: Q003
+        question: "How should Starlark script errors be handled?"
+        answer: "Fail-fast. Script errors abort transformation immediately."
+        area: edge_cases
+        doc_updates:
+          - file: spec.md
+            section: error-handling
+            action: added
+          - file: context.md
+            section: ad-6
+            action: added
+      - id: Q004
+        question: "What sandbox constraints should apply to Starlark scripts?"
+        answer: "Strict hermetic: no FS/net, 10k steps, 64MB memory, 1k recursion."
+        area: constraints
+        doc_updates:
+          - file: spec.md
+            section: sandbox-policy
+            action: added
+          - file: context.md
+            section: ad-7
+            action: added
+      - id: Q005
+        question: "How should TOML configs merge?"
+        answer: "Cargo-style: scalars override, arrays concat (higher-precedence later), tables deep merge."
+        area: behavior
+        doc_updates:
+          - file: spec.md
+            section: merge-strategy
+            action: modified
+          - file: context.md
+            section: ad-5
+            action: added
+      - id: Q006
+        question: "How should the 'files' output work?"
+        answer: "Relative to harness.path"
+        area: behavior
+        doc_updates:
+          - file: spec.md
+            section: output-schema
+            action: modified
+      - id: Q007
+        question: "Should lib include template() helper?"
+        answer: "No. Keep Starlark pure. Templates stay in .tmpl files."
+        area: integration
+        doc_updates:
+          - file: context.md
+            section: resolved-questions
+            action: modified
+      - id: Q008
+        question: "How should user harness definitions be discovered?"
+        answer: "Project > user > embedded, first match wins."
+        area: integration
+        doc_updates:
+          - file: spec.md
+            section: harness-discovery
+            action: added
+          - file: context.md
+            section: ad-8
+            action: added
+      - id: Q009
+        question: "What Starlark API surface should be exposed?"
+        answer: "Minimal: henia.dict.get_path, json, re modules. Use built-ins for rest."
+        area: integration
+        doc_updates:
+          - file: spec.md
+            section: henia-api
+            action: modified
+          - file: context.md
+            section: henia-starlark-api
+            action: modified
+  - id: S003
+    timestamp: 2026-01-20T14:00:00Z
+    source: spec-clarify
+    trigger: spec-review critical issues
+    questions:
+      - id: Q010
+        question: "Discovery path: 3-level (project > user > embedded) or 2-level?"
+        answer: "3-level. Project enables repo-specific customization."
+        area: integration
+        doc_updates:
+          - file: context.md
+            section: ad-3
+            action: modified
+      - id: Q011
+        question: "toml.bzl go.starlark.net compatibility?"
+        answer: "Remove toml module. TOML parsing handled by Go."
+        area: constraints
+        doc_updates:
+          - file: spec.md
+            section: starlark-modules
+            action: modified
+          - file: context.md
+            section: starlark-modules
+            action: modified
+      - id: Q012
+        question: "How is henia passed to transform()?"
+        answer: "Global only. Signature is def transform(input, ctx)."
+        area: behavior
+        doc_updates:
+          - file: spec.md
+            section: output-schema
+            action: modified
+      - id: Q013
+        question: "Add example transform.star implementations?"
+        answer: "Yes, in resources/examples/ directory."
+        area: behavior
+        doc_updates:
+          - file: resources/examples/claude.transform.star
+            action: created
+          - file: resources/examples/opencode.transform.star
+            action: created
+      - id: Q014
+        question: "Strict mode validation criteria?"
+        answer: "Type validation only. Unknown fields allowed."
+        area: behavior
+        doc_updates:
+          - file: spec.md
+            section: acceptance-criteria
+            action: modified
+      - id: Q015
+        question: "henia.dict.get_path() missing path behavior?"
+        answer: "Returns default or None. Does not raise."
+        area: behavior
+        doc_updates:
+          - file: spec.md
+            section: henia-api
+            action: modified
+          - file: context.md
+            section: henia-api
+            action: modified
+
+  - id: S004
+    timestamp: 2026-01-20T14:30:00Z
+    source: spec-review
+    trigger: Multi-reviewer spec review identified stale resource files
+    questions:
+      - id: Q016
+        question: "Resource files use 3-arg transform(input, ctx, lib) but spec says 2-arg with henia global"
+        answer: "Fix resources to match spec: def transform(input, ctx) with henia as pre-loaded global"
+        area: behavior
+        doc_updates:
+          - file: resources/starlark/claude-transform.star
+            section: function-signature
+            action: modified
+          - file: resources/starlark/opencode-transform.star
+            section: function-signature
+            action: modified
+          - file: resources/implementation.md
+            section: vm.go
+            action: modified
+      - id: Q017
+        question: "implementation.md Resolve() only shows 2-level discovery but spec says 3-level"
+        answer: "Fix to match spec: project > user > embedded (3-level)"
+        area: integration
+        doc_updates:
+          - file: resources/implementation.md
+            section: resolve.go
+            action: modified
+      - id: Q018
+        question: "HTP-006 says 'lib helpers' but spec says 'henia.dict.get_path'"
+        answer: "Fix task description to match spec API"
+        area: behavior
+        doc_updates:
+          - file: tasks.yaml
+            section: HTP-006
+            action: modified
+      - id: Q019
+        question: "Phase 2 checkpoint says 'lib.get, lib.ensure, lib.map_list' but spec only defines henia.dict.get_path"
+        answer: "Fix checkpoint criteria to match spec"
+        area: behavior
+        doc_updates:
+          - file: tasks.yaml
+            section: phase-2-checkpoint
+            action: modified
+      - id: Q020
+        question: "Phase 4 checkpoint says 'rejects unknown output fields' but spec says 'type validation only, unknown fields allowed'"
+        answer: "Fix checkpoint criteria to match spec"
+        area: behavior
+        doc_updates:
+          - file: tasks.yaml
+            section: phase-4-checkpoint
+            action: modified
+
+  - id: S005
+    timestamp: 2026-01-20T16:00:00Z
+    source: spec-clarify
+    trigger: spec-review gaps
+    questions:
+      - id: Q021
+        question: "How should 64MB memory limit be enforced?"
+        answer: "Remove constraint - go.starlark.net has no memory limiting. Keep step limit only."
+        area: constraints
+        doc_updates:
+          - file: spec.md
+            section: sandbox-policy
+            action: modified
+          - file: context.md
+            section: ad-7
+            action: modified
+          - file: context.md
+            section: constraints
+            action: modified
+      - id: Q022
+        question: "What happens when ctx dict fields are None or missing?"
+        answer: "Guarantee never None. Go provides empty dicts for variables, tools, keys, references."
+        area: edge_cases
+        doc_updates:
+          - file: spec.md
+            section: context-schema
+            action: modified
+      - id: Q023
+        question: "How should file emission paths be validated?"
+        answer: "Strict validation: no '..', must be relative, no symlinks. Fail on violation."
+        area: constraints
+        doc_updates:
+          - file: spec.md
+            section: file-emission-security
+            action: added
+          - file: context.md
+            section: constraints
+            action: modified
+      - id: Q024
+        question: "What type validation does strict mode perform?"
+        answer: "Validate against canonical schema only. Harness schemas derived from it."
+        area: behavior
+        doc_updates:
+          - file: spec.md
+            section: acceptance-criteria
+            action: modified
+      - id: Q025
+        question: "How should warnings from Starlark scripts be handled?"
+        answer: "Both: log to stderr with artifact path prefix AND return in result for caller."
+        area: behavior
+        doc_updates:
+          - file: spec.md
+            section: error-handling
+            action: modified
+      - id: Q026
+        question: "Should user_invocable and tools_policy be added to Input Schema?"
+        answer: "Yes, add both fields to Canonical struct and Input Schema."
+        area: data_model
+        doc_updates:
+          - file: spec.md
+            section: input-schema
+            action: modified
+          - file: context.md
+            section: canonical-frontmatter
+            action: modified
+      - id: Q027
+        question: "User override path in acceptance criteria incorrect?"
+        answer: "Fix AC to match spec: ~/.config/henia/harnesses/claude/transform.star"
+        area: behavior
+        doc_updates:
+          - file: spec.md
+            section: acceptance-criteria
+            action: modified
+
+  - id: S006
+    timestamp: 2026-01-20T18:00:00Z
+    source: spec-clarify
+    trigger: spec-review gaps (multi-reviewer)
+    questions:
+      - id: Q028
+        question: "Should the 10k step limit be configurable?"
+        answer: "Yes, configurable globally via [starlark].max_steps in TOML config."
+        area: constraints
+        doc_updates:
+          - file: spec.md
+            section: sandbox-policy
+            action: modified
+          - file: context.md
+            section: ad-7
+            action: modified
+          - file: tasks.yaml
+            section: HTP-005
+            action: modified
+      - id: Q029
+        question: "Where should Strict field addition to Harness struct be tracked?"
+        answer: "Part of HTP-001 - canonical struct task includes config struct updates."
+        area: integration
+        doc_updates:
+          - file: context.md
+            section: key-files
+            action: modified
+          - file: tasks.yaml
+            section: HTP-001
+            action: modified
+
+markers:
+  - id: M001
+    area: edge_cases
+    description: "How to handle Starlark script errors: fail fast or collect and continue?"
+    doc_ref: "context.md#resolved-questions"
+    status: resolved
+    resolution: "Fail-fast. Script errors abort transformation immediately."
+  - id: M002
+    area: integration
+    description: "Should lib include template() helper for Go template execution in Starlark?"
+    doc_ref: "context.md#resolved-questions"
+    status: resolved
+    resolution: "No. Keep Starlark pure for transforms. Templates stay in .tmpl files."
+  - id: M003
+    area: integration
+    description: "Discovery path conflict: spec.md shows 3-level (project/user/embedded) but context.md AD-3 shows 2-level"
+    doc_ref: "spec.md#harness-discovery, context.md#ad-3"
+    status: resolved
+    resolution: "3-level discovery: project > user > embedded. Updated context.md AD-3 to match."
+    source: spec-review
+  - id: M004
+    area: constraints
+    description: "toml.bzl is Bazel-specific - may not work with go.starlark.net. Need to verify or use alternative."
+    doc_ref: "spec.md#starlark-modules"
+    status: resolved
+    resolution: "Remove toml module. TOML parsing handled by Go before Starlark execution."
+    source: spec-review
+  - id: M005
+    area: behavior
+    description: "No example transform.star implementations provided - implementers lack guidance"
+    doc_ref: "spec.md#starlark-contract"
+    status: resolved
+    resolution: "Add examples in resources/examples/ directory."
+    source: spec-review
+  - id: M006
+    area: behavior
+    description: "transform() signature ambiguous - is henia passed as arg #3 or available as global?"
+    doc_ref: "spec.md#output-schema"
+    status: resolved
+    resolution: "henia is a pre-loaded global. Signature is def transform(input, ctx)."
+    source: spec-review
+  - id: M007
+    area: behavior
+    description: "Strict mode validation criteria undefined - what fields are allowed per harness?"
+    doc_ref: "spec.md#acceptance-criteria"
+    status: resolved
+    resolution: "Type validation only. Unknown fields are allowed; only invalid types raise errors."
+    source: spec-review
+  - id: M008
+    area: behavior
+    description: "henia.dict.get_path() behavior unspecified - error handling, default values, null traversal"
+    doc_ref: "spec.md#henia-api"
+    status: resolved
+    resolution: "Returns default (or None) for missing paths. Does not raise on missing keys."
+    source: spec-review
+
+complexity_tracking: []
+
+gates:
+  simplicity:
+    status: n/a
+    reason: "Feature-level spec"
+  anti_abstraction:
+    status: n/a
+    reason: "Feature-level spec"
+  integration_first:
+    status: n/a
+    reason: "Feature-level spec"
+
+deferred:
+  - area: integration
+    question: "Should there be a 'henia validate-transform' CLI command?"
+
+readiness:
+  high_priority_areas_covered: true
+  success_criteria_measurable: true
+  scope_boundaries_clear: true
+  integration_points_identified: true
+  edge_cases_addressed: true
+
+loqui_check:
+  present: false
+  language: null
+  status: skipped
+  violations: []
+  adherence_notes: |
+    Starlark examples are illustrative. Will be validated during implementation.
+
+review_config:
+  reviewers:
+    - type: claude
+      model: opus
+    - type: opencode
+      model: openai/gpt-5.2-pro
+    - type: opencode
+      model: google/gemini-3-pro-preview
+
+notes: |
+  Architecture pivoted during review from CUE to Starlark.
+
+  Key insights from review:
+  - OpenCode and Claude skill frontmatter are fixed, tiny schemas (~5 fields)
+  - CUE's power (arbitrary schema transformation) isn't needed
+  - Starlark provides Python-like syntax with lower learning curve
+  - TOML already handles 90% of customization needs
+
+  The new architecture separates concerns cleanly:
+  - TOML: declarative config (variables, tool mappings, references)
+  - Starlark: non-trivial logic (conditionals, coupling rules, reshaping)
+  - Go: rendering, I/O, validation

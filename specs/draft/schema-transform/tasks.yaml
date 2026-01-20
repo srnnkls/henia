@@ -1,0 +1,158 @@
+spec: harness-transform
+code: HTP
+next_id: 19
+tasks:
+  # Phase 1: Foundation
+  - id: HTP-001
+    content: Define canonical Go struct for artifact frontmatter; add Strict field to Harness struct in config.go
+    status: pending
+    active_form: Defining canonical struct
+  - id: HTP-002
+    content: Implement ToMap() method on canonical struct
+    status: pending
+    active_form: Implementing ToMap method
+    depends_on: [HTP-001]
+  - id: HTP-003
+    content: Add TOML loading with merge semantics (project > user > embedded)
+    status: pending
+    active_form: Adding TOML merge loading
+
+  # Phase 2: Starlark Runtime
+  - id: HTP-004
+    content: Add go.starlark.net dependency
+    status: pending
+    active_form: Adding Starlark dependency
+  - id: HTP-005
+    content: Implement Starlark VM wrapper with sandbox; read max_steps from global [starlark] config
+    status: pending
+    active_form: Implementing Starlark VM wrapper
+    depends_on: [HTP-004]
+  - id: HTP-006
+    content: Implement henia.dict helpers (get_path) as pre-loaded global
+    status: pending
+    active_form: Implementing henia helpers
+    depends_on: [HTP-005]
+  - id: HTP-007
+    content: Implement 3-level script resolution (project > user > embedded)
+    status: pending
+    active_form: Implementing script resolution
+    depends_on: [HTP-005]
+
+  # Phase 3: Built-in Transforms
+  - id: HTP-008
+    content: Write Claude transform.star with model/tools mapping
+    status: pending
+    active_form: Writing Claude transform
+    depends_on: [HTP-006]
+  - id: HTP-009
+    content: Write OpenCode transform.star with permission coupling
+    status: pending
+    active_form: Writing OpenCode transform
+    depends_on: [HTP-006]
+  - id: HTP-010
+    content: Implement opencode.json emission in Go
+    status: pending
+    active_form: Implementing opencode.json emission
+    depends_on: [HTP-009]
+  - id: HTP-011
+    content: Implement templated reference output writing
+    status: pending
+    active_form: Implementing reference output
+    depends_on: [HTP-008, HTP-009]
+
+  # Phase 4: Integration
+  - id: HTP-012
+    content: Wire Starlark runner into Transform() method
+    status: pending
+    active_form: Wiring Starlark into Transform
+    depends_on: [HTP-007, HTP-011]
+  - id: HTP-013
+    content: Implement strict mode validation
+    status: pending
+    active_form: Implementing strict mode
+    depends_on: [HTP-012]
+  - id: HTP-014
+    content: Add deprecation path for old mapping logic
+    status: pending
+    active_form: Adding deprecation path
+    depends_on: [HTP-012]
+
+  # Phase 5: Testing
+  - id: HTP-015
+    content: Write unit tests for canonical struct and ToMap
+    status: pending
+    active_form: Writing canonical struct tests
+    depends_on: [HTP-002]
+  - id: HTP-016
+    content: Write unit tests for Starlark runtime and lib helpers
+    status: pending
+    active_form: Writing Starlark runtime tests
+    depends_on: [HTP-006]
+  - id: HTP-017
+    content: Write integration tests for full transform pipeline
+    status: pending
+    active_form: Writing integration tests
+    depends_on: [HTP-012]
+  - id: HTP-018
+    content: Write golden tests for Claude and OpenCode output
+    status: pending
+    active_form: Writing golden tests
+    depends_on: [HTP-013]
+
+meta:
+  created: 2026-01-18
+  last_updated: 2026-01-20
+  progress: 0/18
+
+phases:
+  - name: "Phase 1: Foundation"
+    task_ids: [HTP-001, HTP-002, HTP-003]
+    checkpoint:
+      description: Canonical struct defined, TOML merge working
+      criteria:
+        - Canonical struct has all frontmatter fields
+        - ToMap() produces correct dict representation
+        - TOML merges project > user > embedded correctly
+      verified: false
+
+  - name: "Phase 2: Starlark Runtime"
+    task_ids: [HTP-004, HTP-005, HTP-006, HTP-007]
+    checkpoint:
+      description: Starlark VM can execute transform scripts
+      criteria:
+        - go.starlark.net imported and compiles
+        - VM wrapper sandboxes execution (no I/O)
+        - henia.dict.get_path works correctly as pre-loaded global
+        - Script resolution checks project > user > embedded (3-level)
+      verified: false
+
+  - name: "Phase 3: Built-in Transforms"
+    task_ids: [HTP-008, HTP-009, HTP-010, HTP-011]
+    checkpoint:
+      description: Claude and OpenCode transforms produce correct output
+      criteria:
+        - Claude transform maps model_tier to model
+        - OpenCode transform enforces write/patch => edit
+        - opencode.json emitted with permission dict
+        - Reference templates applied correctly
+      verified: false
+
+  - name: "Phase 4: Integration"
+    task_ids: [HTP-012, HTP-013, HTP-014]
+    checkpoint:
+      description: Starlark integrated into sync pipeline
+      criteria:
+        - Transform() uses Starlark when script available
+        - strict=true validates output types (unknown fields allowed)
+        - Old mapping logic still works (backwards compat)
+      verified: false
+
+  - name: "Phase 5: Testing"
+    task_ids: [HTP-015, HTP-016, HTP-017, HTP-018]
+    checkpoint:
+      description: Full test coverage
+      criteria:
+        - Unit tests pass for canonical and Starlark
+        - Integration tests pass for full pipeline
+        - Golden tests match expected Claude/OpenCode output
+      verified: false
