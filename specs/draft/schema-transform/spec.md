@@ -87,6 +87,12 @@ headings, paragraphs, links and images. Expr predicates must be boolean. A false
 assertion reports at the selected source location. Configuration and evaluation
 errors are distinct from ordinary failed assertions.
 
+Collection checks also identify duplicate names, headings and paragraphs, including
+paragraphs within directives. Optional normalized Unicode Levenshtein similarity
+reports near-duplicate paragraphs at a configurable threshold. Diagnostics include
+the matching source location and a numeric similarity score; this is a deterministic
+text measure, not a probability or semantic equivalence claim.
+
 Rules run without executing templates. Dynamic nodes are skipped by default;
 compiled output can be linted to validate expanded values. Literal code is not
 misidentified as directive content. Built-in and custom rules share disabling,

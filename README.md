@@ -90,8 +90,11 @@ currently deferred. Literal code and escaped syntax remain unchanged.
 ## Lint rules
 
 Built-in rules check metadata, template/directive syntax, local links, artifact
-references, duplicate headings/content/skills, known outdated references, line
-budgets and review dates. Add your own rules in `henia.toml`:
+references, duplicate headings/content/skills, optional paragraph similarity,
+known outdated references, line budgets and review dates. Enable near-duplicate
+checks with `[lint] duplicate_similarity = 0.9`; `duplicate_min_words` defaults to
+12. Warnings include the matching paragraph's location and similarity score.
+Add your own rules in `henia.toml`:
 
 ```toml
 [[lint.rules]]

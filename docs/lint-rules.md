@@ -1,5 +1,48 @@
 # Lint rule DSL
 
+## Duplicate and similar content
+
+Collection-wide checks run alongside the per-node Expr rules:
+
+- `duplicate-skill`: duplicate artifact names across scanned files.
+- `duplicate-heading`: repeated headings within a document.
+- `duplicate-content`: repeated paragraphs within or across files, including
+  paragraphs inside directives and list items.
+- `similar-content`: optional near-duplicate paragraphs using normalized
+  Levenshtein edit distance.
+
+```toml
+[lint]
+duplicate_min_words = 12
+duplicate_similarity = 0.9
+```
+
+Exact comparisons ignore case and whitespace but retain Markdown syntax, link
+destinations and inline directive attributes. Code blocks and paragraphs containing
+template actions are excluded. The minimum length defaults to 12 words; lower it
+to catch short repeated instructions. Near-duplicate checking defaults to off
+(`duplicate_similarity = 0`). A threshold of `1` permits only exact matches,
+which the exact-duplicate rule handles.
+
+Similarity is `1 - edits / max(length(a), length(b))`, using Unicode characters
+after the same normalization. Each insertion, deletion or substitution costs one
+edit. A score of `0.9` means at most roughly 10% character edits; it is a
+deterministic text similarity score, not a probability or semantic judgment.
+Reordered passages and paraphrases may score poorly even when their meaning is
+similar. Results are warnings for review, not automatic rewrites.
+
+Each paragraph reports its closest qualifying earlier paragraph in the sorted
+scan order. Ties favor the first occurrence. Exact duplicates produce only the
+exact warning. Diagnostics identify the first/matching location in `related`;
+near-duplicate JSON diagnostics also expose a numeric `similarity` field.
+
+These checks maintain a collection index in Go. Expr predicates still operate on
+individual selected nodes. Length and character-count filters plus a bounded
+distance calculation reduce comparison work; large collections with many similar
+paragraphs can still require quadratic candidate comparisons.
+
+## Custom rule declarations
+
 Declare `[[lint.rules]]` entries in project or user `henia.toml`. Rules augment the
 built-in linter and run on parsed canonical Markdown. Conditions use
 [Expr syntax](https://expr-lang.org/docs/language-definition), not Go templates.

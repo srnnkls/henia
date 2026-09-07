@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -25,26 +26,39 @@ import (
 )
 
 type Diagnostic struct {
-	Path     string `json:"path"`
-	Line     int    `json:"line"`
-	Column   int    `json:"column"`
-	Severity string `json:"severity"`
-	Rule     string `json:"rule"`
-	Message  string `json:"message"`
+	Path       string     `json:"path"`
+	Line       int        `json:"line"`
+	Column     int        `json:"column"`
+	Severity   string     `json:"severity"`
+	Rule       string     `json:"rule"`
+	Message    string     `json:"message"`
+	Related    []Location `json:"related,omitempty"`
+	Similarity *float64   `json:"similarity,omitempty"`
+}
+
+type Location struct {
+	Path   string `json:"path"`
+	Line   int    `json:"line"`
+	Column int    `json:"column"`
 }
 
 type Options struct {
-	Rules      []Rule            `toml:"rules,omitempty"`
-	Disable    []string          `toml:"disable,omitempty"`
-	Outdated   map[string]string `toml:"outdated,omitempty"`
-	MaxLines   int               `toml:"max_lines,omitempty"`
-	MaxAgeDays int               `toml:"max_age_days,omitempty"`
-	Now        time.Time         `toml:"-"`
+	Rules               []Rule            `toml:"rules,omitempty"`
+	Disable             []string          `toml:"disable,omitempty"`
+	Outdated            map[string]string `toml:"outdated,omitempty"`
+	MaxLines            int               `toml:"max_lines,omitempty"`
+	MaxAgeDays          int               `toml:"max_age_days,omitempty"`
+	DuplicateMinWords   int               `toml:"duplicate_min_words,omitempty"`
+	DuplicateSimilarity float64           `toml:"duplicate_similarity,omitempty"`
+	Now                 time.Time         `toml:"-"`
 }
 
-var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-heading", "duplicate-content", "duplicate-skill", "outdated-reference", "large-skill", "stale-review"}
+var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-heading", "duplicate-content", "similar-content", "duplicate-skill", "outdated-reference", "large-skill", "stale-review"}
 
 func (o Options) Validate() error {
+	if math.IsNaN(o.DuplicateSimilarity) || o.DuplicateSimilarity < 0 || o.DuplicateSimilarity > 1 {
+		return fmt.Errorf("duplicate_similarity must be between 0 and 1 (0 disables similarity checks)")
+	}
 	if _, err := compileRules(o.Rules); err != nil {
 		return err
 	}
@@ -53,7 +67,7 @@ func (o Options) Validate() error {
 			return fmt.Errorf("unknown lint rule %q", rule)
 		}
 	}
-	if o.MaxLines < 0 || o.MaxAgeDays < 0 {
+	if o.MaxLines < 0 || o.MaxAgeDays < 0 || o.DuplicateMinWords < 0 {
 		return fmt.Errorf("lint limits must not be negative")
 	}
 	for old := range o.Outdated {
@@ -74,12 +88,13 @@ type document struct {
 }
 
 type checker struct {
-	rules       []compiledRule
-	options     Options
-	diagnostics []Diagnostic
-	names       map[string]string
-	paragraphs  map[string]Diagnostic
-	anchors     map[string]map[string]bool
+	rules             []compiledRule
+	options           Options
+	diagnostics       []Diagnostic
+	names             map[string]Location
+	paragraphs        map[string]Diagnostic
+	similarParagraphs []paragraph
+	anchors           map[string]map[string]bool
 }
 
 // Run checks Markdown files and directories recursively. Artifact references are
@@ -94,6 +109,9 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 	if options.MaxAgeDays == 0 {
 		options.MaxAgeDays = 180
 	}
+	if options.DuplicateMinWords == 0 {
+		options.DuplicateMinWords = 12
+	}
 	if options.Now.IsZero() {
 		options.Now = time.Now()
 	}
@@ -104,7 +122,7 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no Markdown files found")
 	}
-	c := checker{options: options, diagnostics: []Diagnostic{}, names: make(map[string]string), paragraphs: make(map[string]Diagnostic), anchors: make(map[string]map[string]bool)}
+	c := checker{options: options, diagnostics: []Diagnostic{}, names: make(map[string]Location), paragraphs: make(map[string]Diagnostic), anchors: make(map[string]map[string]bool)}
 	c.rules, err = compileRules(options.Rules)
 	if err != nil {
 		return nil, err
@@ -136,9 +154,9 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 			}
 			key := string(d.kind) + ":" + name
 			if first, ok := c.names[key]; ok {
-				c.add(d, 0, "warning", "duplicate-skill", fmt.Sprintf("duplicate %s name %q; first defined in %s", d.kind, name, first))
+				c.addDuplicate(d, 0, "duplicate-skill", fmt.Sprintf("duplicate %s name %q; first defined in %s", d.kind, name, first.Path), first)
 			} else {
-				c.names[key] = path
+				c.names[key] = Location{Path: path, Line: 1, Column: 1}
 			}
 		}
 		documents = append(documents, d)
@@ -268,7 +286,8 @@ func (c *checker) check(d document) error {
 		}
 		c.add(d, offset, "error", "invalid-markup", err.Error())
 	}
-	headings := make(map[string]int)
+	c.checkDuplicates(d, markupSource)
+	headings := make(map[string]Location)
 	root := goldmark.New().Parser().Parse(text.NewReader(d.body))
 	// Plain Goldmark retains canonical directive text, which lets lint inspect
 	// references in directive content without rewriting diagnostic positions.
@@ -282,13 +301,11 @@ func (c *checker) check(d document) error {
 		case *ast.Heading:
 			key := normalize(string(n.Text(d.body)))
 			offset := d.offset + n.Lines().At(0).Start
-			if line, ok := headings[key]; ok {
-				c.add(d, offset, "warning", "duplicate-heading", fmt.Sprintf("heading repeated; first occurrence on line %d", line))
+			if first, ok := headings[key]; ok {
+				c.addDuplicate(d, offset, "duplicate-heading", fmt.Sprintf("heading repeated; first occurrence on line %d", first.Line), first)
 			} else {
-				headings[key] = bytes.Count(d.source[:offset], []byte{'\n'}) + 1
+				headings[key] = sourceLocation(d, offset)
 			}
-		case *ast.Paragraph, *ast.TextBlock:
-			c.checkParagraph(d, node)
 		case *ast.CodeSpan:
 			value := string(n.Text(d.body))
 			offset := d.offset + nodeOffset(n)
@@ -331,20 +348,6 @@ func nodeOffset(node ast.Node) int {
 }
 
 func normalize(value string) string { return strings.ToLower(strings.Join(strings.Fields(value), " ")) }
-
-func (c *checker) checkParagraph(d document, node ast.Node) {
-	value := normalize(string(node.Text(d.body)))
-	// Short repeated phrases and headings are usually intentional navigation.
-	if len(strings.Fields(value)) < 12 || strings.Contains(value, "{{") || strings.Contains(value, ":::") {
-		return
-	}
-	offset := d.offset + node.Lines().At(0).Start
-	if first, ok := c.paragraphs[value]; ok {
-		c.add(d, offset, "warning", "duplicate-content", fmt.Sprintf("paragraph duplicates %s:%d", first.Path, first.Line))
-	} else {
-		c.paragraphs[value] = Diagnostic{Path: d.path, Line: bytes.Count(d.source[:offset], []byte{'\n'}) + 1}
-	}
-}
 
 func (c *checker) checkLink(d document, offset int, destination string) {
 	if destination == "" || strings.Contains(destination, "{{") {

@@ -197,3 +197,27 @@ severity = "error"
 		t.Fatalf("%+v", diagnostics)
 	}
 }
+
+func TestLintSimilarityConfigAndJSON(t *testing.T) {
+	root := t.TempDir()
+	paragraph := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
+	fixture(t, filepath.Join(root, "a.md"), paragraph+"\n")
+	fixture(t, filepath.Join(root, "b.md"), strings.Replace(paragraph, "every", "each", 1)+"\n")
+	testConfig(t, "[lint]\nduplicate_similarity = 0.9\nduplicate_min_words = 12\n")
+	cmd := newLintCommand()
+	cmd.SilenceUsage = true
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{root, "--format", "json", "--strict"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("strict similarity warning did not fail lint")
+	}
+	var diagnostics []lint.Diagnostic
+	if err := json.Unmarshal(out.Bytes(), &diagnostics); err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Rule != "similar-content" || diagnostics[0].Similarity == nil || len(diagnostics[0].Related) != 1 {
+		t.Fatalf("%+v", diagnostics)
+	}
+}
