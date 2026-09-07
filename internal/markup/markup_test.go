@@ -26,6 +26,7 @@ func TestRender(t *testing.T) {
 		{"blockquote", "> :::x\n> text\n> :::\n", "xml", "> <x>\n> text\n> </x>\n"},
 		{"list", "- :::x\n  text\n  :::\n", "xml", "- <x>\n  text\n  </x>\n"},
 		{"empty", ":::x\n:::", "xml", "<x>\n</x>"},
+		{"plain markdown directives", ":::note{priority=high}\nUse :term[TTL]{abbr=cache}.\n:::\n", "markdown", "**note priority=\"high\"**\nUse **term abbr=\"cache\":** TTL.\n\n"},
 		{"markdown", "# Heading\n\n- **bold**  \n  next\n\n[link]: ./file.md\n", "xml", "# Heading\n\n- **bold**  \n  next\n\n[link]: ./file.md\n"},
 	}
 	for _, tt := range tests {

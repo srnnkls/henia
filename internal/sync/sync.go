@@ -3,6 +3,7 @@ package sync
 import (
 	"fmt"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/target"
 	"github.com/srnnkls/henia/internal/transform"
+	"github.com/srnnkls/henia/internal/vendor"
 	"github.com/srnnkls/phora"
 )
 
@@ -24,9 +26,10 @@ type FetchedSource struct {
 }
 
 type Result struct {
-	Synced  int
-	Skipped int
-	Errors  []error
+	Synced   int
+	Skipped  int
+	Errors   []error
+	Warnings []string
 }
 
 type Syncer struct {
@@ -87,6 +90,8 @@ func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 
 		tgt := target.NewFromConfig(harnessName, harness)
 		tr := &transform.Transformer{
+			Profile:      harness.Profile,
+			Strict:       harness.Strict,
 			Variables:    harness.Variables,
 			OutputFormat: harness.Format,
 			Keys:         harness.Keys,
@@ -94,12 +99,26 @@ func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 			Tools:        harness.Tools,
 			References:   convertReferences(harness.References),
 		}
+		if harness.Profile != "" {
+			profile, err := vendor.Load(harness.Profile, harness.ProjectRoot, harness.UserRoot)
+			if err == nil {
+				tr.Compiler, err = vendor.NewCompiler(profile)
+			}
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
+				continue
+			}
+			tr.Context = vendor.Context{Name: harnessName, Profile: harness.Profile, Path: harness.Path, Variables: harness.Variables, Tools: harness.Tools, Keys: harness.Keys}
+		}
 
 		for _, art := range filtered {
 			transformed, err := tr.Transform(art)
 			if err != nil {
 				result.Errors = append(result.Errors, fmt.Errorf("%s: transform %s for %s: %w", art.SourcePath, art.Name, harnessName, err))
 				continue
+			}
+			for _, warning := range transformed.Warnings {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("%s (%s): %s", art.SourcePath, harnessName, warning))
 			}
 			destination, err := filepath.Abs(tgt.TargetPath(transformed))
 			if err != nil {
@@ -127,12 +146,54 @@ func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 					continue
 				}
 			}
-			if first, ok := destinations[destination]; ok {
-				result.Errors = append(result.Errors, fmt.Errorf("output collision at %s between %s and %s", destination, first, source))
+			paths, err := target.OutputPaths(tgt, transformed)
+			if err != nil {
+				result.Errors = append(result.Errors, err)
 				continue
 			}
-			destinations[destination] = source
+			for _, path := range paths {
+				absolute, err := resolvedPath(path)
+				if err != nil {
+					return nil, err
+				}
+				if first, ok := destinations[absolute]; ok {
+					result.Errors = append(result.Errors, fmt.Errorf("output collision at %s between %s and %s", absolute, first, source))
+				}
+				destinations[absolute] = source
+				boundary, err := resolvedPath(tgt.Path())
+				if err != nil {
+					return nil, err
+				}
+				relative, err := filepath.Rel(boundary, absolute)
+				if err != nil {
+					return nil, err
+				}
+				if !filepath.IsLocal(relative) {
+					result.Errors = append(result.Errors, fmt.Errorf("output %s escapes harness path %s", path, tgt.Path()))
+				}
+				for _, canonical := range allArtifacts {
+					protected, err := resolvedPath(canonical.SourcePath)
+					if err != nil {
+						return nil, err
+					}
+					relative, err := filepath.Rel(protected, absolute)
+					if err != nil {
+						return nil, err
+					}
+					if absolute == protected || canonical.IsDirectory && filepath.IsLocal(relative) {
+						result.Errors = append(result.Errors, fmt.Errorf("output %s would overwrite canonical source %s", absolute, protected))
+					}
+				}
+			}
 			jobs = append(jobs, writeJob{tgt, transformed})
+		}
+	}
+	// File/directory conflicts also fail before writing any artifact.
+	for path := range destinations {
+		for parent := filepath.Dir(path); parent != filepath.Dir(parent); parent = filepath.Dir(parent) {
+			if _, exists := destinations[parent]; exists {
+				result.Errors = append(result.Errors, fmt.Errorf("output file/directory collision between %s and %s", parent, path))
+			}
 		}
 	}
 	// Validate every transformation before touching the output tree.
@@ -147,6 +208,34 @@ func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 		result.Synced++
 	}
 	return result, nil
+}
+
+// Resolve existing ancestors too, so source and destination aliases participate
+// in the same collision checks even when the final output files do not exist yet.
+func resolvedPath(path string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	ancestor := absolute
+	for {
+		resolved, err := filepath.EvalSymlinks(ancestor)
+		if err == nil {
+			relative, err := filepath.Rel(ancestor, absolute)
+			if err != nil {
+				return "", err
+			}
+			return filepath.Join(resolved, relative), nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(ancestor)
+		if parent == ancestor {
+			return "", err
+		}
+		ancestor = parent
+	}
 }
 
 func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifact.Artifact {

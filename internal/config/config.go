@@ -1,9 +1,14 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/srnnkls/henia/internal/defaults"
 	"github.com/srnnkls/henia/internal/lint"
+	"github.com/srnnkls/henia/internal/vendor"
+	"maps"
 	"os"
+	"path/filepath"
 
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/srnnkls/henia"
@@ -22,21 +27,112 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	return loadLayers(path, data)
+}
 
-	var cfg Config
-	if err := toml.Unmarshal(data, &cfg); err != nil {
+func LoadOptional(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
+	return loadLayers(path, data)
+}
 
+func loadLayers(path string, projectData []byte) (*Config, error) {
+	projectRoot, err := filepath.Abs(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	userRoot := filepath.Join(home, ".config", "henia")
+	userData, err := os.ReadFile(filepath.Join(userRoot, "henia.toml"))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	return decodeLayers(projectRoot, userRoot, userData, projectData)
+}
+
+func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*Config, error) {
+	var base, user, project map[string]any
+	for _, layer := range []struct {
+		data []byte
+		out  *map[string]any
+	}{
+		{[]byte(defaults.ConfigTOML), &base}, {userData, &user}, {projectData, &project},
+	} {
+		if err := toml.Unmarshal(layer.data, layer.out); err != nil {
+			return nil, err
+		}
+	}
+	// Explicit configurations select their harnesses. Merge each selected harness
+	// with its preset without unexpectedly deploying to other live installations.
+	if projectData != nil || userData != nil {
+		delete(base, "artifacts")
+		selected := map[string]any{}
+		for _, layer := range []map[string]any{user, project} {
+			if harnesses, ok := layer["harness"].(map[string]any); ok {
+				for name := range harnesses {
+					if value, ok := base["harness"].(map[string]any)[name]; ok {
+						selected[name] = value
+					}
+				}
+			}
+		}
+		base["harness"] = selected
+		// Existing explicit configurations remain on the legacy mapper until they
+		// opt into a profile. New builds without configuration use all vendor profiles.
+		for name, value := range selected {
+			preset := maps.Clone(value.(map[string]any))
+			explicit := false
+			for _, layer := range []map[string]any{user, project} {
+				if harnesses, ok := layer["harness"].(map[string]any); ok {
+					if harness, ok := harnesses[name].(map[string]any); ok {
+						if _, ok := harness["profile"]; ok {
+							explicit = true
+						}
+					}
+				}
+			}
+			if !explicit {
+				preset = map[string]any{}
+			}
+			selected[name] = preset
+		}
+	}
+	merged := vendor.Merge(vendor.Merge(base, user), project)
+	data, err := toml.Marshal(merged)
+	if err != nil {
+		return nil, err
+	}
+	var cfg Config
+	if err := toml.NewDecoder(bytes.NewReader(data)).DisallowUnknownFields().Decode(&cfg); err != nil {
+		return nil, err
+	}
 	if cfg.Sources == nil {
 		cfg.Sources = make(map[string]phora.Source)
 	}
 	if cfg.Harness == nil {
 		cfg.Harness = make(map[string]henia.Harness)
 	}
-
 	for name, h := range cfg.Harness {
-		if h.Format != "" && h.Format != "directives" && h.Format != "xml" {
+		h.ProjectRoot, h.UserRoot = projectRoot, userRoot
+		cfg.Harness[name] = h
+		if h.Profile != "" {
+			profile, err := vendor.Load(h.Profile, projectRoot, userRoot)
+			if err == nil {
+				_, err = vendor.NewCompiler(profile)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("harness %s: %w", name, err)
+			}
+		}
+		if h.Profile != "" && h.Structure == "flat" {
+			return nil, fmt.Errorf("harness %s: skill profiles require nested structure", name)
+		}
+		if h.Format != "" && h.Format != "directives" && h.Format != "xml" && h.Format != "markdown" {
 			return nil, fmt.Errorf("harness %s: unsupported format %q", name, h.Format)
 		}
 		if h.Structure != "" && h.Structure != "flat" && h.Structure != "nested" {

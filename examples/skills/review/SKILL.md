@@ -1,12 +1,24 @@
 ---
 name: review
 description: Review a code change for correctness and missing coverage.
-priority: high
-review_mode: focused
-checks:
-  - Correctness
-  - Error handling
-  - Relevant test coverage
+henia:
+  variables:
+    priority: high
+    review_mode: focused
+    checks:
+      - Correctness
+      - Error handling
+      - Relevant test coverage
+  targets:
+    claude:
+      auto_invoke: false
+    codex:
+      auto_invoke: false
+      openai:
+        interface:
+          display_name: Code review
+          short_description: Review correctness and coverage
+          default_prompt: "Use $review to review the current changes."
 ---
 
 # Code review

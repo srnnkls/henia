@@ -1,0 +1,17 @@
+# See docs/vendor-research.md for the supporting vendor contracts.
+fields = ["name", "description", "license", "compatibility", "metadata", "allowed-tools", "when_to_use", "argument-hint", "arguments", "disable-model-invocation", "user-invocable", "disallowed-tools", "model", "effort", "context", "agent", "background", "hooks", "paths", "shell"]
+controls = ["auto_invoke", "user_invocable"]
+consume = ["tools", "model_tier"]
+
+[aliases]
+allowed_tools = "allowed-tools"
+disallowed_tools = "disallowed-tools"
+argument_hint = "argument-hint"
+disable_model_invocation = "disable-model-invocation"
+
+[computed]
+"allowed-tools" = '(input.tools ?? input.allowed_tools ?? input["allowed-tools"]) == nil ? nil : toolNames(input.tools ?? input.allowed_tools ?? input["allowed-tools"], ctx.tools)'
+"disallowed-tools" = '(input.disallowed_tools ?? input["disallowed-tools"]) == nil ? nil : toolNames(input.disallowed_tools ?? input["disallowed-tools"], ctx.tools)'
+model = 'input.model_tier == nil ? nil : require(ctx.variables["model_" + input.model_tier], "model_tier has no configured model variable")'
+"user-invocable" = 'settings.user_invocable'
+"disable-model-invocation" = 'settings.auto_invoke == nil ? nil : not settings.auto_invoke'

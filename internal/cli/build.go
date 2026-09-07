@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/config"
-	"github.com/srnnkls/henia/internal/defaults"
 	"github.com/srnnkls/henia/internal/sync"
 )
 
@@ -64,6 +63,9 @@ func newBuildCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			for _, warning := range result.Warnings {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s\n", warning)
+			}
 			if err := errors.Join(result.Errors...); err != nil {
 				return err
 			}
@@ -87,9 +89,5 @@ func optionalConfig(cmd *cobra.Command) (*config.Config, error) {
 	if cmd.Flags().Changed("config") || !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
-	presets, err := defaults.DefaultConfig()
-	if err != nil {
-		return nil, err
-	}
-	return &config.Config{Artifacts: presets.Artifacts, Harness: presets.Harness}, nil
+	return config.LoadOptional(configPath)
 }

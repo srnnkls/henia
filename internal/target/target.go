@@ -1,9 +1,13 @@
 package target
 
 import (
-	"io"
+	"fmt"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
@@ -50,105 +54,122 @@ func (t *HarnessTarget) Exists(art *artifact.Artifact) (bool, string) {
 	return err == nil, path
 }
 
-func (t *HarnessTarget) Write(art *artifact.Artifact) error {
-	targetPath := t.TargetPath(art)
-	targetDir := filepath.Dir(targetPath)
-
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		return err
+// OutputPaths lists every file that will be written, including resources and sidecars.
+func OutputPaths(t Target, art *artifact.Artifact) ([]string, error) {
+	main := t.TargetPath(art)
+	paths := []string{main}
+	resourceDir := filepath.Dir(main)
+	if filepath.Base(main) != artifact.MainFileName(art.Type) {
+		resourceDir = filepath.Join(resourceDir, art.FullName())
 	}
-
-	content := art.Render()
-	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
-		return err
-	}
-
-	if art.IsDirectory && len(art.Resources) > 0 {
-		resourceDir := targetDir
-		if t.structure == "flat" {
-			resourceDir = filepath.Join(targetDir, art.FullName())
+	if art.IsDirectory {
+		for _, resource := range art.Resources {
+			if !filepath.IsLocal(resource) {
+				return nil, fmt.Errorf("invalid resource path %q", resource)
+			}
+			err := filepath.WalkDir(filepath.Join(art.SourcePath, resource), func(path string, entry fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if entry.Type()&os.ModeSymlink != 0 {
+					return fmt.Errorf("symlink resource is not supported: %s", path)
+				}
+				if entry.IsDir() {
+					return nil
+				}
+				relative, err := filepath.Rel(art.SourcePath, path)
+				if err != nil {
+					return err
+				}
+				paths = append(paths, filepath.Join(resourceDir, relative))
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
 		}
-		if err := copyResources(art.SourcePath, resourceDir, art.Resources); err != nil {
+	}
+	for _, name := range slices.Sorted(maps.Keys(art.Files)) {
+		if !filepath.IsLocal(name) || filepath.Clean(name) != name || name == "." || strings.Contains(name, "\\") {
+			return nil, fmt.Errorf("invalid generated file path %q", name)
+		}
+		paths = append(paths, filepath.Join(t.Path(), name))
+	}
+	seen := map[string]bool{}
+	for _, path := range paths {
+		if seen[path] {
+			return nil, fmt.Errorf("output collision at %s (main file, resource or generated sidecar)", path)
+		}
+		seen[path] = true
+	}
+	return paths, nil
+}
+
+func (t *HarnessTarget) Write(art *artifact.Artifact) error {
+	if _, err := OutputPaths(t, art); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(t.basePath, 0755); err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(t.basePath)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	main, err := filepath.Rel(t.basePath, t.TargetPath(art))
+	if err != nil {
+		return err
+	}
+	write := func(path string, data []byte, mode os.FileMode) error {
+		if err := root.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			return err
+		}
+		return root.WriteFile(path, data, mode)
+	}
+	if err := write(main, []byte(art.Render()), 0644); err != nil {
+		return err
+	}
+	resourceDir := filepath.Dir(main)
+	if t.structure == "flat" {
+		resourceDir = filepath.Join(resourceDir, art.FullName())
+	}
+	if art.IsDirectory && len(art.Resources) > 0 {
+		source, err := os.OpenRoot(art.SourcePath)
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+		for _, resource := range art.Resources {
+			err := fs.WalkDir(source.FS(), resource, func(path string, entry fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if entry.Type()&os.ModeSymlink != 0 {
+					return fmt.Errorf("symlink resource is not supported: %s", path)
+				}
+				if entry.IsDir() {
+					return nil
+				}
+				info, err := entry.Info()
+				if err != nil {
+					return err
+				}
+				data, err := source.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				return write(filepath.Join(resourceDir, path), data, info.Mode().Perm())
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(art.Files)) {
+		if err := write(name, art.Files[name], 0644); err != nil {
 			return err
 		}
 	}
-
 	return nil
-}
-
-func copyResources(srcDir, dstDir string, resources []string) error {
-	for _, res := range resources {
-		srcPath := filepath.Join(srcDir, res)
-		dstPath := filepath.Join(dstDir, res)
-
-		info, err := os.Stat(srcPath)
-		if err != nil {
-			continue
-		}
-
-		if info.IsDir() {
-			if err := copyDir(srcPath, dstPath); err != nil {
-				return err
-			}
-		} else {
-			if err := copyFile(srcPath, dstPath); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func copyDir(src, dst string) error {
-	if err := os.MkdirAll(dst, 0755); err != nil {
-		return err
-	}
-
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-
-		if entry.IsDir() {
-			if err := copyDir(srcPath, dstPath); err != nil {
-				return err
-			}
-		} else {
-			if err := copyFile(srcPath, dstPath); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func copyFile(src, dst string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return err
-	}
-
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		return err
-	}
-
-	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode())
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	return err
 }

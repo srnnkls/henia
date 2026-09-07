@@ -3,6 +3,7 @@ module github.com/srnnkls/henia
 go 1.26.0
 
 require (
+	github.com/expr-lang/expr v1.17.8
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/spf13/cobra v1.10.2
 	github.com/srnnkls/phora v0.0.0-20260115094253-a1b2437f4aab

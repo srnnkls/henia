@@ -8,8 +8,10 @@ import (
 	"text/template"
 
 	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/canonical"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
+	"github.com/srnnkls/henia/internal/vendor"
 )
 
 type ReferenceConfig struct {
@@ -17,6 +19,10 @@ type ReferenceConfig struct {
 }
 
 type Transformer struct {
+	Profile      string
+	Strict       bool
+	Compiler     *vendor.Compiler
+	Context      vendor.Context
 	OutputFormat string
 	Variables    map[string]string
 	Mappings     map[string]string
@@ -99,20 +105,21 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 
 	templateContext := make(map[string]any, len(art.Frontmatter)+len(t.Variables))
 	maps.Copy(templateContext, art.Frontmatter)
+	if h, ok := art.Frontmatter["henia"].(map[string]any); ok {
+		if vars, ok := h["variables"].(map[string]any); ok {
+			maps.Copy(templateContext, vars)
+		}
+	}
 	for k, v := range t.Variables {
 		templateContext[k] = v
 	}
 
 	for k, v := range art.Frontmatter {
-		if str, ok := v.(string); ok {
-			transformed, err := ExecuteTemplate(str, templateContext)
-			if err != nil {
-				return nil, fmt.Errorf("transform frontmatter %q: %w", k, err)
-			}
-			result.Frontmatter[k] = transformed
-		} else {
-			result.Frontmatter[k] = v
+		transformed, err := templateValue(v, templateContext)
+		if err != nil {
+			return nil, fmt.Errorf("transform frontmatter %q: %w", k, err)
 		}
+		result.Frontmatter[k] = transformed
 	}
 
 	keyMappings := t.Mappings
@@ -122,6 +129,23 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	result.Frontmatter = ApplyMappings(result.Frontmatter, keyMappings)
 
 	result.Frontmatter = ApplyValueMappings(result.Frontmatter, t.Values)
+	if art.Type == artifact.TypeSkill && t.Profile != "" {
+		can, err := canonical.Parse(result.Frontmatter)
+		if err != nil {
+			return nil, err
+		}
+		if t.Compiler == nil {
+			return nil, fmt.Errorf("profile %s was not compiled", t.Profile)
+		}
+		compiled, err := t.Compiler.Compile(art.FullName(), can.ToMap(), t.Context)
+		if err != nil {
+			return nil, err
+		}
+		result.Frontmatter, result.Files, result.Warnings = compiled.Frontmatter, compiled.Files, compiled.Warnings
+		if t.Strict && len(result.Warnings) > 0 {
+			return nil, fmt.Errorf("unsupported skill metadata: %s", strings.Join(result.Warnings, "; "))
+		}
+	}
 
 	body, err := ExecuteTemplate(art.Body, templateContext)
 	if err != nil {
@@ -138,6 +162,35 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	result.Body = body
 
 	return result, nil
+}
+
+func templateValue(value any, context map[string]any) (any, error) {
+	switch v := value.(type) {
+	case string:
+		return ExecuteTemplate(v, context)
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for k, item := range v {
+			var err error
+			out[k], err = templateValue(item, context)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return out, nil
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			var err error
+			out[i], err = templateValue(item, context)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return out, nil
+	default:
+		return value, nil
+	}
 }
 
 func (t *Transformer) transformReferences(body string) string {

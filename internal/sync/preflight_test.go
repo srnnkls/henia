@@ -52,3 +52,30 @@ func TestOutputInsideSource(t *testing.T) {
 		t.Fatalf("expected source-overlap error: %+v", result)
 	}
 }
+
+func TestOutputAliasCannotOverwriteSource(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	if err := os.MkdirAll(filepath.Join(source, "skills/example"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(source, "skills/example/SKILL.md")
+	if err := os.WriteFile(path, []byte("# Canonical\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(source, alias); err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewSyncer(nil, map[string]henia.Harness{"legacy": {Path: alias}}).Deploy([]FetchedSource{{LocalPath: source}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Errors) == 0 || result.Synced != 0 {
+		t.Fatalf("accepted source alias: %+v", result)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "# Canonical\n" {
+		t.Fatal("changed canonical file")
+	}
+}

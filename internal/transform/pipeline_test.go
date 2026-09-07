@@ -35,6 +35,42 @@ func TestUnknownFormat(t *testing.T) {
 	}
 }
 
+func TestTemplateCompositionAndNestedMetadata(t *testing.T) {
+	art := &artifact.Artifact{
+		Frontmatter: map[string]any{
+			"enabled":  true,
+			"checks":   []any{"correctness", "coverage"},
+			"metadata": map[string]any{"audience": "{{.audience}}"},
+			"henia":    map[string]any{"variables": map[string]any{"audience": "author"}},
+		},
+		Body: `{{define "check"}}:::instruction{audience={{$.audience}}}
+{{range .checks}}- {{.}}
+{{end}}Use ` + "`!read`" + `.
+:::
+{{end}}{{if .enabled}}{{template "check" .}}{{end}}`,
+	}
+	tr := Transformer{OutputFormat: "xml", Variables: map[string]string{"audience": "reviewer"}, Tools: map[string]string{"read": "Read"}}
+	got, err := tr.Transform(art)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "<instruction audience=\"reviewer\">\n- correctness\n- coverage\nUse `Read`.\n</instruction>\n"
+	if got.Body != want {
+		t.Fatalf("got %q, want %q", got.Body, want)
+	}
+	if got.Frontmatter["metadata"].(map[string]any)["audience"] != "reviewer" {
+		t.Fatal("nested frontmatter template was not expanded")
+	}
+	if art.Frontmatter["metadata"].(map[string]any)["audience"] != "{{.audience}}" {
+		t.Fatal("input was mutated")
+	}
+	art.Frontmatter["enabled"] = false
+	got, err = tr.Transform(art)
+	if err != nil || got.Body != "" {
+		t.Fatalf("disabled template: %q, %v", got.Body, err)
+	}
+}
+
 func BenchmarkPipeline(b *testing.B) {
 	art := &artifact.Artifact{Frontmatter: map[string]any{"priority": "critical"}, Body: strings.Repeat(":::instruction{priority={{.priority}}}\nUse :term[TTL]{abbr=\"time to live\"}.\n:::\n\n", 140)}
 	tr := Transformer{OutputFormat: "xml"}

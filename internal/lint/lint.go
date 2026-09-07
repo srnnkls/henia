@@ -34,6 +34,7 @@ type Diagnostic struct {
 }
 
 type Options struct {
+	Rules      []Rule            `toml:"rules,omitempty"`
 	Disable    []string          `toml:"disable,omitempty"`
 	Outdated   map[string]string `toml:"outdated,omitempty"`
 	MaxLines   int               `toml:"max_lines,omitempty"`
@@ -44,8 +45,11 @@ type Options struct {
 var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-heading", "duplicate-content", "duplicate-skill", "outdated-reference", "large-skill", "stale-review"}
 
 func (o Options) Validate() error {
+	if _, err := compileRules(o.Rules); err != nil {
+		return err
+	}
 	for _, rule := range o.Disable {
-		if !slices.Contains(rules, rule) {
+		if !slices.Contains(rules, rule) && !slices.ContainsFunc(o.Rules, func(r Rule) bool { return r.ID == rule }) {
 			return fmt.Errorf("unknown lint rule %q", rule)
 		}
 	}
@@ -70,6 +74,7 @@ type document struct {
 }
 
 type checker struct {
+	rules       []compiledRule
 	options     Options
 	diagnostics []Diagnostic
 	names       map[string]string
@@ -100,6 +105,10 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 		return nil, fmt.Errorf("no Markdown files found")
 	}
 	c := checker{options: options, diagnostics: []Diagnostic{}, names: make(map[string]string), paragraphs: make(map[string]Diagnostic), anchors: make(map[string]map[string]bool)}
+	c.rules, err = compileRules(options.Rules)
+	if err != nil {
+		return nil, err
+	}
 	var documents []document
 	for _, path := range files {
 		if err := ctx.Err(); err != nil {
@@ -207,6 +216,7 @@ func (c *checker) add(d document, offset int, severity, rule, message string) {
 }
 
 func (c *checker) check(d document) error {
+	c.checkRules(d)
 	if d.kind != artifact.TypeUnknown {
 		for _, key := range []string{"name", "description"} {
 			value, _ := d.art.Frontmatter[key].(string)

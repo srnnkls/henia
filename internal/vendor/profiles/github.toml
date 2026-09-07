@@ -1,0 +1,13 @@
+# See docs/vendor-research.md for the supporting vendor contracts.
+fields = ["name", "description", "license", "compatibility", "metadata", "allowed-tools"]
+controls = []
+consume = ["tools"]
+
+[aliases]
+allowed_tools = "allowed-tools"
+disallowed_tools = "disallowed-tools"
+argument_hint = "argument-hint"
+disable_model_invocation = "disable-model-invocation"
+
+[computed]
+"allowed-tools" = '(input.tools ?? input.allowed_tools ?? input["allowed-tools"]) == nil ? nil : toolNames(input.tools ?? input.allowed_tools ?? input["allowed-tools"], ctx.tools)'

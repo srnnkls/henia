@@ -43,6 +43,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Deployed %d artifact(s)\n", result.Synced)
+	for _, warning := range result.Warnings {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s\n", warning)
+	}
 	if len(result.Errors) > 0 {
 		for _, e := range result.Errors {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", e)

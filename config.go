@@ -16,6 +16,8 @@ type ReferenceConfig struct {
 }
 
 type Harness struct {
+	Profile                    string                       `toml:"profile,omitempty"`
+	Strict                     bool                         `toml:"strict,omitempty"`
 	Format                     string                       `toml:"format,omitempty"`
 	Path                       string                       `toml:"path,omitempty"`
 	Structure                  string                       `toml:"structure,omitempty"` // "flat" or "nested" (default)
@@ -29,6 +31,8 @@ type Harness struct {
 	References                 map[string]ReferenceConfig   `toml:"references,omitempty"`
 	Include                    []string                     `toml:"include,omitempty"`
 	Exclude                    []string                     `toml:"exclude,omitempty"`
+	ProjectRoot                string                       `toml:"-"`
+	UserRoot                   string                       `toml:"-"`
 }
 
 func ExpandPath(path string) string {

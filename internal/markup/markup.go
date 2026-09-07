@@ -10,11 +10,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
-	"github.com/yuin/goldmark/util"
 )
 
 // Error locates invalid markup in the input, using one-based coordinates.
@@ -245,7 +243,7 @@ type edit struct {
 func Render(source, format string) (string, error) { return render(source, format, 0) }
 
 func render(input, format string, depth int) (string, error) {
-	if format != "" && format != "directives" && format != "xml" {
+	if format != "" && format != "directives" && format != "xml" && format != "markdown" {
 		return "", fmt.Errorf("unsupported markup format %q", format)
 	}
 	if depth > 100 {
@@ -255,21 +253,13 @@ func render(input, format string, depth int) (string, error) {
 		return input, nil
 	}
 	source := []byte(input)
+	doc, err := parse(source, depth > 0)
+	if err != nil {
+		return "", err
+	}
 	p := &directiveParser{}
-	md := goldmark.New(goldmark.WithParserOptions(parser.WithBlockParsers(util.Prioritized(&blockParser{p}, 850)), parser.WithInlineParsers(util.Prioritized(&inlineParser{p}, 150))))
-	if depth > 0 {
-		md = goldmark.New(goldmark.WithParser(parser.NewParser(
-			parser.WithBlockParsers(util.Prioritized(parser.NewParagraphParser(), 1000)),
-			parser.WithInlineParsers(parser.DefaultInlineParsers()...),
-			parser.WithInlineParsers(util.Prioritized(&inlineParser{p}, 150)),
-		)))
-	}
-	doc := md.Parser().Parse(text.NewReader(source))
-	if p.err != nil {
-		return "", p.err
-	}
 	var edits []edit
-	err := ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+	err = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		switch n := node.(type) {
 		case *blockNode:
 			open, close := delimiters(n.directive, format, false)
@@ -313,6 +303,17 @@ func render(input, format string, depth int) (string, error) {
 }
 
 func delimiters(d directive, format string, inline bool) (string, string) {
+	if format == "markdown" {
+		label := d.name
+		for _, a := range d.attrs {
+			label += " " + a.name + "=" + strconv.Quote(a.value)
+		}
+		label = strings.NewReplacer("*", "\\*", "_", "\\_", "[", "\\[", "]", "\\]", "<", "&lt;", ">", "&gt;").Replace(label)
+		if inline {
+			return "**" + label + ":** ", ""
+		}
+		return "**" + label + "**", ""
+	}
 	var attrs strings.Builder
 	for i, a := range d.attrs {
 		if i > 0 {

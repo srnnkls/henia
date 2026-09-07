@@ -31,6 +31,12 @@ func newLintCommand() *cobra.Command {
 				options = cfg.Lint
 			} else if cmd.Flags().Changed("config") || !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("load config: %w", err)
+			} else {
+				cfg, err = config.LoadOptional(configPath)
+				if err != nil {
+					return err
+				}
+				options = cfg.Lint
 			}
 			options.Disable = append(options.Disable, disabled...)
 			diagnostics, err := lint.Run(cmd.Context(), args, options)

@@ -1,6 +1,7 @@
 artifacts = ["skills"]
 
 [harness.claude]
+profile = "claude"
 path = ".claude"
 format = "xml"
 
@@ -11,7 +12,8 @@ review_mode = "thorough"
 read = "Read"
 
 [harness.codex]
-path = ".codex"
+profile = "codex"
+path = ".agents"
 format = "directives"
 
 [harness.codex.variables]
@@ -26,3 +28,19 @@ max_age_days = 180
 
 [lint.outdated]
 "old-model-id" = "replacement-model-id"
+
+[[lint.rules]]
+id = "instruction-priority"
+select = "directive"
+when = 'node.name == "instruction"'
+assert = 'node.attrs.priority in ["normal", "high", "critical"]'
+message = "Instructions need a valid priority."
+severity = "warning"
+
+[[lint.rules]]
+id = "skill-description"
+select = "document"
+when = 'document.kind == "skill"'
+assert = 'len(frontmatter.description ?? "") >= 30'
+message = "Describe what this skill does and when to use it."
+severity = "error"

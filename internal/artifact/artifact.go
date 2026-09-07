@@ -29,6 +29,8 @@ type Artifact struct {
 	Frontmatter map[string]any
 	Body        string
 	Resources   []string
+	Files       map[string][]byte // Generated files relative to the harness root.
+	Warnings    []string
 }
 
 func (a *Artifact) FullName() string {

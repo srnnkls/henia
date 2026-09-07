@@ -8,7 +8,7 @@ The plan establishes a two-layer architecture:
 - Go templates for control flow (existing)
 - Goldmark for semantic markup parsing and rendering
 
-**Note:** Harness-specific frontmatter transforms are handled separately by the [Harness Transform Pipeline](../schema-transform/spec.md) using Starlark.
+**Note:** Harness-specific frontmatter transforms are handled separately by the [Harness Transform Pipeline](../schema-transform/spec.md) using TOML + Expr (updated 2026-09-07).
 
 The key architectural insight: Henia should not invent new languages. Instead, it normalizes author-friendly syntax and delegates semantics to proven engines.
 

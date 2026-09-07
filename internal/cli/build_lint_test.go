@@ -117,3 +117,83 @@ func TestLintJSONAndExitStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildProfilesWithTemplatesAndSidecars(t *testing.T) {
+	root := t.TempDir()
+	fixture(t, filepath.Join(root, "skills/example/SKILL.md"), `---
+name: example
+description: Example skill
+henia:
+  auto_invoke: false
+  variables:
+    priority: high
+  targets:
+    codex:
+      openai:
+        interface:
+          display_name: "{{.title}}"
+---
+
+{{define "instructions"}}:::instruction{priority={{.priority}}}
+Use `+"`$example`"+`.
+:::
+{{end}}{{template "instructions" .}}`)
+	testConfig(t, `[harness.claude]
+profile = "claude"
+strict = true
+[harness.codex]
+profile = "codex"
+strict = true
+[harness.codex.variables]
+title = "Example display"
+`)
+	output := filepath.Join(t.TempDir(), "out")
+	cmd := newBuildCommand()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetArgs([]string{root, "--output", output})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	claude, err := os.ReadFile(filepath.Join(output, "claude/skills/example/SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(claude), "disable-model-invocation: true") || !strings.Contains(string(claude), "<instruction priority=\"high\">") {
+		t.Fatalf("%s", claude)
+	}
+	sidecar, err := os.ReadFile(filepath.Join(output, "codex/skills/example/agents/openai.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(sidecar), "display_name: Example display") || !strings.Contains(string(sidecar), "allow_implicit_invocation: false") {
+		t.Fatalf("%s", sidecar)
+	}
+}
+
+func TestLintRulesFromConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "SKILL.md")
+	fixture(t, path, "---\nname: example\ndescription: Example\n---\n\n:::instruction\nText.\n:::\n")
+	testConfig(t, `[[lint.rules]]
+id = "instruction-priority"
+select = "directive"
+assert = 'node.attrs.priority == "high"'
+message = "Set priority"
+severity = "error"
+`)
+	cmd := newLintCommand()
+	cmd.SilenceUsage = true
+	output := &bytes.Buffer{}
+	cmd.SetOut(output)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{path, "--format", "json"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("custom error rule did not fail lint")
+	}
+	var diagnostics []lint.Diagnostic
+	if err := json.Unmarshal(output.Bytes(), &diagnostics); err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Rule != "instruction-priority" || diagnostics[0].Line != 6 {
+		t.Fatalf("%+v", diagnostics)
+	}
+}
