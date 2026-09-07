@@ -2,13 +2,13 @@
 
 ## Native Plan
 
-**Source:** `~/.claude/plans/markup-pipeline.md`
+Source: `~/.claude/plans/markup-pipeline.md`
 
 The plan establishes a two-layer architecture:
 - Go templates for control flow (existing)
 - Goldmark for semantic markup parsing and rendering
 
-**Note:** Harness-specific frontmatter transforms are handled separately by the [Harness Transform Pipeline](../schema-transform/spec.md) using TOML + Expr (updated 2026-09-07).
+Note: Harness-specific frontmatter transforms are handled separately by the [Harness Transform Pipeline](../schema-transform/spec.md) using TOML + Expr (updated 2026-09-07).
 
 The key architectural insight: Henia should not invent new languages. Instead, it normalizes author-friendly syntax and delegates semantics to proven engines.
 
@@ -53,7 +53,7 @@ The TRANSFORM phase currently handles:
   - Supports sigils: $ (skill), / (command), @ (agent), # (file), ! (tool)
   - Applied after template execution
 
-**What are "References"?**
+What are "References"?
 
 References are an existing Henia feature for transforming backtick-wrapped sigils into target-specific output. Examples:
 - `` `$skill-name` `` → `[skill-name](#skill-name)` (skill reference)
@@ -61,14 +61,14 @@ References are an existing Henia feature for transforming backtick-wrapped sigil
 - `` `@agent-name` `` → `@agent-name` (agent reference)
 - `` `!tool-name` `` → `kubectl` (tool mapping from config)
 
-In the new pipeline, reference transformation runs **after** goldmark rendering, ensuring directives are already transformed before reference replacement occurs.
+In the new pipeline, reference transformation runs after goldmark rendering, ensuring directives are already transformed before reference replacement occurs.
 
 ## Architectural Decisions
 
 ### 1. Layer Separation
 Each layer has a single responsibility and uses a specialized engine:
-- **Control flow layer**: Go templates handle conditionals, loops, composition
-- **Semantic markup layer**: Goldmark handles parsing, AST, rendering
+- Control flow layer: Go templates handle conditionals, loops, composition
+- Semantic markup layer: Goldmark handles parsing, AST, rendering
 
 No overlap. No custom languages.
 
@@ -98,24 +98,24 @@ Use goldmark's official extension API:
 
 No regex parsing. No custom markdown implementation.
 
-**Markdown Output Strategy:**
+Markdown Output Strategy:
 
 Goldmark renders to HTML by default. To produce markdown output with transformed directives:
 
-1. **Parse with custom extension** - Use goldmark parser with fenced div extension to build AST
-2. **Walk AST manually** - Traverse AST nodes and build output string
-3. **Custom TextRenderer** - Implement goldmark renderer that outputs markdown text instead of HTML
+1. Parse with custom extension - Use goldmark parser with fenced div extension to build AST
+2. Walk AST manually - Traverse AST nodes and build output string
+3. Custom TextRenderer - Implement goldmark renderer that outputs markdown text instead of HTML
    - Standard markdown nodes (paragraphs, headers, lists) → markdown syntax
    - Directive nodes → XML tags (format="xml") or directive syntax (format="directives")
    - Use goldmark's NodeRenderer interface for each node type
 
-**Implementation approach:**
+Implementation approach:
 - Create `MarkdownRenderer` implementing `renderer.Renderer`
 - Register node renderers for all standard goldmark nodes (paragraph, heading, list, etc.)
 - Each renderer outputs markdown text, not HTML
 - Directive renderers output based on format (XML vs passthrough)
 
-**Inline parser trigger requirement:**
+Inline parser trigger requirement:
 - Inline directive parser uses `:` as trigger character
 - Must register trigger: `parser.WithInlineParsers(util.Prioritized(NewInlineParser(), 100))`
 - Inline parser checks for `:name[content]{attrs}` pattern when triggered
@@ -207,6 +207,6 @@ Gradual adoption path:
 - `github.com/yuin/goldmark` - Markdown parser (used by Hugo, Gitea, etc.)
 
 ### Why This Dependency
-- **Goldmark**: Standard Go markdown parser, proper AST, extension API, actively maintained
+- Goldmark: Standard Go markdown parser, proper AST, extension API, actively maintained
 
 No NIH syndrome. Use proven tools.

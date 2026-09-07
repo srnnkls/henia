@@ -34,9 +34,9 @@ fewer tokens than the shingle size have no lexical candidates.
 
 For shingle sets A and B:
 
-- **Jaccard**: `|A ∩ B| / |A ∪ B|`. `duplicate_similarity` sets its threshold.
+- Jaccard: `|A ∩ B| / |A ∪ B|`. `duplicate_similarity` sets its threshold.
   Shared sequences survive sentence reordering except at changed boundaries.
-- **Containment**: `|A ∩ B| / min(|A|, |B|)`. `duplicate_containment` sets its
+- Containment: `|A ∩ B| / min(|A|, |B|)`. `duplicate_containment` sets its
   threshold. This catches a shorter passage copied into a longer paragraph,
   regardless of which one occurs first. It measures coverage of the smaller
   shingle set, not proof of a contiguous substring.

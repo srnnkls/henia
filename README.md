@@ -40,7 +40,7 @@ and interpolation. The template context starts with frontmatter, then
 `henia.variables`, then harness variables (highest precedence). Nested frontmatter
 strings are also templated. Input files are never modified by compilation.
 
-Body processing remains **templates → Goldmark directives → references**.
+Body processing remains *templates → Goldmark directives → references*.
 Metadata expressions receive the templated canonical frontmatter independently.
 
 ## Vendor profiles

@@ -1,6 +1,6 @@
 # Implementation Patterns
 
-**Note:** This file contains code sketches and patterns to follow. These are not tested or final implementations.
+Note: This file contains code sketches and patterns to follow. These are not tested or final implementations.
 
 ## CUE Block Extraction
 
@@ -41,7 +41,7 @@ func ExtractCUEBlocks(source string) (cueSource string, cleanedSource string, er
 }
 ```
 
-**Pattern:** Line-oriented extraction using `bufio.Scanner` for idiomatic Go.
+Pattern: Line-oriented extraction using `bufio.Scanner` for idiomatic Go.
 
 ## CUE Evaluation
 
@@ -80,7 +80,7 @@ func EvaluateCUE(cueSource string, frontmatter map[string]any, config map[string
 }
 ```
 
-**Pattern:** Build base from frontmatter + config, unify with CUE source, decode to Go map.
+Pattern: Build base from frontmatter + config, unify with CUE source, decode to Go map.
 
 ## Transform Integration
 
@@ -158,7 +158,7 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 }
 ```
 
-**Pattern:** Five-step pipeline where each layer feeds into the next.
+Pattern: Five-step pipeline where each layer feeds into the next.
 
 ## Goldmark Rendering
 
@@ -205,13 +205,13 @@ func (t *Transformer) getFencedDivRenderer() renderer.Renderer {
 }
 ```
 
-**Pattern:** Create goldmark instance per transformation with format-specific renderer.
+Pattern: Create goldmark instance per transformation with format-specific renderer.
 
 ## Markdown Renderer (TextRenderer)
 
-**Problem:** Goldmark renders to HTML by default. We need markdown output with transformed directives.
+Problem: Goldmark renders to HTML by default. We need markdown output with transformed directives.
 
-**Solution:** Implement custom renderer that outputs markdown text.
+Solution: Implement custom renderer that outputs markdown text.
 
 ```go
 // internal/fenceddiv/renderer_markdown.go
@@ -286,13 +286,13 @@ func (r *MarkdownRenderer) renderText(w util.BufWriter, source []byte, node ast.
 // ... implement other node renderers for lists, code blocks, emphasis, etc.
 ```
 
-**Pattern:**
+Pattern:
 - Create MarkdownRenderer that implements all standard goldmark node types
 - Each renderer outputs markdown syntax, not HTML
 - Directive nodes delegate to format-specific renderer (XML or Passthrough)
 - Result: markdown with transformed directives embedded
 
-**Alternative (simpler but less extensible):**
+Alternative (simpler but less extensible):
 ```go
 // Walk AST manually without using goldmark's renderer
 func (t *Transformer) renderFencedDivs(body string) (string, error) {
@@ -369,7 +369,7 @@ func (r *XMLRenderer) renderInlineDirective(w util.BufWriter, source []byte, nod
 }
 ```
 
-**Pattern:** Transform AST nodes to XML tags with attribute escaping.
+Pattern: Transform AST nodes to XML tags with attribute escaping.
 
 ## Pass-through Renderer
 
@@ -423,7 +423,7 @@ func (r *PassthroughRenderer) renderInlineDirective(w util.BufWriter, source []b
 }
 ```
 
-**Pattern:** Reconstruct original directive syntax from AST nodes.
+Pattern: Reconstruct original directive syntax from AST nodes.
 
 ## Goldmark Extension
 
@@ -449,4 +449,4 @@ func (e *FencedDivExtension) Extend(md goldmark.Markdown) {
 }
 ```
 
-**Pattern:** Register both block and inline parsers, renderer selection external.
+Pattern: Register both block and inline parsers, renderer selection external.
