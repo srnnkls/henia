@@ -1,0 +1,28 @@
+artifacts = ["skills"]
+
+[harness.claude]
+path = ".claude"
+format = "xml"
+
+[harness.claude.variables]
+review_mode = "thorough"
+
+[harness.claude.tools]
+read = "Read"
+
+[harness.codex]
+path = ".codex"
+format = "directives"
+
+[harness.codex.variables]
+review_mode = "focused"
+
+[harness.codex.tools]
+read = "read_file"
+
+[lint]
+max_lines = 500
+max_age_days = 180
+
+[lint.outdated]
+"old-model-id" = "replacement-model-id"

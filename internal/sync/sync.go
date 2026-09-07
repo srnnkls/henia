@@ -2,6 +2,9 @@ package sync
 
 import (
 	"fmt"
+	"maps"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/srnnkls/henia"
@@ -68,34 +71,81 @@ func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 		allArtifacts = append(allArtifacts, arts...)
 	}
 
-	for harnessName, harness := range s.Harnesses {
+	type writeJob struct {
+		target   target.Target
+		artifact *artifact.Artifact
+	}
+	var jobs []writeJob
+	destinations := make(map[string]string)
+	for _, harnessName := range slices.Sorted(maps.Keys(s.Harnesses)) {
+		harness := s.Harnesses[harnessName]
+		if harness.Path == "" {
+			result.Errors = append(result.Errors, fmt.Errorf("harness %s: path is required", harnessName))
+			continue
+		}
 		filtered := filterArtifacts(allArtifacts, harness)
 
 		tgt := target.NewFromConfig(harnessName, harness)
 		tr := &transform.Transformer{
-			Variables:  harness.Variables,
-			Keys:       harness.Keys,
-			Values:     harness.Values,
-			Tools:      harness.Tools,
-			References: convertReferences(harness.References),
+			Variables:    harness.Variables,
+			OutputFormat: harness.Format,
+			Keys:         harness.Keys,
+			Values:       harness.Values,
+			Tools:        harness.Tools,
+			References:   convertReferences(harness.References),
 		}
 
 		for _, art := range filtered {
 			transformed, err := tr.Transform(art)
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Errorf("transform %s: %w", art.Name, err))
+				result.Errors = append(result.Errors, fmt.Errorf("%s: transform %s for %s: %w", art.SourcePath, art.Name, harnessName, err))
 				continue
 			}
-
-			if err := tgt.Write(transformed); err != nil {
-				result.Errors = append(result.Errors, fmt.Errorf("write %s: %w", art.Name, err))
+			destination, err := filepath.Abs(tgt.TargetPath(transformed))
+			if err != nil {
+				return nil, err
+			}
+			source := art.SourcePath
+			if art.IsDirectory {
+				source = filepath.Join(source, artifact.MainFileName(art.Type))
+			}
+			source, err = filepath.Abs(source)
+			if err != nil {
+				return nil, err
+			}
+			if destination == source {
+				result.Errors = append(result.Errors, fmt.Errorf("output would overwrite canonical source %s", source))
 				continue
 			}
-
-			result.Synced++
+			if art.IsDirectory {
+				relative, err := filepath.Rel(filepath.Dir(source), destination)
+				if err != nil {
+					return nil, err
+				}
+				if filepath.IsLocal(relative) {
+					result.Errors = append(result.Errors, fmt.Errorf("output %s is inside canonical skill directory %s", destination, art.SourcePath))
+					continue
+				}
+			}
+			if first, ok := destinations[destination]; ok {
+				result.Errors = append(result.Errors, fmt.Errorf("output collision at %s between %s and %s", destination, first, source))
+				continue
+			}
+			destinations[destination] = source
+			jobs = append(jobs, writeJob{tgt, transformed})
 		}
 	}
-
+	// Validate every transformation before touching the output tree.
+	if len(result.Errors) > 0 {
+		return result, nil
+	}
+	for _, job := range jobs {
+		if err := job.target.Write(job.artifact); err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("write %s for %s: %w", job.artifact.Name, job.target.Name(), err))
+			continue
+		}
+		result.Synced++
+	}
 	return result, nil
 }
 
@@ -110,8 +160,8 @@ func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifa
 	typeSet := make(map[string]bool)
 	for _, t := range allowedTypes {
 		normalized := t
-		if strings.HasSuffix(t, "s") {
-			normalized = strings.TrimSuffix(t, "s")
+		if before, ok := strings.CutSuffix(t, "s"); ok {
+			normalized = before
 		}
 		typeSet[normalized] = true
 	}
@@ -131,25 +181,13 @@ func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifa
 
 func shouldSync(name string, harness henia.Harness) bool {
 	if len(harness.Include) > 0 {
-		found := false
-		for _, inc := range harness.Include {
-			if inc == name {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(harness.Include, name)
 		if !found {
 			return false
 		}
 	}
 
-	for _, exc := range harness.Exclude {
-		if exc == name {
-			return false
-		}
-	}
-
-	return true
+	return !slices.Contains(harness.Exclude, name)
 }
 
 func convertReferences(refs map[string]henia.ReferenceConfig) map[string]transform.ReferenceConfig {

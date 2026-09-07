@@ -4,22 +4,24 @@
 
 ```scrut
 $ henia --help
-Henia syncs skills, commands, and agents from phora sources to harness targets.
+Henia compiles canonical Markdown skills, lints their quality, and deploys to multiple harnesses.
 
 Usage:
   henia [command]
 
 Available Commands:
   add         Add source to config and sync
+  build       Compile local canonical artifacts for multiple harnesses
   completion  Generate the autocompletion script for the specified shell
   deploy      Deploy to harnesses (assumes sources already fetched)
   help        Help about any command
+  lint        Check skill metadata, references, duplication and freshness
   sync        Fetch sources and deploy to harnesses
   update      Fetch sources and deploy (alias for sync)
 
 Flags:
-      --config string     Config file path
-      --data-dir string   Data directory for sources
+      --config string     Config file path (default "henia.toml")
+      --data-dir string   Data directory for sources (default ".henia/sources")
   -h, --help              help for henia
 
 Use "henia [command] --help" for more information about a command.
@@ -38,8 +40,8 @@ Flags:
   -h, --help   help for sync
 
 Global Flags:
-      --config string     Config file path
-      --data-dir string   Data directory for sources
+      --config string     Config file path (default "henia.toml")
+      --data-dir string   Data directory for sources (default ".henia/sources")
 ```
 
 ## Deploy Help
@@ -55,8 +57,8 @@ Flags:
   -h, --help   help for deploy
 
 Global Flags:
-      --config string     Config file path
-      --data-dir string   Data directory for sources
+      --config string     Config file path (default "henia.toml")
+      --data-dir string   Data directory for sources (default ".henia/sources")
 ```
 
 ## Deploy To Claude (Nested Structure)

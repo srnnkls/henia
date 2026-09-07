@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -48,5 +49,5 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return nil
+	return errors.Join(result.Errors...)
 }

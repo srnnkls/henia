@@ -1,0 +1,95 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/spf13/cobra"
+	"github.com/srnnkls/henia"
+	"github.com/srnnkls/henia/internal/config"
+	"github.com/srnnkls/henia/internal/defaults"
+	"github.com/srnnkls/henia/internal/sync"
+)
+
+func newBuildCommand() *cobra.Command {
+	var output string
+	var selected []string
+	cmd := &cobra.Command{
+		Use:   "build [source-directory]",
+		Short: "Compile local canonical artifacts for multiple harnesses",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			source := "."
+			if len(args) > 0 {
+				source = args[0]
+			}
+			info, err := os.Stat(source)
+			if err != nil {
+				return fmt.Errorf("source: %w", err)
+			}
+			if !info.IsDir() {
+				return fmt.Errorf("source must be a directory containing skills, commands or agents")
+			}
+			cfg, err := optionalConfig(cmd)
+			if err != nil {
+				return err
+			}
+			harnesses := cfg.Harness
+			if len(harnesses) == 0 {
+				return fmt.Errorf("no harnesses configured")
+			}
+			if len(selected) > 0 {
+				harnesses = make(map[string]henia.Harness, len(selected))
+				for _, name := range selected {
+					h, ok := cfg.Harness[name]
+					if !ok {
+						return fmt.Errorf("unknown harness %q", name)
+					}
+					harnesses[name] = h
+				}
+			}
+			for name, h := range harnesses {
+				if !filepath.IsLocal(name) || filepath.Base(name) != name || name == "." {
+					return fmt.Errorf("invalid harness name %q", name)
+				}
+				h.Path = filepath.Join(output, name)
+				if len(h.Artifacts) == 0 {
+					h.Artifacts = cfg.Artifacts
+				}
+				harnesses[name] = h
+			}
+			result, err := sync.NewSyncer(nil, harnesses).Deploy([]sync.FetchedSource{{Name: source, LocalPath: source}})
+			if err != nil {
+				return err
+			}
+			if err := errors.Join(result.Errors...); err != nil {
+				return err
+			}
+			if result.Synced == 0 {
+				return fmt.Errorf("no artifacts found for selected harnesses")
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Built %d artifact(s) in %s\n", result.Synced, output)
+			return err
+		},
+	}
+	cmd.Flags().StringVarP(&output, "output", "o", ".henia/build", "Output directory (one subdirectory per harness)")
+	cmd.Flags().StringSliceVar(&selected, "harness", nil, "Harnesses to build (comma-separated; default all configured)")
+	return cmd
+}
+
+func optionalConfig(cmd *cobra.Command) (*config.Config, error) {
+	cfg, err := config.Load(configPath)
+	if err == nil {
+		return cfg, nil
+	}
+	if cmd.Flags().Changed("config") || !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("load config: %w", err)
+	}
+	presets, err := defaults.DefaultConfig()
+	if err != nil {
+		return nil, err
+	}
+	return &config.Config{Artifacts: presets.Artifacts, Harness: presets.Harness}, nil
+}

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -53,7 +54,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return nil
+	return errors.Join(result.Errors...)
 }
 
 func runSyncDeployOnly(cmd *cobra.Command, args []string) error {
@@ -84,5 +85,5 @@ func runSyncDeployOnly(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return nil
+	return errors.Join(result.Errors...)
 }

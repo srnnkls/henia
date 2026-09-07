@@ -1,3 +1,5 @@
+//go:build ignore
+
 // AST Node Schemas
 // Location: internal/fenceddiv/ast.go
 

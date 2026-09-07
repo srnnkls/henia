@@ -1,6 +1,6 @@
 # Henia
 
-Henia syncs AI coding assistant artifacts (skills, commands, agents) from git repositories to local harness directories, with powerful transformation capabilities to adapt artifacts for different AI coding assistants.
+Henia is a Go CLI that compiles canonical Markdown skills, commands, and agents for multiple AI harnesses. It uses Goldmark for semantic directives and includes an offline linter for references, duplication, and skill maintenance.
 
 ## What is Henia?
 
@@ -19,7 +19,7 @@ Henia transforms artifacts through multiple layers, each using specialized engin
 
 1. **Data Layer** (Planned): CUE-based validation, schemas, and computation with `%cue` blocks
 2. **Control Flow Layer**: Go template execution for conditionals, loops, and variable substitution
-3. **Semantic Markup Layer** (Planned): Goldmark-based directives (`:::block{attrs}`, `:inline[text]{attrs}`) with format-specific rendering
+3. **Semantic Markup Layer**: Goldmark-based directives (`:::block{attrs}`, `:inline[text]{attrs}`) with format-specific rendering
 4. **Reference Layer**: Transform artifact references (`$skill`, `/command`, `@agent`, `!tool`)
 
 This architecture enables:
@@ -30,6 +30,8 @@ This architecture enables:
 - **Cross-references**: Link between skills, commands, and agents with harness-specific output
 
 ## Installation
+
+Requires Go 1.26 or later to build.
 
 ```bash
 go install github.com/srnnkls/henia/cmd/henia@latest
@@ -57,6 +59,7 @@ ref = "main"
 [harness.claude]
 path = "~/.claude"
 structure = "nested"
+format = "xml"
 artifacts = ["skills", "commands"]
 ```
 
@@ -67,6 +70,69 @@ henia sync --config henia.toml --data-dir ~/.henia/sources
 ```
 
 ## Commands
+
+### build
+
+Compile local artifacts without fetching repositories or deploying to live harness
+locations. The source directory contains `skills/`, `commands/`, and/or `agents/`.
+
+```bash
+henia build ./examples --config examples/henia.toml --output .henia/build
+henia build ./examples --harness claude,codex
+```
+
+The output is `<output>/<harness>/<artifact-type>/...`; `--output` defaults to
+`.henia/build`. `--harness` selects configured harnesses. When `henia.toml` is absent,
+build uses the bundled presets; an explicitly requested missing config is an error.
+Resource files are copied alongside the generated main artifact. Resource contents
+are not transformed. Rebuilding overwrites generated paths but does not remove files
+for artifacts deleted from the source.
+
+### lint
+
+Scan Markdown files or directories recursively, including skill reference documents:
+
+```bash
+henia lint ./examples --strict
+henia lint ./examples --format json --config examples/henia.toml
+henia lint ./skills --disable duplicate-heading,large-skill
+```
+
+Output includes the file, one-based line/column, severity, rule, and explanation.
+Errors return a nonzero exit status. Warnings also fail with `--strict`; JSON output
+is always an array (including `[]` when clean). The linter does not execute templates,
+fetch URLs, or claim that a remote page or model is current. Directive checks mask unevaluated template actions; build validates the fully expanded
+result for each harness. Reference and duplication rules skip code blocks
+and resolve artifact references against the complete set of scanned paths.
+
+| Rule | What it checks |
+|---|---|
+| `metadata` | Missing name/description, malformed YAML, invalid review date |
+| `invalid-template` | Malformed Go template syntax (parsed without execution) |
+| `invalid-markup` | Malformed semantic directives |
+| `broken-link` | Missing relative links, images, `#file` references and Markdown heading anchors |
+| `missing-reference` | Unknown backtick-wrapped `$skill`, `/command`, `@agent` references |
+| `duplicate-heading` | Repeated heading text within a document |
+| `duplicate-content` | Repeated paragraphs of at least 12 words, across scanned files |
+| `duplicate-skill` | Duplicate artifact names within the same artifact type |
+| `outdated-reference` | Occurrences of configured obsolete strings |
+| `large-skill` | Main artifact exceeds the line budget (default 500) |
+| `stale-review` | Optional `last_verified` date is older than the review interval (default 180 days) |
+
+Duplication comparisons ignore case and whitespace. Heuristic warnings need human
+judgment; they never rewrite skills automatically. Configure known obsolete references
+and thresholds in `henia.toml`:
+
+```toml
+[lint]
+max_lines = 500
+max_age_days = 180
+disable = ["duplicate-heading"]
+
+[lint.outdated]
+"old-model-id" = "replacement-model-id"
+"https://docs.example.test/v1/" = "https://docs.example.test/v2/"
+```
 
 ### sync
 
@@ -185,6 +251,7 @@ output = "@{{.Name}}"
 [harness.claude]
 path = "~/.claude"
 structure = "nested"
+format = "xml"
 
 [harness.claude.variables]
 model_strong = "opus"
@@ -261,6 +328,69 @@ Skill content here.
 
 ### Commands
 
+### build
+
+Compile local artifacts without fetching repositories or deploying to live harness
+locations. The source directory contains `skills/`, `commands/`, and/or `agents/`.
+
+```bash
+henia build ./examples --config examples/henia.toml --output .henia/build
+henia build ./examples --harness claude,codex
+```
+
+The output is `<output>/<harness>/<artifact-type>/...`; `--output` defaults to
+`.henia/build`. `--harness` selects configured harnesses. When `henia.toml` is absent,
+build uses the bundled presets; an explicitly requested missing config is an error.
+Resource files are copied alongside the generated main artifact. Resource contents
+are not transformed. Rebuilding overwrites generated paths but does not remove files
+for artifacts deleted from the source.
+
+### lint
+
+Scan Markdown files or directories recursively, including skill reference documents:
+
+```bash
+henia lint ./examples --strict
+henia lint ./examples --format json --config examples/henia.toml
+henia lint ./skills --disable duplicate-heading,large-skill
+```
+
+Output includes the file, one-based line/column, severity, rule, and explanation.
+Errors return a nonzero exit status. Warnings also fail with `--strict`; JSON output
+is always an array (including `[]` when clean). The linter does not execute templates,
+fetch URLs, or claim that a remote page or model is current. Directive checks mask unevaluated template actions; build validates the fully expanded
+result for each harness. Reference and duplication rules skip code blocks
+and resolve artifact references against the complete set of scanned paths.
+
+| Rule | What it checks |
+|---|---|
+| `metadata` | Missing name/description, malformed YAML, invalid review date |
+| `invalid-template` | Malformed Go template syntax (parsed without execution) |
+| `invalid-markup` | Malformed semantic directives |
+| `broken-link` | Missing relative links, images, `#file` references and Markdown heading anchors |
+| `missing-reference` | Unknown backtick-wrapped `$skill`, `/command`, `@agent` references |
+| `duplicate-heading` | Repeated heading text within a document |
+| `duplicate-content` | Repeated paragraphs of at least 12 words, across scanned files |
+| `duplicate-skill` | Duplicate artifact names within the same artifact type |
+| `outdated-reference` | Occurrences of configured obsolete strings |
+| `large-skill` | Main artifact exceeds the line budget (default 500) |
+| `stale-review` | Optional `last_verified` date is older than the review interval (default 180 days) |
+
+Duplication comparisons ignore case and whitespace. Heuristic warnings need human
+judgment; they never rewrite skills automatically. Configure known obsolete references
+and thresholds in `henia.toml`:
+
+```toml
+[lint]
+max_lines = 500
+max_age_days = 180
+disable = ["duplicate-heading"]
+
+[lint.outdated]
+"old-model-id" = "replacement-model-id"
+"https://docs.example.test/v1/" = "https://docs.example.test/v2/"
+```
+
 ```
 commands/
   my-command/
@@ -306,22 +436,22 @@ Henia processes artifacts through a powerful multi-layer transformation pipeline
 
 ### Transformation Architecture
 
-The pipeline consists of four layers, executed in order:
+The implementation executes templates, Goldmark directives, and references in that order. CUE remains a separate planned extension:
 
 1. **Data Layer** (Planned) - CUE validation and computation
 2. **Control Flow Layer** - Go template execution
-3. **Semantic Markup Layer** (Planned) - Goldmark directive rendering
+3. **Semantic Markup Layer** - Goldmark directive rendering
 4. **Reference Layer** - Artifact reference transformation
 
 Each layer uses a specialized engine for its purpose, ensuring clean separation of concerns.
 
 ### Variable Substitution
 
-Use Go template syntax in frontmatter values and body content:
+Use Go template syntax in frontmatter string values and body content. Frontmatter values (including lists, booleans, and nested maps) form the template context. Harness variables override same-named frontmatter values, preserving existing variable templates:
 
 **Source:**
 ```yaml
-model: {{.model_strong}}
+model: "{{.model_strong}}"
 ```
 
 **Configuration:**
@@ -448,7 +578,7 @@ Use model: {{.models.strong}}
 - Final unified value becomes template context
 - Validation errors report clear constraint violations
 
-### Semantic Markup with Directives (Planned)
+### Semantic Markup with Directives
 
 The Goldmark layer enables semantic markup that renders differently per harness:
 
@@ -498,78 +628,34 @@ Use :term[TDD]{abbr="Test-Driven Development"} for all features.
 
 ### Pipeline Integration
 
-The complete transformation flow:
-
 ```
-1. Parse frontmatter (YAML) → extract metadata
-2. Evaluate CUE blocks → validate and compute values
-3. Execute Go templates → conditional content, variable substitution
-4. Render directives → format-specific output (XML or passthrough)
-5. Transform references → harness-specific syntax
-6. Apply key/value mappings → normalize frontmatter
+YAML frontmatter → Go templates → Goldmark directives → references → write
 ```
 
-**Example end-to-end:**
+Frontmatter key/value mappings apply to the rendered metadata. Directives are semantic
+markup; they do not execute code. CUE and Starlark processing are not implemented.
 
-**Source artifact:**
-```markdown
----
-name: code-test
-model: "{{.model_strong}}"
----
+Both container directives (`:::name{attrs}`) and inline directives
+(`:name[content]{attrs}`) support nesting. Goldmark parses the attributes, including
+`#id`, `.class`, quoted strings with escaped quotes, and unquoted scalar values.
+Quote values containing spaces or punctuation. Directive and attribute names use
+ASCII letters or `_`, followed by letters, digits, `_`, `-`, or `.`. Duplicate
+attribute names and structured attribute values are rejected. Two-colon leaf
+directives are not processed in this version.
 
-%cue {{
-required_tools: ["bash", "read", "write"]
-}}
+`format = "xml"` converts only directives to XML tags and escapes attribute values.
+The body remains Markdown, so the complete output is not an XML document.
+`format = "directives"` (also the default when omitted) normalizes directive spacing
+and quotes attributes. Empty attribute blocks may disappear. Markdown outside the
+directives, including code fences, retains its original bytes.
 
-# Code Test
+Malformed directives report line and column positions in the expanded body.
+All selected artifacts are transformed before any output is written; syntax errors
+and output collisions fail preflight. Filesystem errors during writing can leave
+partial output and cause a nonzero exit status.
 
-:::instruction{priority="high"}
-Use :term[TDD]{abbr="Test-Driven Development"} workflow.
-:::
-
-See `$code-review` skill after implementation.
-```
-
-**Claude output (format="xml"):**
-```markdown
----
-name: code-test
-model: opus
-allowed_tools:
-  - Bash
-  - Read
-  - Write
----
-
-# Code Test
-
-<instruction priority="high">
-Use <term abbr="Test-Driven Development">TDD</term> workflow.
-</instruction>
-
-See `/code-review` skill after implementation.
-```
-
-**OpenCode output (format="directives"):**
-```markdown
----
-name: code-test
-model: anthropic/claude-sonnet-4-5
-tools:
-  - bash
-  - read
-  - write
----
-
-# Code Test
-
-:::instruction{priority="high"}
-Use :term[TDD]{abbr="Test-Driven Development"} workflow.
-:::
-
-See `@code-review` skill after implementation.
-```
+See [the runnable example](examples/skills/review/SKILL.md) and its
+[harness configuration](examples/henia.toml).
 
 ## Directory Structures
 
@@ -655,7 +741,7 @@ All artifacts from all sources are discovered and deployed together.
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.26+
 - [mise](https://mise.jdx.dev/) (optional, for task runner)
 - [scrut](https://github.com/facebookincubator/scrut) (for integration tests)
 
@@ -712,7 +798,7 @@ mise run test
    - **Parse frontmatter**: Extract YAML metadata from artifacts
    - **CUE evaluation** (planned): Validate data and compute derived values
    - **Template execution**: Go templates for conditionals and variable substitution
-   - **Directive rendering** (planned): Goldmark-based semantic markup transformation
+   - **Directive rendering**: Goldmark-based semantic markup transformation
    - **Reference transformation**: Convert artifact references to harness-specific syntax
    - **Key/value mapping**: Normalize frontmatter for target harness
    - **Command generation**: Auto-generate commands from user-invocable skills (if enabled)
@@ -741,6 +827,9 @@ See `internal/defaults/henia.toml` for default harness configurations.
 ### Transformation Pipeline Status
 
 **Currently Implemented:**
+- ✓ Local multi-harness builds and offline skill linting
+- ✓ Goldmark block/inline directives with XML and normalized directive output
+- ✓ Typed frontmatter template context with harness variable overrides
 - ✓ Go template execution with variable substitution
 - ✓ Frontmatter key/value mapping
 - ✓ Reference transformation (`$skill`, `/command`, `@agent`, `!tool`)
@@ -749,9 +838,7 @@ See `internal/defaults/henia.toml` for default harness configurations.
 
 **Planned (In Development):**
 - ⏳ CUE data layer for validation and computation (`%cue` blocks)
-- ⏳ Goldmark semantic markup with directives (`:::block{attrs}`, `:inline[text]{attrs}`)
-- ⏳ Format-specific rendering (XML for Claude, passthrough for others)
-- ⏳ Enhanced type support in template context (`map[string]any` instead of `map[string]string`)
+
 
 See the [Transformations](#transformations) section for detailed examples of both current and planned features.
 

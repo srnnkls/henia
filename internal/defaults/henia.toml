@@ -4,6 +4,7 @@ artifacts = ["skills", "commands", "agents"]
 # Structure: nested (skills/name/SKILL.md)
 # Docs: https://docs.anthropic.com/en/docs/claude-code
 [harness.claude]
+format = "xml"
 path = ".claude"
 structure = "nested"
 

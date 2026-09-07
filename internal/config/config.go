@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"github.com/srnnkls/henia/internal/lint"
 	"os"
 
 	toml "github.com/pelletier/go-toml/v2"
@@ -9,6 +11,7 @@ import (
 )
 
 type Config struct {
+	Lint      lint.Options             `toml:"lint,omitempty"`
 	Artifacts []string                 `toml:"artifacts,omitempty"`
 	Sources   map[string]phora.Source  `toml:"sources,omitempty"`
 	Harness   map[string]henia.Harness `toml:"harness,omitempty"`
@@ -32,5 +35,16 @@ func Load(path string) (*Config, error) {
 		cfg.Harness = make(map[string]henia.Harness)
 	}
 
+	for name, h := range cfg.Harness {
+		if h.Format != "" && h.Format != "directives" && h.Format != "xml" {
+			return nil, fmt.Errorf("harness %s: unsupported format %q", name, h.Format)
+		}
+		if h.Structure != "" && h.Structure != "flat" && h.Structure != "nested" {
+			return nil, fmt.Errorf("harness %s: unsupported structure %q", name, h.Structure)
+		}
+	}
+	if err := cfg.Lint.Validate(); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
 }

@@ -16,6 +16,7 @@ type ReferenceConfig struct {
 }
 
 type Harness struct {
+	Format                     string                       `toml:"format,omitempty"`
 	Path                       string                       `toml:"path,omitempty"`
 	Structure                  string                       `toml:"structure,omitempty"` // "flat" or "nested" (default)
 	GenerateCommandsFromSkills bool                         `toml:"generate_commands_from_skills,omitempty"`

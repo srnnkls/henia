@@ -3,10 +3,12 @@ package transform
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"strings"
 	"text/template"
 
 	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
 )
 
@@ -15,15 +17,16 @@ type ReferenceConfig struct {
 }
 
 type Transformer struct {
-	Variables  map[string]string
-	Mappings   map[string]string
-	Keys       map[string]string
-	Values     map[string]map[string]string
-	References map[string]ReferenceConfig
-	Tools      map[string]string
+	OutputFormat string
+	Variables    map[string]string
+	Mappings     map[string]string
+	Keys         map[string]string
+	Values       map[string]map[string]string
+	References   map[string]ReferenceConfig
+	Tools        map[string]string
 }
 
-func ExecuteTemplate(content string, vars map[string]string) (string, error) {
+func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
 	tmpl, err := template.New("content").Parse(content)
 	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
@@ -40,9 +43,7 @@ func ExecuteTemplate(content string, vars map[string]string) (string, error) {
 func ApplyMappings(fm map[string]any, mappings map[string]string) map[string]any {
 	if mappings == nil {
 		result := make(map[string]any)
-		for k, v := range fm {
-			result[k] = v
-		}
+		maps.Copy(result, fm)
 		return result
 	}
 
@@ -61,9 +62,7 @@ func ApplyMappings(fm map[string]any, mappings map[string]string) map[string]any
 func ApplyValueMappings(fm map[string]any, values map[string]map[string]string) map[string]any {
 	if values == nil {
 		result := make(map[string]any)
-		for k, v := range fm {
-			result[k] = v
-		}
+		maps.Copy(result, fm)
 		return result
 	}
 
@@ -98,9 +97,15 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		Frontmatter: make(map[string]any),
 	}
 
+	templateContext := make(map[string]any, len(art.Frontmatter)+len(t.Variables))
+	maps.Copy(templateContext, art.Frontmatter)
+	for k, v := range t.Variables {
+		templateContext[k] = v
+	}
+
 	for k, v := range art.Frontmatter {
 		if str, ok := v.(string); ok {
-			transformed, err := ExecuteTemplate(str, t.Variables)
+			transformed, err := ExecuteTemplate(str, templateContext)
 			if err != nil {
 				return nil, fmt.Errorf("transform frontmatter %q: %w", k, err)
 			}
@@ -118,9 +123,14 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 
 	result.Frontmatter = ApplyValueMappings(result.Frontmatter, t.Values)
 
-	body, err := ExecuteTemplate(art.Body, t.Variables)
+	body, err := ExecuteTemplate(art.Body, templateContext)
 	if err != nil {
 		return nil, fmt.Errorf("transform body: %w", err)
+	}
+
+	body, err = markup.Render(body, t.OutputFormat)
+	if err != nil {
+		return nil, fmt.Errorf("render directives: %w", err)
 	}
 
 	body = t.transformReferences(body)

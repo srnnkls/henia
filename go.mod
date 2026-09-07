@@ -1,11 +1,12 @@
 module github.com/srnnkls/henia
 
-go 1.23.0
+go 1.26.0
 
 require (
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/spf13/cobra v1.10.2
-	github.com/srnnkls/phora v0.0.0
+	github.com/srnnkls/phora v0.0.0-20260115094253-a1b2437f4aab
+	github.com/yuin/goldmark v1.7.16
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -33,5 +34,3 @@ require (
 	golang.org/x/sys v0.32.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
-
-replace github.com/srnnkls/phora => ../phora
