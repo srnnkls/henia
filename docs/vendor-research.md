@@ -1,5 +1,9 @@
 # Skill portability
 
+Native discovery paths below describe vendor contracts. Henia writes each variant
+under its build output directory; Phora chooses the installation destinations.
+
+
 Primary-source research checked 2026-09-07. This document distinguishes the
 vendor contract from Henia's compiler choices; it is not an installation guide.
 

@@ -1,4 +1,4 @@
-package sync
+package build
 
 import (
 	"os"
@@ -11,7 +11,7 @@ import (
 
 func TestOutputCollision(t *testing.T) {
 	root := t.TempDir()
-	var sources []FetchedSource
+	var sources []string
 	for _, name := range []string{"one", "two"} {
 		source := filepath.Join(root, name)
 		if err := os.MkdirAll(filepath.Join(source, "skills"), 0755); err != nil {
@@ -20,14 +20,14 @@ func TestOutputCollision(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(source, "skills/same.md"), []byte("# Skill\n"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		sources = append(sources, FetchedSource{Name: name, LocalPath: source})
+		sources = append(sources, source)
 	}
 	output := filepath.Join(root, "out")
-	result, err := NewSyncer(nil, map[string]henia.Harness{"claude": {Path: output}}).Deploy(sources)
+	result, err := Run(t.Context(), sources, output, map[string]henia.Harness{"claude": {}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Errors) != 1 || !strings.Contains(result.Errors[0].Error(), "collision") || result.Synced != 0 {
+	if len(result.Errors) != 1 || !strings.Contains(result.Errors[0].Error(), "collision") || result.Built != 0 {
 		t.Fatalf("expected collision: %+v", result)
 	}
 	if _, err := os.Stat(output); !os.IsNotExist(err) {
@@ -44,7 +44,7 @@ func TestOutputInsideSource(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skill, "SKILL.md"), []byte("# Skill\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := NewSyncer(nil, map[string]henia.Harness{"claude": {Path: filepath.Join(skill, "output")}}).Deploy([]FetchedSource{{LocalPath: root}})
+	result, err := Run(t.Context(), []string{root}, filepath.Join(skill, "output"), map[string]henia.Harness{"claude": {}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,14 +64,17 @@ func TestOutputAliasCannotOverwriteSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	alias := filepath.Join(root, "alias")
-	if err := os.Symlink(source, alias); err != nil {
+	if err := os.MkdirAll(alias, 0755); err != nil {
 		t.Fatal(err)
 	}
-	result, err := NewSyncer(nil, map[string]henia.Harness{"legacy": {Path: alias}}).Deploy([]FetchedSource{{LocalPath: source}})
+	if err := os.Symlink(source, filepath.Join(alias, "legacy")); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Run(t.Context(), []string{source}, alias, map[string]henia.Harness{"legacy": {}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Errors) == 0 || result.Synced != 0 {
+	if len(result.Errors) == 0 || result.Built != 0 {
 		t.Fatalf("accepted source alias: %+v", result)
 	}
 	data, err := os.ReadFile(path)

@@ -1,6 +1,8 @@
-package sync
+// Package build compiles local canonical artifacts into a separate output tree.
+package build
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"os"
@@ -13,62 +15,37 @@ import (
 	"github.com/srnnkls/henia/internal/target"
 	"github.com/srnnkls/henia/internal/transform"
 	"github.com/srnnkls/henia/internal/vendor"
-	"github.com/srnnkls/phora"
 )
 
-type Fetcher interface {
-	FetchAll() ([]phora.FetchResult, error)
-}
-
-type FetchedSource struct {
-	Name      string
-	LocalPath string
-}
-
 type Result struct {
-	Synced   int
-	Skipped  int
+	Built    int
 	Errors   []error
 	Warnings []string
 }
 
-type Syncer struct {
-	Fetcher   Fetcher
-	Harnesses map[string]henia.Harness
-}
-
-func NewSyncer(fetcher Fetcher, harnesses map[string]henia.Harness) *Syncer {
-	return &Syncer{
-		Fetcher:   fetcher,
-		Harnesses: harnesses,
+// Run compiles local source directories. Each harness writes beneath output/name.
+func Run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness) (*Result, error) {
+	if output == "" {
+		return nil, fmt.Errorf("build output directory is required")
 	}
-}
-
-func (s *Syncer) Sync() (*Result, error) {
-	results, err := s.Fetcher.FetchAll()
-	if err != nil {
-		return nil, fmt.Errorf("fetch: %w", err)
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("at least one source directory is required")
 	}
-
-	sources := make([]FetchedSource, len(results))
-	for i, r := range results {
-		sources[i] = FetchedSource{
-			Name:      r.Name,
-			LocalPath: r.LocalPath,
+	for name := range harnesses {
+		if !filepath.IsLocal(name) || filepath.Base(name) != name || name == "." {
+			return nil, fmt.Errorf("invalid harness name %q", name)
 		}
 	}
-
-	return s.Deploy(sources)
-}
-
-func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 	result := &Result{}
 
 	var allArtifacts []*artifact.Artifact
 	for _, src := range sources {
-		arts, err := artifact.Discover(src.LocalPath, []string{"skills", "commands", "agents"})
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		arts, err := artifact.Discover(src, []string{"skills", "commands", "agents"})
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Errorf("discover %s: %w", src.Name, err))
+			result.Errors = append(result.Errors, fmt.Errorf("discover %s: %w", src, err))
 			continue
 		}
 		allArtifacts = append(allArtifacts, arts...)
@@ -80,15 +57,15 @@ func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 	}
 	var jobs []writeJob
 	destinations := make(map[string]string)
-	for _, harnessName := range slices.Sorted(maps.Keys(s.Harnesses)) {
-		harness := s.Harnesses[harnessName]
-		if harness.Path == "" {
-			result.Errors = append(result.Errors, fmt.Errorf("harness %s: path is required", harnessName))
-			continue
+	for _, harnessName := range slices.Sorted(maps.Keys(harnesses)) {
+		harness := harnesses[harnessName]
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
+		outputPath := filepath.Join(output, harnessName)
 		filtered := filterArtifacts(allArtifacts, harness)
 
-		tgt := target.NewFromConfig(harnessName, harness)
+		tgt := target.NewFromConfig(harnessName, outputPath, harness)
 		tr := &transform.Transformer{
 			Profile:      harness.Profile,
 			Strict:       harness.Strict,
@@ -108,7 +85,7 @@ func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 				result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
 				continue
 			}
-			tr.Context = vendor.Context{Name: harnessName, Profile: harness.Profile, Path: harness.Path, Variables: harness.Variables, Tools: harness.Tools, Keys: harness.Keys}
+			tr.Context = vendor.Context{Name: harnessName, Profile: harness.Profile, Path: outputPath, Variables: harness.Variables, Tools: harness.Tools, Keys: harness.Keys}
 		}
 
 		for _, art := range filtered {
@@ -169,7 +146,7 @@ func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 					return nil, err
 				}
 				if !filepath.IsLocal(relative) {
-					result.Errors = append(result.Errors, fmt.Errorf("output %s escapes harness path %s", path, tgt.Path()))
+					result.Errors = append(result.Errors, fmt.Errorf("output %s escapes build output %s", path, tgt.Path()))
 				}
 				for _, canonical := range allArtifacts {
 					protected, err := resolvedPath(canonical.SourcePath)
@@ -201,11 +178,14 @@ func (s *Syncer) Deploy(sources []FetchedSource) (*Result, error) {
 		return result, nil
 	}
 	for _, job := range jobs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if err := job.target.Write(job.artifact); err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("write %s for %s: %w", job.artifact.Name, job.target.Name(), err))
 			continue
 		}
-		result.Synced++
+		result.Built++
 	}
 	return result, nil
 }
@@ -259,7 +239,7 @@ func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifa
 		if !typeSet[string(art.Type)] {
 			continue
 		}
-		if !shouldSync(art.Name, harness) {
+		if !shouldBuild(art.Name, harness) {
 			continue
 		}
 		filtered = append(filtered, art)
@@ -268,7 +248,7 @@ func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifa
 	return filtered
 }
 
-func shouldSync(name string, harness henia.Harness) bool {
+func shouldBuild(name string, harness henia.Harness) bool {
 	if len(harness.Include) > 0 {
 		found := slices.Contains(harness.Include, name)
 		if !found {

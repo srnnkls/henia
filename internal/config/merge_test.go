@@ -33,7 +33,7 @@ custom = "project"
 }
 
 func TestLegacyConfigDoesNotOptIntoProfile(t *testing.T) {
-	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte("[harness.claude]\npath='output'\n"))
+	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte("[harness.claude]\nformat='xml'\n"))
 	if err != nil {
 		t.Fatal(err)
 	}

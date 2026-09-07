@@ -248,3 +248,26 @@ func TestLintSemanticConfigAndJSON(t *testing.T) {
 		t.Fatalf("%+v", diagnostics)
 	}
 }
+
+func TestBuildOutputSettingAndCLIOverride(t *testing.T) {
+	source := t.TempDir()
+	fixture(t, filepath.Join(source, "skills/example/SKILL.md"), "---\nname: example\ndescription: Example\n---\n# Example\n")
+	testConfig(t, "[build]\noutput='artifacts'\n[harness.claude]\nprofile='claude'\n")
+	for _, override := range []bool{false, true} {
+		destination := filepath.Join(filepath.Dir(configPath), "artifacts")
+		args := []string{source}
+		if override {
+			destination = filepath.Join(t.TempDir(), "override")
+			args = append(args, "--output", destination)
+		}
+		cmd := newBuildCommand()
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(destination, "claude/skills/example/SKILL.md")); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

@@ -1,0 +1,18 @@
+# Run after the build hook completes. Demo destinations stay in staging.
+[sources.claude-build]
+path = ".henia/build/claude"
+include = ["skills/*"]
+
+[sources.codex-build]
+path = ".henia/build/codex"
+include = ["skills/*"]
+
+[targets.claude]
+path = ".henia/installed/claude"
+layout = "flat"
+sources = ["claude-build"]
+
+[targets.codex]
+path = ".henia/installed/codex"
+layout = "flat"
+sources = ["codex-build"]

@@ -18,6 +18,23 @@ The user selected TOML + Expr on 2026-09-07. This supersedes the earlier require
 for Starlark scripts, their module/helper API and interpreter-specific step limits.
 Starlark and CUE are deferred. Go templates remain required for body composition.
 
+## Compiler boundary
+
+Henia builds and lints local artifacts. Phora owns fetching, source selection,
+installation paths, deployment, pruning, locks and hook orchestration. Henia has
+no deployment commands, source registry or Phora library dependency.
+
+`[build].output` selects an artifact directory, default `.henia/build`; `--output`
+overrides it. Explicit relative configuration paths resolve against the declaring
+config file; CLI paths resolve against the invocation directory. Every harness
+writes under `<output>/<harness>/...`. Harness configuration defines compilation
+semantics and has no installation `path`. Legacy `[sources]` and harness `path`
+settings fail with migration guidance to Phora.
+
+Phora may invoke the compiler as a hook and consume the resulting directory as a
+local source. Output must exist before Phora snapshots that source. See the
+[phase example](../../../docs/phora.md).
+
 ## Required pipeline
 
 - Parse YAML and preserve canonical types and extra fields.
@@ -59,7 +76,7 @@ conversion, boolean inversion and reshaping without custom parsers. Shared helpe
 map tool names, merge maps, and require a nonempty value. Computations do not
 mutate inputs or depend on evaluation order.
 
-Additional files are relative to the harness root. JSON and YAML serialize data;
+Additional files are relative to the harness build output root. JSON and YAML serialize data;
 text requires a string. Nil or empty-map results suppress file emission. Multiple
 skills claiming a shared configuration file fail with a collision instead of
 silently overwriting one another. Per-skill mappings must not implicitly grant
@@ -75,8 +92,9 @@ Unreadable or invalid overrides fail instead of falling back silently.
 
 Configuration merges bundled defaults, user `~/.config/henia/henia.toml`, then
 project TOML. Scalars override including false; arrays concatenate with later
-items last; tables merge recursively. Explicit configurations select only the
-harnesses they declare. Existing configurations without a `profile` retain the
+items last; tables merge recursively. Configurations with harness declarations
+select only those entries; build-only or lint-only settings retain the bundled
+profiles. Existing configurations without a `profile` retain the
 legacy mapper. Default builds support all nine researched skill profiles.
 
 ## Lint rule DSL

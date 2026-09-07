@@ -3,7 +3,6 @@ artifacts = ["skills"]
 
 [harness.claude]
 profile = "claude"
-path = ".claude"
 format = "xml"
 structure = "nested"
 artifacts = ["skills"]
@@ -27,14 +26,12 @@ output = "/{{.Name}}"
 
 [harness.claude-upload]
 profile = "claude-upload"
-path = ".henia/packages/claude-upload"
 format = "xml"
 structure = "nested"
 artifacts = ["skills"]
 
 [harness.codex]
 profile = "codex"
-path = ".agents"
 format = "directives"
 structure = "nested"
 artifacts = ["skills"]
@@ -44,7 +41,6 @@ output = "${{.Name}}"
 
 [harness.chatgpt]
 profile = "chatgpt"
-path = ".henia/packages/chatgpt"
 format = "directives"
 structure = "nested"
 artifacts = ["skills"]
@@ -54,7 +50,6 @@ output = "@{{.Name}}"
 
 [harness.opencode]
 profile = "opencode"
-path = ".opencode"
 format = "directives"
 structure = "nested"
 artifacts = ["skills"]
@@ -64,7 +59,6 @@ output = 'skill({name: "{{.Name}}"})'
 
 [harness.gemini]
 profile = "gemini"
-path = ".gemini"
 format = "directives"
 structure = "nested"
 artifacts = ["skills"]
@@ -74,14 +68,12 @@ output = 'activate_skill({name: "{{.Name}}"})'
 
 [harness.github]
 profile = "github"
-path = ".github"
 format = "directives"
 structure = "nested"
 artifacts = ["skills"]
 
 [harness.cursor]
 profile = "cursor"
-path = ".cursor"
 format = "directives"
 structure = "nested"
 artifacts = ["skills"]
@@ -91,7 +83,6 @@ output = "/{{.Name}}"
 
 [harness.agentskills]
 profile = "agentskills"
-path = ".henia/packages/agentskills"
 format = "directives"
 structure = "nested"
 artifacts = ["skills"]

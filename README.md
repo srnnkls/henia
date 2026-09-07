@@ -3,6 +3,7 @@
 Henia compiles canonical Markdown skills for multiple AI harnesses and lints their
 metadata, directives, references and structure. Write a skill once, use Go
 templates to compose its body, and select a vendor profile for its output.
+Phora owns source fetching, installation, deployment state and hook orchestration.
 
 ## Quick start
 
@@ -45,17 +46,17 @@ Metadata expressions receive the templated canonical frontmatter independently.
 
 ## Vendor profiles
 
-| Profile | Default skill destination / package staging |
+| Profile | Default build artifact |
 |---|---|
-| `claude` | `.claude/skills/<name>/SKILL.md` |
-| `codex` | `.agents/skills/<name>/SKILL.md` |
-| `opencode` | `.opencode/skills/<name>/SKILL.md` |
-| `gemini` | `.gemini/skills/<name>/SKILL.md` |
-| `github` | `.github/skills/<name>/SKILL.md` |
-| `cursor` | `.cursor/skills/<name>/SKILL.md` |
-| `chatgpt` | `.henia/packages/chatgpt/skills/<name>/SKILL.md` |
-| `claude-upload` | `.henia/packages/claude-upload/skills/<name>/SKILL.md` |
-| `agentskills` | `.henia/packages/agentskills/skills/<name>/SKILL.md` |
+| `claude` | `.henia/build/claude/skills/<name>/SKILL.md` |
+| `codex` | `.henia/build/codex/skills/<name>/SKILL.md` |
+| `opencode` | `.henia/build/opencode/skills/<name>/SKILL.md` |
+| `gemini` | `.henia/build/gemini/skills/<name>/SKILL.md` |
+| `github` | `.henia/build/github/skills/<name>/SKILL.md` |
+| `cursor` | `.henia/build/cursor/skills/<name>/SKILL.md` |
+| `chatgpt` | `.henia/build/chatgpt/skills/<name>/SKILL.md` |
+| `claude-upload` | `.henia/build/claude-upload/skills/<name>/SKILL.md` |
+| `agentskills` | `.henia/build/agentskills/skills/<name>/SKILL.md` |
 
 Profiles map keys, values and types, filter unsupported metadata with diagnostics,
 and generate additional files such as `agents/openai.yaml`. Upload profiles stage
@@ -66,13 +67,11 @@ See [vendor contracts and sources](docs/vendor-research.md) and
 ```toml
 [harness.claude]
 profile = "claude"
-path = ".claude"
 format = "xml"
 strict = true
 
 [harness.codex]
 profile = "codex"
-path = ".agents"
 format = "directives"
 ```
 
@@ -125,33 +124,37 @@ The linter does not execute templates or fetch URLs. Dynamic nodes are skipped b
 custom rules by default; lint compiled output to check expanded values. Errors
 fail lint; `--strict` also fails on warnings. JSON output is an array of diagnostics.
 
-## Build and deploy
+## Build artifacts for Phora
 
 ```bash
-# Compile local skills into a separate tree, without fetching or installing.
 henia build examples --output .henia/build --harness claude,codex
-
-# Fetch configured sources and deploy them.
-henia sync --config henia.toml
-
-# Deploy already fetched sources.
-henia deploy --config henia.toml
 ```
 
-Build writes `<output>/<harness>/skills/<name>/...`. Without a configuration it
-uses all nine bundled profiles. An explicit configuration selects only the
-harnesses declared in project or user configuration; it does not enable unrelated
-installations. `update` aliases `sync`; `add <repo> --ref <ref>` adds and syncs a source.
+Build writes `<output>/<harness>/skills/<name>/...`. The output directory defaults
+to `.henia/build` and can be configured independently of the vendor profiles:
 
 ```toml
-[sources.team]
-repo = "https://github.com/example/skills"
-ref = "main"
+[build]
+output = "dist/skills"
 
 [harness.claude]
 profile = "claude"
-path = ".claude"
+format = "xml"
 ```
+
+A configured relative output path resolves against its configuration file.
+`--output` overrides the setting and resolves against the invocation directory.
+With no explicit harness selection in config, builds use all nine bundled profiles;
+declaring harnesses selects only those entries. `--harness` narrows that selection.
+
+Henia consumes local directories and writes build artifacts. It has no `add`,
+`sync`, `update` or `deploy` command, source registry, deployment lock or Phora
+library dependency. Migrate old `[sources]` entries and harness installation
+`path` settings into Phora configuration; use `[build].output` for compilation.
+
+Phora can invoke `henia build` from a hook and consume each harness output as a
+local source. See the [Phora integration guide](docs/phora.md) for the phase order
+and example configurations.
 
 Config merges bundled defaults, `~/.config/henia/henia.toml`, then project
 `henia.toml`: tables merge recursively, scalars override (including `false`), and

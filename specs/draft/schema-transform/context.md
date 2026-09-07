@@ -10,8 +10,11 @@ The current normative contract is [spec.md](spec.md).
 - `internal/markup`: Goldmark rendering and source-aware lint views.
 - `internal/lint`: built-in checks and declarative custom rules.
 - `internal/transform`: templates, metadata compilation, markup and references.
-- `internal/target`, `internal/sync`: preflight plans and bounded output writes.
+- `internal/target`, `internal/build`: preflight plans and bounded output writes.
 
 Vendor behavior is documented with primary sources in
 [the research matrix](../../../docs/vendor-research.md). Older Starlark resources
 remain on the historical schema-transform branch and are not executable contracts.
+
+Phora is the deployment authority. Henia reads local canonical inputs and emits
+artifacts under one build output directory; its Go module does not import Phora.

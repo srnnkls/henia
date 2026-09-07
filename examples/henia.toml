@@ -1,8 +1,10 @@
 artifacts = ["skills"]
 
+[build]
+output = ".henia/build"
+
 [harness.claude]
 profile = "claude"
-path = ".claude"
 format = "xml"
 
 [harness.claude.variables]
@@ -13,7 +15,6 @@ read = "Read"
 
 [harness.codex]
 profile = "codex"
-path = ".agents"
 format = "directives"
 
 [harness.codex.variables]

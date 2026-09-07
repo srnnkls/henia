@@ -31,9 +31,8 @@ func New(basePath string) *HarnessTarget {
 	return &HarnessTarget{basePath: basePath}
 }
 
-func NewFromConfig(name string, h henia.Harness) Target {
-	path := henia.ExpandPath(h.Path)
-	return &HarnessTarget{name: name, basePath: path, structure: h.Structure}
+func NewFromConfig(name, output string, h henia.Harness) Target {
+	return &HarnessTarget{name: name, basePath: output, structure: h.Structure}
 }
 
 func (t *HarnessTarget) Name() string { return t.name }

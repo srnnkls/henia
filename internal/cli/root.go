@@ -6,7 +6,6 @@ import (
 
 var (
 	configPath string
-	dataDir    string
 )
 
 func Execute() error {
@@ -15,13 +14,12 @@ func Execute() error {
 
 var rootCmd = &cobra.Command{
 	Use:          "henia",
-	Short:        "Build, lint and deploy portable AI skills",
-	Long:         "Henia compiles canonical Markdown skills, lints their quality, and deploys to multiple harnesses.",
+	Short:        "Build and lint portable AI skills",
+	Long:         "Henia compiles canonical Markdown skills into build artifacts and lints their quality.",
 	SilenceUsage: true,
 }
 
 func init() {
 	rootCmd.AddCommand(newBuildCommand(), newLintCommand())
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "henia.toml", "Config file path")
-	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", ".henia/sources", "Data directory for sources")
 }

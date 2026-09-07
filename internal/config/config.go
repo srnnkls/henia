@@ -3,23 +3,26 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"github.com/srnnkls/henia/internal/defaults"
-	"github.com/srnnkls/henia/internal/lint"
-	"github.com/srnnkls/henia/internal/vendor"
 	"maps"
 	"os"
 	"path/filepath"
 
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/srnnkls/henia"
-	"github.com/srnnkls/phora"
+	"github.com/srnnkls/henia/internal/defaults"
+	"github.com/srnnkls/henia/internal/lint"
+	"github.com/srnnkls/henia/internal/vendor"
 )
 
 type Config struct {
 	Lint      lint.Options             `toml:"lint,omitempty"`
 	Artifacts []string                 `toml:"artifacts,omitempty"`
-	Sources   map[string]phora.Source  `toml:"sources,omitempty"`
+	Build     BuildOptions             `toml:"build,omitempty"`
 	Harness   map[string]henia.Harness `toml:"harness,omitempty"`
+}
+
+type BuildOptions struct {
+	Output string `toml:"output,omitempty"`
 }
 
 func Load(path string) (*Config, error) {
@@ -66,10 +69,24 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		if err := toml.Unmarshal(layer.data, layer.out); err != nil {
 			return nil, err
 		}
+		if _, ok := (*layer.out)["sources"]; ok {
+			return nil, fmt.Errorf("source fetching belongs to Phora; remove [sources] from henia.toml and pass a local directory to henia build")
+		}
+		if harnesses, ok := (*layer.out)["harness"].(map[string]any); ok {
+			for name, value := range harnesses {
+				if harness, ok := value.(map[string]any); ok {
+					if _, exists := harness["path"]; exists {
+						return nil, fmt.Errorf("harness.%s.path is a deployment setting; use [build].output for artifacts and configure final destinations in Phora", name)
+					}
+				}
+			}
+		}
 	}
 	// Explicit configurations select their harnesses. Merge each selected harness
-	// with its preset without unexpectedly deploying to other live installations.
-	if projectData != nil || userData != nil {
+	// with its preset when harnesses are explicitly selected.
+	userHarnesses, _ := user["harness"].(map[string]any)
+	projectHarnesses, _ := project["harness"].(map[string]any)
+	if len(userHarnesses) > 0 || len(projectHarnesses) > 0 {
 		delete(base, "artifacts")
 		selected := map[string]any{}
 		for _, layer := range []map[string]any{user, project} {
@@ -102,13 +119,17 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 			selected[name] = preset
 		}
 	}
-	// Resolve model paths in the layer that declares them, so user defaults do
+	// Resolve filesystem settings in the layer that declares them, so defaults do
 	// not change meaning with the project or invocation working directory.
 	for _, layer := range []struct {
 		values map[string]any
 		root   string
 	}{{user, userRoot}, {project, projectRoot}} {
 		lintConfig, _ := layer.values["lint"].(map[string]any)
+		buildConfig, _ := layer.values["build"].(map[string]any)
+		if path, ok := buildConfig["output"].(string); ok && path != "" && !filepath.IsAbs(path) {
+			buildConfig["output"] = filepath.Join(layer.root, path)
+		}
 		semantic, _ := lintConfig["semantic"].(map[string]any)
 		if path, ok := semantic["model_path"].(string); ok && path != "" && !filepath.IsAbs(path) {
 			semantic["model_path"] = filepath.Join(layer.root, path)
@@ -123,8 +144,8 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 	if err := toml.NewDecoder(bytes.NewReader(data)).DisallowUnknownFields().Decode(&cfg); err != nil {
 		return nil, err
 	}
-	if cfg.Sources == nil {
-		cfg.Sources = make(map[string]phora.Source)
+	if cfg.Build.Output == "" {
+		cfg.Build.Output = ".henia/build"
 	}
 	if cfg.Harness == nil {
 		cfg.Harness = make(map[string]henia.Harness)

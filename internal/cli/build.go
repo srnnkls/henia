@@ -4,12 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/srnnkls/henia"
+	"github.com/srnnkls/henia/internal/build"
 	"github.com/srnnkls/henia/internal/config"
-	"github.com/srnnkls/henia/internal/sync"
 )
 
 func newBuildCommand() *cobra.Command {
@@ -50,16 +49,16 @@ func newBuildCommand() *cobra.Command {
 				}
 			}
 			for name, h := range harnesses {
-				if !filepath.IsLocal(name) || filepath.Base(name) != name || name == "." {
-					return fmt.Errorf("invalid harness name %q", name)
-				}
-				h.Path = filepath.Join(output, name)
 				if len(h.Artifacts) == 0 {
 					h.Artifacts = cfg.Artifacts
 				}
 				harnesses[name] = h
 			}
-			result, err := sync.NewSyncer(nil, harnesses).Deploy([]sync.FetchedSource{{Name: source, LocalPath: source}})
+			destination := output
+			if !cmd.Flags().Changed("output") {
+				destination = cfg.Build.Output
+			}
+			result, err := build.Run(cmd.Context(), []string{source}, destination, harnesses)
 			if err != nil {
 				return err
 			}
@@ -69,14 +68,14 @@ func newBuildCommand() *cobra.Command {
 			if err := errors.Join(result.Errors...); err != nil {
 				return err
 			}
-			if result.Synced == 0 {
+			if result.Built == 0 {
 				return fmt.Errorf("no artifacts found for selected harnesses")
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Built %d artifact(s) in %s\n", result.Synced, output)
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Built %d artifact(s) in %s\n", result.Built, destination)
 			return err
 		},
 	}
-	cmd.Flags().StringVarP(&output, "output", "o", ".henia/build", "Output directory (one subdirectory per harness)")
+	cmd.Flags().StringVarP(&output, "output", "o", ".henia/build", "Build output directory (overrides [build].output)")
 	cmd.Flags().StringSliceVar(&selected, "harness", nil, "Harnesses to build (comma-separated; default all configured)")
 	return cmd
 }

@@ -5,7 +5,6 @@ Enable a profile explicitly in a project configuration:
 ```toml
 [harness.claude]
 profile = "claude"
-path = ".claude"
 format = "xml"
 strict = true
 ```
@@ -79,7 +78,6 @@ value = '{name: input.name, description: input.description}'
 # henia.toml
 [harness.my-agent]
 profile = "my-agent"
-path = ".my-agent"
 format = "directives"
 ```
 
@@ -99,7 +97,8 @@ use [Expr](https://expr-lang.org/docs/language-definition).
 
 Computed expressions receive `input` (templated canonical metadata), `settings`
 (merged Henia preferences), `native` (selected target overrides), and `ctx`:
-`name`, `profile`, `path`, `variables`, `tools`, and `keys`.
+`name`, `profile`, `path`, `variables`, `tools`, and `keys`. Here `ctx.path` is
+the harness's build output directory, never a configured installation destination.
 
 Helpers:
 
@@ -115,7 +114,7 @@ explicitly removed by a native override. Legacy TOML key/value mappings run befo
 the profile; native output overrides run after it. Output types are preserved.
 
 File `value` expressions produce data for `yaml`/`json`, or a string for `text`.
-`nil` and empty maps suppress a file. Paths are relative to the harness root;
+`nil` and empty maps suppress a file. Paths are relative to the harness build output root;
 `{name}` expands to the skill directory name. Traversal and collisions with main
 files, resources or other emitted files fail preflight. Shared harness-level files
 are not implicitly merged across skills: competing writers cause an error.

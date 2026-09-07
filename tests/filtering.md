@@ -3,47 +3,47 @@
 ## Setup Test Environment
 
 ```scrut
-$ FIXTURE="$TESTDIR/fixtures/simple-source" && DATADIR=/tmp/henia-filter-data/test-source && rm -rf /tmp/henia-filter-test /tmp/henia-filter-data && mkdir -p "$DATADIR" && cp -r "$FIXTURE"/* "$DATADIR/" && cd "$DATADIR" && git init >/dev/null 2>&1 && git config user.email "test@test.com" && git config user.name "Test" && git add . && git commit -m "Initial commit" >/dev/null 2>&1
+$ rm -rf /tmp/henia-filter-test
 ```
 
 ## Create Filter Config Files
 
 ```scrut
-$ printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[sources.test-source]' 'repo = "local"' 'ref = "main"' '[harness.claude]' 'path = "/tmp/henia-filter-test"' 'structure = "nested"' 'artifacts = ["skills"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-type.toml
+$ printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[harness.claude]' 'structure = "nested"' 'artifacts = ["skills"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-type.toml
 ```
 
 ## Filter By Artifact Type
 
-Only deploy skills, exclude commands and agents.
+Only build skills, exclude commands and agents.
 
 ```scrut
-$ henia deploy --config /tmp/henia-filter-type.toml --data-dir /tmp/henia-filter-data 2>&1
-Deployed 1 artifact(s)
+$ henia build "$TESTDIR/fixtures/simple-source" --config /tmp/henia-filter-type.toml --output /tmp/henia-filter-test 2>&1
+Built 1 artifact(s) in /tmp/henia-filter-test
 ```
 
-## Verify Only Skills Deployed
+## Verify Only Skills Built
 
 ```scrut
-$ ls /tmp/henia-filter-test
+$ ls /tmp/henia-filter-test/claude
 skills
 ```
 
 ```scrut
-$ ls /tmp/henia-filter-test/skills/
+$ ls /tmp/henia-filter-test/claude/skills/
 test-skill
 ```
 
 ## Create Include List Config
 
 ```scrut
-$ rm -rf /tmp/henia-filter-test && printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[sources.test-source]' 'repo = "local"' 'ref = "main"' '[harness.claude]' 'path = "/tmp/henia-filter-test"' 'structure = "nested"' 'include = ["test-skill"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-include.toml
+$ rm -rf /tmp/henia-filter-test && printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[harness.claude]' 'structure = "nested"' 'include = ["test-skill"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-include.toml
 ```
 
 ## Filter By Include List
 
 ```scrut
-$ henia deploy --config /tmp/henia-filter-include.toml --data-dir /tmp/henia-filter-data 2>&1
-Deployed 1 artifact(s)
+$ henia build "$TESTDIR/fixtures/simple-source" --config /tmp/henia-filter-include.toml --output /tmp/henia-filter-test 2>&1
+Built 1 artifact(s) in /tmp/henia-filter-test
 ```
 
 ## Verify Only Included Artifacts
@@ -61,35 +61,35 @@ $ find /tmp/henia-filter-test -name "*.md" -type f | grep COMMAND.md | wc -l | t
 ## Create Exclude List Config
 
 ```scrut
-$ rm -rf /tmp/henia-filter-test && printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[sources.test-source]' 'repo = "local"' 'ref = "main"' '[harness.claude]' 'path = "/tmp/henia-filter-test"' 'structure = "nested"' 'exclude = ["test-command"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-exclude.toml
+$ rm -rf /tmp/henia-filter-test && printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[harness.claude]' 'structure = "nested"' 'exclude = ["test-command"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-exclude.toml
 ```
 
 ## Filter By Exclude List
 
 ```scrut
-$ henia deploy --config /tmp/henia-filter-exclude.toml --data-dir /tmp/henia-filter-data 2>&1
-Deployed 2 artifact(s)
+$ henia build "$TESTDIR/fixtures/simple-source" --config /tmp/henia-filter-exclude.toml --output /tmp/henia-filter-test 2>&1
+Built 2 artifact(s) in /tmp/henia-filter-test
 ```
 
-## Verify Excluded Artifact Not Deployed
+## Verify Excluded Artifact Not Built
 
 ```scrut
-$ ls /tmp/henia-filter-test/skills/
+$ ls /tmp/henia-filter-test/claude/skills/
 test-skill
 ```
 
 ```scrut
-$ ls /tmp/henia-filter-test/agents/
+$ ls /tmp/henia-filter-test/claude/agents/
 test-agent
 ```
 
 ```scrut
-$ test -d /tmp/henia-filter-test/commands && echo "Commands directory exists" || echo "No commands directory"
+$ test -d /tmp/henia-filter-test/claude/commands && echo "Commands directory exists" || echo "No commands directory"
 No commands directory
 ```
 
 ## Cleanup
 
 ```scrut
-$ rm -rf /tmp/henia-filter-test /tmp/henia-filter-data /tmp/henia-filter-*.toml
+$ rm -rf /tmp/henia-filter-test /tmp/henia-filter-*.toml
 ```
