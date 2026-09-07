@@ -3,11 +3,15 @@ package transform
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"strings"
 	"text/template"
 
 	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/canonical"
+	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
+	"github.com/srnnkls/henia/internal/vendor"
 )
 
 type ReferenceConfig struct {
@@ -15,15 +19,20 @@ type ReferenceConfig struct {
 }
 
 type Transformer struct {
-	Variables  map[string]string
-	Mappings   map[string]string
-	Keys       map[string]string
-	Values     map[string]map[string]string
-	References map[string]ReferenceConfig
-	Tools      map[string]string
+	Profile      string
+	Strict       bool
+	Compiler     *vendor.Compiler
+	Context      vendor.Context
+	OutputFormat string
+	Variables    map[string]string
+	Mappings     map[string]string
+	Keys         map[string]string
+	Values       map[string]map[string]string
+	References   map[string]ReferenceConfig
+	Tools        map[string]string
 }
 
-func ExecuteTemplate(content string, vars map[string]string) (string, error) {
+func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
 	tmpl, err := template.New("content").Parse(content)
 	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
@@ -40,9 +49,7 @@ func ExecuteTemplate(content string, vars map[string]string) (string, error) {
 func ApplyMappings(fm map[string]any, mappings map[string]string) map[string]any {
 	if mappings == nil {
 		result := make(map[string]any)
-		for k, v := range fm {
-			result[k] = v
-		}
+		maps.Copy(result, fm)
 		return result
 	}
 
@@ -61,9 +68,7 @@ func ApplyMappings(fm map[string]any, mappings map[string]string) map[string]any
 func ApplyValueMappings(fm map[string]any, values map[string]map[string]string) map[string]any {
 	if values == nil {
 		result := make(map[string]any)
-		for k, v := range fm {
-			result[k] = v
-		}
+		maps.Copy(result, fm)
 		return result
 	}
 
@@ -98,16 +103,23 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		Frontmatter: make(map[string]any),
 	}
 
-	for k, v := range art.Frontmatter {
-		if str, ok := v.(string); ok {
-			transformed, err := ExecuteTemplate(str, t.Variables)
-			if err != nil {
-				return nil, fmt.Errorf("transform frontmatter %q: %w", k, err)
-			}
-			result.Frontmatter[k] = transformed
-		} else {
-			result.Frontmatter[k] = v
+	templateContext := make(map[string]any, len(art.Frontmatter)+len(t.Variables))
+	maps.Copy(templateContext, art.Frontmatter)
+	if h, ok := art.Frontmatter["henia"].(map[string]any); ok {
+		if vars, ok := h["variables"].(map[string]any); ok {
+			maps.Copy(templateContext, vars)
 		}
+	}
+	for k, v := range t.Variables {
+		templateContext[k] = v
+	}
+
+	for k, v := range art.Frontmatter {
+		transformed, err := templateValue(v, templateContext)
+		if err != nil {
+			return nil, fmt.Errorf("transform frontmatter %q: %w", k, err)
+		}
+		result.Frontmatter[k] = transformed
 	}
 
 	keyMappings := t.Mappings
@@ -117,10 +129,32 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	result.Frontmatter = ApplyMappings(result.Frontmatter, keyMappings)
 
 	result.Frontmatter = ApplyValueMappings(result.Frontmatter, t.Values)
+	if art.Type == artifact.TypeSkill && t.Profile != "" {
+		can, err := canonical.Parse(result.Frontmatter)
+		if err != nil {
+			return nil, err
+		}
+		if t.Compiler == nil {
+			return nil, fmt.Errorf("profile %s was not compiled", t.Profile)
+		}
+		compiled, err := t.Compiler.Compile(art.FullName(), can.ToMap(), t.Context)
+		if err != nil {
+			return nil, err
+		}
+		result.Frontmatter, result.Files, result.Warnings = compiled.Frontmatter, compiled.Files, compiled.Warnings
+		if t.Strict && len(result.Warnings) > 0 {
+			return nil, fmt.Errorf("unsupported skill metadata: %s", strings.Join(result.Warnings, "; "))
+		}
+	}
 
-	body, err := ExecuteTemplate(art.Body, t.Variables)
+	body, err := ExecuteTemplate(art.Body, templateContext)
 	if err != nil {
 		return nil, fmt.Errorf("transform body: %w", err)
+	}
+
+	body, err = markup.Render(body, t.OutputFormat)
+	if err != nil {
+		return nil, fmt.Errorf("render directives: %w", err)
 	}
 
 	body = t.transformReferences(body)
@@ -128,6 +162,35 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	result.Body = body
 
 	return result, nil
+}
+
+func templateValue(value any, context map[string]any) (any, error) {
+	switch v := value.(type) {
+	case string:
+		return ExecuteTemplate(v, context)
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for k, item := range v {
+			var err error
+			out[k], err = templateValue(item, context)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return out, nil
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			var err error
+			out[i], err = templateValue(item, context)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return out, nil
+	default:
+		return value, nil
+	}
 }
 
 func (t *Transformer) transformReferences(body string) string {

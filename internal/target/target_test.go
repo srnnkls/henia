@@ -10,7 +10,7 @@ import (
 )
 
 func TestTargetPath(t *testing.T) {
-	target := New("/home/user/.claude")
+	target := New("/build/claude")
 
 	tests := []struct {
 		art  *artifact.Artifact
@@ -18,15 +18,15 @@ func TestTargetPath(t *testing.T) {
 	}{
 		{
 			art:  &artifact.Artifact{Name: "code-test", Type: artifact.TypeSkill},
-			want: "/home/user/.claude/skills/code-test/SKILL.md",
+			want: "/build/claude/skills/code-test/SKILL.md",
 		},
 		{
 			art:  &artifact.Artifact{Name: "spec.create", Type: artifact.TypeCommand},
-			want: "/home/user/.claude/commands/spec.create/COMMAND.md",
+			want: "/build/claude/commands/spec.create/COMMAND.md",
 		},
 		{
 			art:  &artifact.Artifact{Name: "tester", Type: artifact.TypeAgent},
-			want: "/home/user/.claude/agents/tester/AGENT.md",
+			want: "/build/claude/agents/tester/AGENT.md",
 		},
 	}
 
@@ -134,22 +134,19 @@ func TestExists(t *testing.T) {
 }
 
 func TestNewFromConfig(t *testing.T) {
-	harness := henia.Harness{
-		Path: "/home/user/.claude",
-	}
+	harness := henia.Harness{}
 
-	target := NewFromConfig("claude", harness)
+	target := NewFromConfig("claude", "/build/claude", harness)
 	if target.Name() != "claude" {
 		t.Errorf("Name() = %q, want %q", target.Name(), "claude")
 	}
-	if target.Path() != "/home/user/.claude" {
+	if target.Path() != "/build/claude" {
 		t.Errorf("Path() = %q", target.Path())
 	}
 }
 
 func TestFlatTargetPath(t *testing.T) {
-	target := NewFromConfig("opencode", henia.Harness{
-		Path:      "/home/user/.opencode",
+	target := NewFromConfig("opencode", "/build/opencode", henia.Harness{
 		Structure: "flat",
 	})
 
@@ -159,15 +156,15 @@ func TestFlatTargetPath(t *testing.T) {
 	}{
 		{
 			art:  &artifact.Artifact{Name: "code-test", Type: artifact.TypeSkill},
-			want: "/home/user/.opencode/skills/code-test.md",
+			want: "/build/opencode/skills/code-test.md",
 		},
 		{
 			art:  &artifact.Artifact{Name: "spec.create", Type: artifact.TypeCommand},
-			want: "/home/user/.opencode/commands/spec.create.md",
+			want: "/build/opencode/commands/spec.create.md",
 		},
 		{
 			art:  &artifact.Artifact{Name: "tester", Type: artifact.TypeAgent},
-			want: "/home/user/.opencode/agents/tester.md",
+			want: "/build/opencode/agents/tester.md",
 		},
 	}
 
@@ -190,8 +187,7 @@ func TestFlatWriteWithResources(t *testing.T) {
 	os.WriteFile(filepath.Join(srcDir, "reference", "guide.md"), []byte("# Guide"), 0644)
 
 	targetDir := filepath.Join(tmpDir, "target")
-	target := NewFromConfig("opencode", henia.Harness{
-		Path:      targetDir,
+	target := NewFromConfig("opencode", targetDir, henia.Harness{
 		Structure: "flat",
 	})
 

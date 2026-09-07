@@ -1,6 +1,6 @@
 [tools]
 "github:facebookincubator/scrut" = "0.4.2"
-go = "1.25.5"
+go = "1.26.5"
 
 [tasks.build]
 description = "Build henia binary"

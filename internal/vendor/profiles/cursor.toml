@@ -1,0 +1,13 @@
+# See docs/vendor-research.md for the supporting vendor contracts.
+fields = ["name", "description", "paths", "disable-model-invocation", "icon", "color", "metadata"]
+controls = ["auto_invoke"]
+consume = []
+
+[aliases]
+allowed_tools = "allowed-tools"
+disallowed_tools = "disallowed-tools"
+argument_hint = "argument-hint"
+disable_model_invocation = "disable-model-invocation"
+
+[computed]
+"disable-model-invocation" = 'settings.auto_invoke == nil ? nil : not settings.auto_invoke'

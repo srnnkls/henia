@@ -1,0 +1,25 @@
+spec: schema-transform
+code: HTP
+architecture: toml-expr
+tasks:
+  - id: HTP-001
+    content: Canonical schema and typed round-trip
+    status: done
+  - id: HTP-002
+    content: Layered config and custom profile resolution
+    status: done
+  - id: HTP-003
+    content: Shared Expr runtime and declarative vendor transforms
+    status: done
+  - id: HTP-004
+    content: Nine researched skill profiles and generated files
+    status: done
+  - id: HTP-005
+    content: Lint DSL with source locations and CLI integration
+    status: done
+  - id: HTP-006
+    content: Output preflight and filesystem boundary validation
+    status: done
+  - id: HTP-007
+    content: End-to-end verification and documentation
+    status: done

@@ -1,0 +1,9 @@
+spec: schema-transform
+phases:
+  - tasks: [HTP-001, HTP-002]
+  - tasks: [HTP-003]
+    depends_on: [HTP-001, HTP-002]
+  - tasks: [HTP-004, HTP-005, HTP-006]
+    depends_on: [HTP-003]
+  - tasks: [HTP-007]
+    depends_on: [HTP-004, HTP-005, HTP-006]

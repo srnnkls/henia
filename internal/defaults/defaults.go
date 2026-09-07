@@ -11,8 +11,8 @@ import (
 var ConfigTOML string
 
 type Config struct {
-	Artifacts []string                   `toml:"artifacts,omitempty"`
-	Harness   map[string]henia.Harness   `toml:"harness,omitempty"`
+	Artifacts []string                 `toml:"artifacts,omitempty"`
+	Harness   map[string]henia.Harness `toml:"harness,omitempty"`
 }
 
 func DefaultConfig() (*Config, error) {

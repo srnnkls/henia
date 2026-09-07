@@ -1,0 +1,12 @@
+# Run from the Henia repository root, with henia on PATH.
+[sources.canonical]
+path = "examples"
+include = ["skills/*"]
+
+[targets.canonical]
+path = ".henia/canonical"
+layout = "flat"
+sources = ["canonical"]
+
+[hooks]
+post_sync = "henia build .henia/canonical --config examples/henia.toml --output .henia/build"

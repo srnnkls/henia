@@ -1,11 +1,5 @@
 package henia
 
-import (
-	"os"
-	"path/filepath"
-	"strings"
-)
-
 type ArtifactMapping struct {
 	Keys   map[string]string            `toml:"keys,omitempty"`
 	Values map[string]map[string]string `toml:"values,omitempty"`
@@ -16,7 +10,9 @@ type ReferenceConfig struct {
 }
 
 type Harness struct {
-	Path                       string                       `toml:"path,omitempty"`
+	Profile                    string                       `toml:"profile,omitempty"`
+	Strict                     bool                         `toml:"strict,omitempty"`
+	Format                     string                       `toml:"format,omitempty"`
 	Structure                  string                       `toml:"structure,omitempty"` // "flat" or "nested" (default)
 	GenerateCommandsFromSkills bool                         `toml:"generate_commands_from_skills,omitempty"`
 	Artifacts                  []string                     `toml:"artifacts,omitempty"`
@@ -28,15 +24,6 @@ type Harness struct {
 	References                 map[string]ReferenceConfig   `toml:"references,omitempty"`
 	Include                    []string                     `toml:"include,omitempty"`
 	Exclude                    []string                     `toml:"exclude,omitempty"`
-}
-
-func ExpandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
+	ProjectRoot                string                       `toml:"-"`
+	UserRoot                   string                       `toml:"-"`
 }

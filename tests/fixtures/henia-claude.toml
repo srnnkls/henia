@@ -1,11 +1,6 @@
 artifacts = ["skills", "commands", "agents"]
 
-[sources.test-source]
-repo = "local"
-ref = "main"
-
 [harness.claude]
-path = "/tmp/henia-test-claude"
 structure = "nested"
 
 [harness.claude.variables]

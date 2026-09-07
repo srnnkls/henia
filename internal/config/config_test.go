@@ -3,80 +3,46 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestLoadConfig(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	configContent := `
-artifacts = ["skills"]
-
-[sources.my-source]
-repo = "owner/repo"
-ref = "main"
-
-[harness.claude]
-path = "~/.claude"
-artifacts = ["skills", "commands"]
-`
-	configPath := filepath.Join(tmpDir, "henia.toml")
-	os.WriteFile(configPath, []byte(configContent), 0644)
-
-	cfg, err := Load(configPath)
+	root := t.TempDir()
+	path := filepath.Join(root, "henia.toml")
+	if err := os.WriteFile(path, []byte("[build]\noutput='dist'\n[harness.claude]\nprofile='claude'\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatal(err)
 	}
-
-	if len(cfg.Sources) != 1 {
-		t.Errorf("Sources count = %d, want 1", len(cfg.Sources))
-	}
-
-	src, ok := cfg.Sources["my-source"]
-	if !ok {
-		t.Fatal("Expected 'my-source' to exist")
-	}
-
-	if src.Repo != "owner/repo" {
-		t.Errorf("Repo = %q, want 'owner/repo'", src.Repo)
-	}
-
-	if len(cfg.Harness) != 1 {
-		t.Errorf("Harness count = %d, want 1", len(cfg.Harness))
-	}
-
-	harness, ok := cfg.Harness["claude"]
-	if !ok {
-		t.Fatal("Expected 'claude' harness to exist")
-	}
-
-	if harness.Path != "~/.claude" {
-		t.Errorf("Harness path = %q, want '~/.claude'", harness.Path)
+	if len(cfg.Harness) != 1 || cfg.Harness["claude"].Profile != "claude" || cfg.Build.Output != filepath.Join(root, "dist") {
+		t.Fatalf("%+v", cfg)
 	}
 }
 
 func TestLoadConfigMissing(t *testing.T) {
-	_, err := Load("/nonexistent/path/henia.toml")
-	if err == nil {
-		t.Error("Expected error for missing config file")
+	if _, err := Load(filepath.Join(t.TempDir(), "missing.toml")); err == nil {
+		t.Fatal("accepted missing configuration")
 	}
 }
 
-func TestLoadConfigEmpty(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	configPath := filepath.Join(tmpDir, "henia.toml")
-	os.WriteFile(configPath, []byte(""), 0644)
-
-	cfg, err := Load(configPath)
+func TestBuildOnlyConfigKeepsProfiles(t *testing.T) {
+	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte("[build]\noutput='dist'\n"))
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatal(err)
 	}
+	if len(cfg.Harness) != 9 {
+		t.Fatalf("build setting disabled profiles: %+v", cfg.Harness)
+	}
+}
 
-	if cfg.Sources == nil {
-		t.Error("Sources should be initialized")
-	}
-	if cfg.Harness == nil {
-		t.Error("Harness should be initialized")
+func TestRejectDeploymentSettings(t *testing.T) {
+	for _, input := range []string{"[sources.team]\nrepo='owner/repo'\n", "[harness.claude]\npath='.claude'\n"} {
+		_, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte(input))
+		if err == nil || !strings.Contains(err.Error(), "Phora") {
+			t.Fatalf("want actionable migration error: %v", err)
+		}
 	}
 }

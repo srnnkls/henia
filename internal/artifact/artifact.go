@@ -2,6 +2,7 @@ package artifact
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -28,6 +29,8 @@ type Artifact struct {
 	Frontmatter map[string]any
 	Body        string
 	Resources   []string
+	Files       map[string][]byte // Generated files relative to the harness root.
+	Warnings    []string
 }
 
 func (a *Artifact) FullName() string {
@@ -42,26 +45,29 @@ func Parse(data []byte) (*Artifact, error) {
 		Frontmatter: make(map[string]any),
 	}
 
-	content := string(data)
-	if !strings.HasPrefix(content, "---\n") {
-		art.Body = content
+	first, rest, found := strings.Cut(string(data), "\n")
+	if strings.TrimSuffix(first, "\r") != "---" {
+		art.Body = string(data)
 		return art, nil
 	}
-
-	rest := content[4:]
-	endIdx := strings.Index(rest, "\n---\n")
-	if endIdx == -1 {
-		art.Body = content
-		return art, nil
+	if !found {
+		return nil, fmt.Errorf("unclosed YAML frontmatter")
 	}
-
-	fmContent := rest[:endIdx]
-	if err := yaml.Unmarshal([]byte(fmContent), &art.Frontmatter); err != nil {
-		return nil, err
+	end := 0
+	for {
+		line, remaining, newline := strings.Cut(rest[end:], "\n")
+		if strings.TrimSuffix(line, "\r") == "---" {
+			if err := yaml.Unmarshal([]byte(rest[:end]), &art.Frontmatter); err != nil {
+				return nil, fmt.Errorf("parse frontmatter: %w", err)
+			}
+			art.Body = strings.TrimPrefix(strings.TrimPrefix(remaining, "\r\n"), "\n")
+			return art, nil
+		}
+		if !newline {
+			return nil, fmt.Errorf("unclosed YAML frontmatter")
+		}
+		end += len(line) + 1
 	}
-
-	art.Body = strings.TrimPrefix(rest[endIdx+5:], "\n")
-	return art, nil
 }
 
 func TypeFromPath(path string) Type {
@@ -133,8 +139,8 @@ func Discover(rootDir string, artifactTypes []string) ([]*Artifact, error) {
 
 			if entry.IsDir() {
 				art, err = loadDirectoryArtifact(entryPath, name, artType)
-			} else if strings.HasSuffix(name, ".md") {
-				art, err = loadFileArtifact(entryPath, strings.TrimSuffix(name, ".md"), artType)
+			} else if before, ok := strings.CutSuffix(name, ".md"); ok {
+				art, err = loadFileArtifact(entryPath, before, artType)
 			}
 
 			if err != nil {

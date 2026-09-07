@@ -1,0 +1,47 @@
+artifacts = ["skills"]
+
+[build]
+output = ".henia/build"
+
+[harness.claude]
+profile = "claude"
+format = "xml"
+
+[harness.claude.variables]
+review_mode = "thorough"
+
+[harness.claude.tools]
+read = "Read"
+
+[harness.codex]
+profile = "codex"
+format = "directives"
+
+[harness.codex.variables]
+review_mode = "focused"
+
+[harness.codex.tools]
+read = "read_file"
+
+[lint]
+max_lines = 500
+max_age_days = 180
+
+[lint.outdated]
+"old-model-id" = "replacement-model-id"
+
+[[lint.rules]]
+id = "instruction-priority"
+select = "directive"
+when = 'node.name == "instruction"'
+assert = 'node.attrs.priority in ["normal", "high", "critical"]'
+message = "Instructions need a valid priority."
+severity = "warning"
+
+[[lint.rules]]
+id = "skill-description"
+select = "document"
+when = 'document.kind == "skill"'
+assert = 'len(frontmatter.description ?? "") >= 30'
+message = "Describe what this skill does and when to use it."
+severity = "error"
