@@ -102,6 +102,18 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 			selected[name] = preset
 		}
 	}
+	// Resolve model paths in the layer that declares them, so user defaults do
+	// not change meaning with the project or invocation working directory.
+	for _, layer := range []struct {
+		values map[string]any
+		root   string
+	}{{user, userRoot}, {project, projectRoot}} {
+		lintConfig, _ := layer.values["lint"].(map[string]any)
+		semantic, _ := lintConfig["semantic"].(map[string]any)
+		if path, ok := semantic["model_path"].(string); ok && path != "" && !filepath.IsAbs(path) {
+			semantic["model_path"] = filepath.Join(layer.root, path)
+		}
+	}
 	merged := vendor.Merge(vendor.Merge(base, user), project)
 	data, err := toml.Marshal(merged)
 	if err != nil {

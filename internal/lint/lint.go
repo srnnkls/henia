@@ -26,14 +26,17 @@ import (
 )
 
 type Diagnostic struct {
-	Path       string     `json:"path"`
-	Line       int        `json:"line"`
-	Column     int        `json:"column"`
-	Severity   string     `json:"severity"`
-	Rule       string     `json:"rule"`
-	Message    string     `json:"message"`
-	Related    []Location `json:"related,omitempty"`
-	Similarity *float64   `json:"similarity,omitempty"`
+	Path          string     `json:"path"`
+	Line          int        `json:"line"`
+	Column        int        `json:"column"`
+	Severity      string     `json:"severity"`
+	Rule          string     `json:"rule"`
+	Message       string     `json:"message"`
+	Related       []Location `json:"related,omitempty"`
+	Similarity    *float64   `json:"similarity,omitempty"`
+	Method        string     `json:"method,omitempty"`
+	SharedPhrases []string   `json:"shared_phrases,omitempty"`
+	Model         string     `json:"model,omitempty"`
 }
 
 type Location struct {
@@ -43,21 +46,32 @@ type Location struct {
 }
 
 type Options struct {
-	Rules               []Rule            `toml:"rules,omitempty"`
-	Disable             []string          `toml:"disable,omitempty"`
-	Outdated            map[string]string `toml:"outdated,omitempty"`
-	MaxLines            int               `toml:"max_lines,omitempty"`
-	MaxAgeDays          int               `toml:"max_age_days,omitempty"`
-	DuplicateMinWords   int               `toml:"duplicate_min_words,omitempty"`
-	DuplicateSimilarity float64           `toml:"duplicate_similarity,omitempty"`
-	Now                 time.Time         `toml:"-"`
+	Rules                 []Rule            `toml:"rules,omitempty"`
+	Disable               []string          `toml:"disable,omitempty"`
+	Outdated              map[string]string `toml:"outdated,omitempty"`
+	MaxLines              int               `toml:"max_lines,omitempty"`
+	MaxAgeDays            int               `toml:"max_age_days,omitempty"`
+	DuplicateMinWords     int               `toml:"duplicate_min_words,omitempty"`
+	DuplicateSimilarity   float64           `toml:"duplicate_similarity,omitempty"`
+	DuplicateContainment  float64           `toml:"duplicate_containment,omitempty"`
+	DuplicateShingleWords int               `toml:"duplicate_shingle_words,omitempty"`
+	Semantic              SemanticOptions   `toml:"semantic,omitempty"`
+	Now                   time.Time         `toml:"-"`
 }
 
-var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-heading", "duplicate-content", "similar-content", "duplicate-skill", "outdated-reference", "large-skill", "stale-review"}
+var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-heading", "duplicate-content", "similar-content", "semantic-content", "duplicate-skill", "outdated-reference", "large-skill", "stale-review"}
 
 func (o Options) Validate() error {
-	if math.IsNaN(o.DuplicateSimilarity) || o.DuplicateSimilarity < 0 || o.DuplicateSimilarity > 1 {
-		return fmt.Errorf("duplicate_similarity must be between 0 and 1 (0 disables similarity checks)")
+	for _, limit := range []struct {
+		name  string
+		value float64
+	}{{"duplicate_similarity", o.DuplicateSimilarity}, {"duplicate_containment", o.DuplicateContainment}} {
+		if math.IsNaN(limit.value) || limit.value < 0 || limit.value > 1 {
+			return fmt.Errorf("%s must be between 0 and 1 (0 disables this measure)", limit.name)
+		}
+	}
+	if err := o.Semantic.validate(); err != nil {
+		return err
 	}
 	if _, err := compileRules(o.Rules); err != nil {
 		return err
@@ -67,7 +81,7 @@ func (o Options) Validate() error {
 			return fmt.Errorf("unknown lint rule %q", rule)
 		}
 	}
-	if o.MaxLines < 0 || o.MaxAgeDays < 0 || o.DuplicateMinWords < 0 {
+	if o.MaxLines < 0 || o.MaxAgeDays < 0 || o.DuplicateMinWords < 0 || o.DuplicateShingleWords < 0 {
 		return fmt.Errorf("lint limits must not be negative")
 	}
 	for old := range o.Outdated {
@@ -94,6 +108,7 @@ type checker struct {
 	names             map[string]Location
 	paragraphs        map[string]Diagnostic
 	similarParagraphs []paragraph
+	shingleIndex      map[string][]int
 	anchors           map[string]map[string]bool
 }
 
@@ -112,6 +127,9 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 	if options.DuplicateMinWords == 0 {
 		options.DuplicateMinWords = 12
 	}
+	if options.DuplicateShingleWords == 0 {
+		options.DuplicateShingleWords = 3
+	}
 	if options.Now.IsZero() {
 		options.Now = time.Now()
 	}
@@ -122,7 +140,7 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no Markdown files found")
 	}
-	c := checker{options: options, diagnostics: []Diagnostic{}, names: make(map[string]Location), paragraphs: make(map[string]Diagnostic), anchors: make(map[string]map[string]bool)}
+	c := checker{options: options, diagnostics: []Diagnostic{}, names: make(map[string]Location), paragraphs: make(map[string]Diagnostic), anchors: make(map[string]map[string]bool), shingleIndex: make(map[string][]int)}
 	c.rules, err = compileRules(options.Rules)
 	if err != nil {
 		return nil, err
@@ -168,6 +186,9 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 		if err := c.check(d); err != nil {
 			return nil, err
 		}
+	}
+	if err := c.checkSemantic(ctx); err != nil {
+		return nil, err
 	}
 	slices.SortFunc(c.diagnostics, func(a, b Diagnostic) int {
 		return cmp.Or(strings.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column), strings.Compare(a.Rule, b.Rule), strings.Compare(a.Message, b.Message))

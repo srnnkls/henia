@@ -1,93 +1,75 @@
 package lint
 
-import "math"
+import (
+	"slices"
+	"strings"
+	"unicode"
+)
 
 type paragraph struct {
-	text     []rune
-	counts   map[rune]int
-	location Location
+	text         string
+	shingles     map[string]bool
+	location     Location
+	lexicalMatch bool
 }
 
-func newParagraph(text string, location Location) paragraph {
-	p := paragraph{text: []rune(text), counts: map[rune]int{}, location: location}
-	for _, r := range p.text {
-		p.counts[r]++
+func newParagraph(source string, location Location, size int) paragraph {
+	words := strings.FieldsFunc(strings.ToLower(source), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.IsMark(r)
+	})
+	p := paragraph{text: strings.Join(strings.Fields(source), " "), shingles: map[string]bool{}, location: location}
+	for i := 0; i+size <= len(words); i++ {
+		p.shingles[strings.Join(words[i:i+size], " ")] = true
 	}
 	return p
 }
 
-func closestParagraph(current paragraph, candidates []paragraph, threshold float64) (Location, float64, bool) {
-	var location Location
-	best := -1.0
-	for _, previous := range candidates {
-		length := max(len(current.text), len(previous.text))
-		limit := int(math.Floor((1-threshold)*float64(length) + 1e-9))
-		if length-min(len(current.text), len(previous.text)) > limit {
-			continue
-		}
-		// Character-count differences bound the required edits, cheaply excluding
-		// unrelated paragraphs before the more expensive sequence comparison.
-		missing, extra := 0, 0
-		for r, count := range current.counts {
-			extra += max(0, count-previous.counts[r])
-		}
-		for r, count := range previous.counts {
-			missing += max(0, count-current.counts[r])
-		}
-		if max(missing, extra) > limit {
-			continue
-		}
-		distance := boundedLevenshtein(current.text, previous.text, limit)
-		if distance > limit {
-			continue
-		}
-		score := 1 - float64(distance)/float64(length)
-		if score+1e-12 >= threshold && score > best {
-			best, location = score, previous.location
-		}
-	}
-	return location, best, best >= 0
+type paragraphMatch struct {
+	index  int
+	score  float64
+	method string
 }
 
-// boundedLevenshtein computes rune edit distance inside a threshold-width band.
-// It returns limit+1 when the true distance exceeds the requested limit.
-func boundedLevenshtein(a, b []rune, limit int) int {
-	if len(a) < len(b) {
-		a, b = b, a
-	}
-	if len(a)-len(b) > limit {
-		return limit + 1
-	}
-	if len(b) == 0 {
-		return len(a)
-	}
-	infinity := limit + 1
-	previous, current := make([]int, len(b)+1), make([]int, len(b)+1)
-	for j := range previous {
-		previous[j] = min(j, infinity)
-	}
-	for i := 1; i <= len(a); i++ {
-		current[0] = min(i, infinity)
-		start, end := max(1, i-limit), min(len(b), i+limit)
-		if start > 1 {
-			current[start-1] = infinity
+// Compare only paragraphs sharing at least one shingle. Jaccard takes priority;
+// containment catches partial copies when whole-paragraph overlap is too low.
+func (c *checker) closestLexical(current paragraph) (paragraphMatch, bool) {
+	intersections := map[int]int{}
+	for shingle := range current.shingles {
+		for _, index := range c.shingleIndex[shingle] {
+			intersections[index]++
 		}
-		minimum := infinity
-		for j := start; j <= end; j++ {
-			cost := 0
-			if a[i-1] != b[j-1] {
-				cost = 1
-			}
-			current[j] = min(previous[j]+1, current[j-1]+1, previous[j-1]+cost)
-			minimum = min(minimum, current[j])
-		}
-		if minimum > limit {
-			return infinity
-		}
-		if end < len(b) {
-			current[end+1] = infinity
-		}
-		previous, current = current, previous
 	}
-	return min(previous[len(b)], infinity)
+	indices := make([]int, 0, len(intersections))
+	for index := range intersections {
+		indices = append(indices, index)
+	}
+	slices.Sort(indices)
+	bestJaccard, bestContainment := paragraphMatch{index: -1}, paragraphMatch{index: -1}
+	for _, index := range indices {
+		intersection := intersections[index]
+		previous := c.similarParagraphs[index]
+		jaccard := float64(intersection) / float64(len(current.shingles)+len(previous.shingles)-intersection)
+		containment := float64(intersection) / float64(min(len(current.shingles), len(previous.shingles)))
+		if c.options.DuplicateSimilarity > 0 && jaccard >= c.options.DuplicateSimilarity && jaccard > bestJaccard.score {
+			bestJaccard = paragraphMatch{index, jaccard, "jaccard"}
+		}
+		if c.options.DuplicateContainment > 0 && containment >= c.options.DuplicateContainment && containment > bestContainment.score {
+			bestContainment = paragraphMatch{index, containment, "containment"}
+		}
+	}
+	if bestJaccard.index >= 0 {
+		return bestJaccard, true
+	}
+	return bestContainment, bestContainment.index >= 0
+}
+
+func sharedPhrases(a, b paragraph) []string {
+	var phrases []string
+	for shingle := range a.shingles {
+		if b.shingles[shingle] {
+			phrases = append(phrases, shingle)
+		}
+	}
+	slices.Sort(phrases)
+	return phrases[:min(5, len(phrases))]
 }

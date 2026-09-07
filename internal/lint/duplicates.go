@@ -23,8 +23,9 @@ func (c *checker) addDuplicate(d document, offset int, rule, message string, fir
 }
 
 func (c *checker) checkDuplicates(d document, markupSource []byte) {
-	similarity := c.options.DuplicateSimilarity > 0 && !slices.Contains(c.options.Disable, "similar-content")
-	if slices.Contains(c.options.Disable, "duplicate-content") && !similarity {
+	similarity := (c.options.DuplicateSimilarity > 0 || c.options.DuplicateContainment > 0) && !slices.Contains(c.options.Disable, "similar-content")
+	semantic := c.options.Semantic.Enabled && !slices.Contains(c.options.Disable, "semantic-content")
+	if slices.Contains(c.options.Disable, "duplicate-content") && !similarity && !semantic {
 		return
 	}
 	nodes, err := markup.Inspect(markupSource)
@@ -48,11 +49,20 @@ func (c *checker) checkDuplicates(d document, markupSource []byte) {
 		} else {
 			location := sourceLocation(d, offset)
 			c.paragraphs[key] = Diagnostic{Path: location.Path, Line: location.Line, Column: location.Column}
-			if similarity {
-				current := newParagraph(key, location)
-				if first, score, ok := closestParagraph(current, c.similarParagraphs, c.options.DuplicateSimilarity); ok {
-					c.addDuplicate(d, offset, "similar-content", fmt.Sprintf("paragraph is %.1f%% similar to %s:%d (normalized Levenshtein)", score*100, first.Path, first.Line), first)
-					c.diagnostics[len(c.diagnostics)-1].Similarity = new(score)
+			if similarity || semantic {
+				current := newParagraph(source, location, c.options.DuplicateShingleWords)
+				if match, ok := c.closestLexical(current); similarity && ok {
+					first := c.similarParagraphs[match.index]
+					phrases := sharedPhrases(current, first)
+					c.addDuplicate(d, offset, "similar-content", fmt.Sprintf("paragraph has %.1f%% word-shingle %s with %s:%d; shared phrases: %s", match.score*100, match.method, first.location.Path, first.location.Line, strings.Join(phrases, "; ")), first.location)
+					diagnostic := &c.diagnostics[len(c.diagnostics)-1]
+					diagnostic.Similarity, diagnostic.Method, diagnostic.SharedPhrases = new(match.score), match.method, phrases
+					current.lexicalMatch = true
+				}
+				if similarity {
+					for shingle := range current.shingles {
+						c.shingleIndex[shingle] = append(c.shingleIndex[shingle], len(c.similarParagraphs))
+					}
 				}
 				c.similarParagraphs = append(c.similarParagraphs, current)
 			}

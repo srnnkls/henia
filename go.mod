@@ -1,12 +1,13 @@
 module github.com/srnnkls/henia
 
-go 1.26.0
+go 1.26.5
 
 require (
 	github.com/expr-lang/expr v1.17.8
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/spf13/cobra v1.10.2
 	github.com/srnnkls/phora v0.0.0-20260115094253-a1b2437f4aab
+	github.com/townsendmerino/aikit v1.16.0
 	github.com/yuin/goldmark v1.7.16
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -32,6 +33,7 @@ require (
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.37.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )

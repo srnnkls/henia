@@ -6,7 +6,7 @@ templates to compose its body, and select a vendor profile for its output.
 
 ## Quick start
 
-Requires Go 1.26 or later.
+Requires Go 1.26.5 or later.
 
 ```bash
 go build -o /tmp/henia ./cmd/henia
@@ -90,10 +90,14 @@ currently deferred. Literal code and escaped syntax remain unchanged.
 ## Lint rules
 
 Built-in rules check metadata, template/directive syntax, local links, artifact
-references, duplicate headings/content/skills, optional paragraph similarity,
-known outdated references, line budgets and review dates. Enable near-duplicate
-checks with `[lint] duplicate_similarity = 0.9`; `duplicate_min_words` defaults to
-12. Warnings include the matching paragraph's location and similarity score.
+references, duplicate headings/content/skills, optional word-shingle overlap and
+containment, local semantic similarity, known outdated references, line budgets
+and review dates. Exact paragraph checks run by default. Enable lexical measures
+with `[lint] duplicate_similarity = 0.7` and `duplicate_containment = 0.9`;
+`duplicate_min_words` defaults to 12. Semantic checks use in-process Model2Vec
+with local weights and an explicit threshold in `[lint.semantic]`. Findings include
+the matching location, method, score and shared phrases where applicable.
+See [configuration and model setup](docs/lint-rules.md).
 Add your own rules in `henia.toml`:
 
 ```toml

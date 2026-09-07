@@ -1,0 +1,30 @@
+{
+  "normalizer": {
+    "type": "BertNormalizer",
+    "clean_text": true,
+    "handle_chinese_chars": true,
+    "strip_accents": true,
+    "lowercase": true
+  },
+  "pre_tokenizer": {
+    "type": "BertPreTokenizer"
+  },
+  "model": {
+    "type": "WordPiece",
+    "unk_token": "[UNK]",
+    "continuing_subword_prefix": "##",
+    "max_input_chars_per_word": 100,
+    "vocab": {
+      "[UNK]": 0,
+      "repair": 1,
+      "broken": 2,
+      "program": 3,
+      "fix": 4,
+      "faulty": 5,
+      "code": 6,
+      "simmer": 7,
+      "vegetable": 8,
+      "soup": 9
+    }
+  }
+}

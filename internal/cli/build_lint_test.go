@@ -203,7 +203,7 @@ func TestLintSimilarityConfigAndJSON(t *testing.T) {
 	paragraph := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
 	fixture(t, filepath.Join(root, "a.md"), paragraph+"\n")
 	fixture(t, filepath.Join(root, "b.md"), strings.Replace(paragraph, "every", "each", 1)+"\n")
-	testConfig(t, "[lint]\nduplicate_similarity = 0.9\nduplicate_min_words = 12\n")
+	testConfig(t, "[lint]\nduplicate_similarity = 0.7\nduplicate_min_words = 12\n")
 	cmd := newLintCommand()
 	cmd.SilenceUsage = true
 	out := &bytes.Buffer{}
@@ -217,7 +217,34 @@ func TestLintSimilarityConfigAndJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &diagnostics); err != nil {
 		t.Fatal(err)
 	}
-	if len(diagnostics) != 1 || diagnostics[0].Rule != "similar-content" || diagnostics[0].Similarity == nil || len(diagnostics[0].Related) != 1 {
+	if len(diagnostics) != 1 || diagnostics[0].Rule != "similar-content" || diagnostics[0].Method != "jaccard" || len(diagnostics[0].SharedPhrases) == 0 || diagnostics[0].Similarity == nil || len(diagnostics[0].Related) != 1 {
+		t.Fatalf("%+v", diagnostics)
+	}
+}
+
+func TestLintSemanticConfigAndJSON(t *testing.T) {
+	root := t.TempDir()
+	fixture(t, filepath.Join(root, "a.md"), "Repair broken program.\n")
+	fixture(t, filepath.Join(root, "b.md"), "Fix faulty code.\n")
+	modelPath, err := filepath.Abs("../lint/testdata/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testConfig(t, "[lint]\nduplicate_min_words=1\n[lint.semantic]\nenabled=true\nthreshold=0.8\nmodel_path='"+filepath.ToSlash(modelPath)+"'\n")
+	cmd := newLintCommand()
+	cmd.SilenceUsage = true
+	output := &bytes.Buffer{}
+	cmd.SetOut(output)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{root, "--format", "json", "--strict"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("strict semantic warning did not fail lint")
+	}
+	var diagnostics []lint.Diagnostic
+	if err := json.Unmarshal(output.Bytes(), &diagnostics); err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Rule != "semantic-content" || diagnostics[0].Method != "cosine" || diagnostics[0].Model != modelPath || diagnostics[0].Similarity == nil {
 		t.Fatalf("%+v", diagnostics)
 	}
 }

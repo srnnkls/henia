@@ -4,112 +4,120 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
 
-func TestBoundedLevenshtein(t *testing.T) {
-	for _, test := range []struct {
-		a, b     string
-		distance int
-	}{
-		{"", "", 0}, {"", "abc", 3}, {"kitten", "sitting", 3},
-		{"café", "cafe", 1}, {"😀ab", "😃ab", 1}, {"abc", "abc", 0},
-		{"abc", "xyz", 3}, {"ab", "ba", 2}, {"same words", "same words!", 1},
-	} {
-		for limit := 0; limit <= test.distance+1; limit++ {
-			want := min(test.distance, limit+1)
-			if got := boundedLevenshtein([]rune(test.a), []rune(test.b), limit); got != want {
-				t.Fatalf("distance(%q,%q, limit=%d)=%d; want %d", test.a, test.b, limit, got, want)
-			}
-		}
-	}
-}
-
-func TestBoundedDistanceMatchesFullMatrix(t *testing.T) {
-	words := []string{""}
-	for range 4 {
-		previous := append([]string(nil), words...)
-		for _, word := range previous {
-			for _, letter := range []string{"a", "b", "é"} {
-				words = append(words, word+letter)
-			}
-		}
-	}
-	for _, a := range words {
-		for _, b := range words {
-			distance := referenceDistance([]rune(a), []rune(b))
-			for limit := range 5 {
-				if got := boundedLevenshtein([]rune(a), []rune(b), limit); got != min(distance, limit+1) {
-					t.Fatalf("%q / %q limit %d: got %d want %d", a, b, limit, got, min(distance, limit+1))
-				}
-			}
-		}
-	}
-}
-
-func referenceDistance(a, b []rune) int {
-	matrix := make([][]int, len(a)+1)
-	for i := range matrix {
-		matrix[i] = make([]int, len(b)+1)
-		matrix[i][0] = i
-	}
-	for j := range matrix[0] {
-		matrix[0][j] = j
-	}
-	for i := 1; i <= len(a); i++ {
-		for j := 1; j <= len(b); j++ {
-			cost := 0
-			if a[i-1] != b[j-1] {
-				cost = 1
-			}
-			matrix[i][j] = min(matrix[i-1][j]+1, matrix[i][j-1]+1, matrix[i-1][j-1]+cost)
-		}
-	}
-	return matrix[len(a)][len(b)]
-}
-
-func TestSimilarParagraphsAcrossFiles(t *testing.T) {
+func paragraphFiles(t *testing.T, texts ...string) string {
+	t.Helper()
 	root := t.TempDir()
-	one := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
-	two := strings.Replace(one, "every", "each", 1)
-	for name, text := range map[string]string{"a": one, "b": two} {
-		if err := os.WriteFile(filepath.Join(root, name+".md"), []byte(":::instruction\n"+text+"\n:::\n"), 0644); err != nil {
+	for i, text := range texts {
+		if err := os.WriteFile(filepath.Join(root, string(rune('a'+i))+".md"), []byte(":::instruction\n"+text+"\n:::\n"), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	diagnostics, err := Run(t.Context(), []string{root}, Options{})
-	if err != nil || len(diagnostics) != 0 {
-		t.Fatalf("similarity should be opt-in: %+v (%v)", diagnostics, err)
-	}
-	diagnostics, err = Run(t.Context(), []string{root}, Options{DuplicateSimilarity: 0.9})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(diagnostics) != 1 || diagnostics[0].Rule != "similar-content" || diagnostics[0].Line != 2 || diagnostics[0].Similarity == nil || *diagnostics[0].Similarity < 0.9 || *diagnostics[0].Similarity >= 1 || diagnostics[0].Related[0].Path != filepath.Join(root, "a.md") {
-		t.Fatalf("%+v", diagnostics)
-	}
-	for _, options := range []Options{{DuplicateSimilarity: 1}, {DuplicateSimilarity: 0.9, DuplicateMinWords: 100}, {DuplicateSimilarity: 0.9, Disable: []string{"similar-content"}}} {
-		diagnostics, err := Run(t.Context(), []string{root}, options)
-		if err != nil || len(diagnostics) != 0 {
-			t.Fatalf("unexpected warning for %+v: %+v (%v)", options, diagnostics, err)
-		}
+	return root
+}
+
+func TestLexicalParagraphs(t *testing.T) {
+	base := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
+	reorderedA := "Inspect every changed function and report concrete failures. Include enough context to reproduce the problem."
+	reorderedB := "Include enough context to reproduce the problem. Inspect every changed function and report concrete failures."
+	for _, test := range []struct {
+		name, a, b, method            string
+		similarity, containment, want float64
+	}{
+		{"edited", base, strings.Replace(base, "every", "each", 1), "jaccard", 0.7, 0, 11.0 / 15},
+		{"reordered", reorderedA, reorderedB, "jaccard", 0.7, 0, 11.0 / 15},
+		{"contained", base, "Before opening a pull request, follow these steps. " + base + " Afterwards, summarize your findings clearly for the reviewer.", "containment", 0.9, 1, 1},
+		{"contained-reverse", "Additional setup instructions precede the main task. " + base, base, "containment", 0, 1, 1},
+		{"different", base, "Prepare the vegetable broth by simmering chopped carrots and onions together in a large covered pot.", "", 0.7, 0.9, 0},
+		{"paraphrase", base, "Examine modified routines, identify reproducible defects, and explain each issue clearly so another developer can investigate it.", "", 0.7, 0.9, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := paragraphFiles(t, test.a, test.b)
+			diagnostics, err := Run(t.Context(), []string{root}, Options{DuplicateSimilarity: test.similarity, DuplicateContainment: test.containment})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.method == "" {
+				if len(diagnostics) != 0 {
+					t.Fatalf("unexpected match: %+v", diagnostics)
+				}
+				return
+			}
+			if len(diagnostics) != 1 {
+				t.Fatalf("%+v", diagnostics)
+			}
+			d := diagnostics[0]
+			if d.Rule != "similar-content" || d.Method != test.method || d.Similarity == nil || math.Abs(*d.Similarity-test.want) > 1e-10 || d.Line != 2 || len(d.Related) != 1 || d.Related[0].Path != filepath.Join(root, "a.md") || len(d.SharedPhrases) == 0 {
+				t.Fatalf("%+v", d)
+			}
+		})
 	}
 }
 
-func TestSimilarityThresholdBoundaryAndClosestMatch(t *testing.T) {
-	current := newParagraph("abcdefghij", Location{})
-	candidates := []paragraph{newParagraph("abcdefghzz", Location{Path: "less-similar"}), newParagraph("abcdefghiz", Location{Path: "closest"}), newParagraph("abcdefghix", Location{Path: "later-tie"})}
-	first, score, ok := closestParagraph(current, candidates, 0.9)
-	if !ok || score != 0.9 || first.Path != "closest" {
-		t.Fatalf("%+v %f %v", first, score, ok)
-	}
-	if _, _, ok := closestParagraph(current, candidates, 0.91); ok {
-		t.Fatal("matched below threshold")
+func TestLexicalThresholdsAndDisabling(t *testing.T) {
+	one := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
+	root := paragraphFiles(t, one, strings.Replace(one, "every", "each", 1))
+	for _, options := range []Options{{}, {DuplicateSimilarity: 1}, {DuplicateSimilarity: 0.7, DuplicateMinWords: 100}, {DuplicateSimilarity: 0.7, Disable: []string{"similar-content"}}} {
+		diagnostics, err := Run(t.Context(), []string{root}, options)
+		if err != nil || len(diagnostics) != 0 {
+			t.Fatalf("%+v: %+v (%v)", options, diagnostics, err)
+		}
 	}
 	for _, threshold := range []float64{-0.1, 1.1, math.NaN(), math.Inf(1)} {
-		if err := (Options{DuplicateSimilarity: threshold}).Validate(); err == nil {
-			t.Fatalf("accepted %v", threshold)
+		for _, options := range []Options{{DuplicateSimilarity: threshold}, {DuplicateContainment: threshold}, {Semantic: SemanticOptions{Threshold: threshold}}} {
+			if err := options.Validate(); err == nil {
+				t.Fatalf("accepted %+v", options)
+			}
 		}
+	}
+	if err := (Options{DuplicateShingleWords: -1}).Validate(); err == nil {
+		t.Fatal("accepted negative shingle size")
+	}
+}
+
+func TestShinglesUnicodeAndMultiplicity(t *testing.T) {
+	p := newParagraph("CAFÉ naïve résumé! café naïve résumé", Location{}, 3)
+	if len(p.shingles) != 3 || !p.shingles["café naïve résumé"] {
+		t.Fatalf("%v", p.shingles)
+	}
+	if len(newParagraph("too short", Location{}, 3).shingles) != 0 {
+		t.Fatal("short input must not create a partial shingle")
+	}
+}
+
+func TestLexicalClosestMatchAndStableTie(t *testing.T) {
+	c := checker{options: Options{DuplicateSimilarity: 0.5}, shingleIndex: map[string][]int{}}
+	for _, text := range []string{"one two three four x y", "one two three four five x", "one two three four five y"} {
+		p := newParagraph(text, Location{}, 2)
+		for shingle := range p.shingles {
+			c.shingleIndex[shingle] = append(c.shingleIndex[shingle], len(c.similarParagraphs))
+		}
+		c.similarParagraphs = append(c.similarParagraphs, p)
+	}
+	p := newParagraph("one two three four five six", Location{}, 2)
+	match, ok := c.closestLexical(p)
+	if !ok || match.index != 1 || math.Abs(match.score-2.0/3) > 1e-10 {
+		t.Fatalf("%+v %v", match, ok)
+	}
+	phrases := sharedPhrases(p, c.similarParagraphs[match.index])
+	if !slices.IsSorted(phrases) {
+		t.Fatalf("unstable explanation: %v", phrases)
+	}
+	c.options.DuplicateSimilarity = 0.67
+	if _, ok := c.closestLexical(p); ok {
+		t.Fatal("matched below threshold")
+	}
+}
+
+func TestExactTakesPriorityOverLexical(t *testing.T) {
+	p := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
+	root := paragraphFiles(t, p, strings.ToUpper(p))
+	diagnostics, err := Run(t.Context(), []string{root}, Options{DuplicateSimilarity: 0.5, DuplicateContainment: 0.5})
+	if err != nil || len(diagnostics) != 1 || diagnostics[0].Rule != "duplicate-content" {
+		t.Fatalf("%+v (%v)", diagnostics, err)
 	}
 }

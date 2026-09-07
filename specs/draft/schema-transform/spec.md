@@ -87,11 +87,16 @@ headings, paragraphs, links and images. Expr predicates must be boolean. A false
 assertion reports at the selected source location. Configuration and evaluation
 errors are distinct from ordinary failed assertions.
 
-Collection checks also identify duplicate names, headings and paragraphs, including
-paragraphs within directives. Optional normalized Unicode Levenshtein similarity
-reports near-duplicate paragraphs at a configurable threshold. Diagnostics include
-the matching source location and a numeric similarity score; this is a deterministic
-text measure, not a probability or semantic equivalence claim.
+Collection checks identify duplicate names, headings and exact normalized
+paragraphs, including paragraphs within directives. Optional word-shingle Jaccard
+and containment measures report lexical overlap at independent thresholds.
+Optional Model2Vec embeddings run entirely in process from local model files and
+report semantic candidates by cosine similarity; enabling them requires an explicit
+model path and threshold. No servers, subprocesses or model downloads participate
+in linting. Paragraph edit distance is removed. Diagnostics include the matching
+source location, method, numeric score, shared phrases for lexical findings and
+model path for semantic findings. Exact then lexical findings take precedence over
+semantic findings. Scores are not probabilities or semantic equivalence claims.
 
 Rules run without executing templates. Dynamic nodes are skipped by default;
 compiled output can be linted to validate expanded values. Literal code is not
