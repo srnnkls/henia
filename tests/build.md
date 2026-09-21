@@ -32,6 +32,7 @@ Usage:
   henia build [source-directory] [flags]
 
 Flags:
+      --clean             Replace the entire output tree after a successful build
       --harness strings   Harnesses to build (comma-separated; default all configured)
   -h, --help              help for build
   -o, --output string     Build output directory (overrides [build].output) (default ".henia/build")

@@ -56,7 +56,10 @@ func (t *HarnessTarget) Exists(art *artifact.Artifact) (bool, string) {
 // OutputPaths lists every file that will be written, including resources and sidecars.
 func OutputPaths(t Target, art *artifact.Artifact) ([]string, error) {
 	main := t.TargetPath(art)
-	paths := []string{main}
+	var paths []string
+	if art.Type != artifact.TypeUnknown {
+		paths = append(paths, main)
+	}
 	resourceDir := filepath.Dir(main)
 	if filepath.Base(main) != artifact.MainFileName(art.Type) {
 		resourceDir = filepath.Join(resourceDir, art.FullName())
@@ -126,8 +129,10 @@ func (t *HarnessTarget) Write(art *artifact.Artifact) error {
 		}
 		return root.WriteFile(path, data, mode)
 	}
-	if err := write(main, []byte(art.Render()), 0644); err != nil {
-		return err
+	if art.Type != artifact.TypeUnknown {
+		if err := write(main, []byte(art.Render()), 0644); err != nil {
+			return err
+		}
 	}
 	resourceDir := filepath.Dir(main)
 	if t.structure == "flat" {

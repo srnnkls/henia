@@ -17,6 +17,12 @@ import (
 	"github.com/srnnkls/henia/internal/vendor"
 )
 
+type writeJob struct {
+	target   target.Target
+	artifact *artifact.Artifact
+	harness  henia.Harness
+}
+
 type Result struct {
 	Built    int
 	Errors   []error
@@ -25,6 +31,18 @@ type Result struct {
 
 // Run compiles local source directories. Each harness writes beneath output/name.
 func Run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness) (*Result, error) {
+	return run(ctx, sources, output, harnesses, false)
+}
+
+// RunClean publishes a complete output tree only after every artifact was written successfully.
+func RunClean(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness) (*Result, error) {
+	if err := validateCleanOutput(sources, output); err != nil {
+		return nil, err
+	}
+	return run(ctx, sources, output, harnesses, true)
+}
+
+func run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, clean bool) (*Result, error) {
 	if output == "" {
 		return nil, fmt.Errorf("build output directory is required")
 	}
@@ -51,9 +69,22 @@ func Run(ctx context.Context, sources []string, output string, harnesses map[str
 		allArtifacts = append(allArtifacts, arts...)
 	}
 
-	type writeJob struct {
-		target   target.Target
-		artifact *artifact.Artifact
+	protected := slices.Clone(allArtifacts)
+	for _, harness := range harnesses {
+		for _, file := range harness.Files {
+			for _, source := range sources {
+				protected = append(protected, &artifact.Artifact{SourcePath: filepath.Join(source, file.Source)})
+			}
+		}
+	}
+	if clean {
+		var inputs []string
+		for _, input := range protected {
+			inputs = append(inputs, input.SourcePath)
+		}
+		if err := validateCleanOutput(inputs, output); err != nil {
+			return nil, err
+		}
 	}
 	var jobs []writeJob
 	destinations := make(map[string]string)
@@ -65,34 +96,28 @@ func Run(ctx context.Context, sources []string, output string, harnesses map[str
 		outputPath := filepath.Join(output, harnessName)
 		filtered := filterArtifacts(allArtifacts, harness)
 
-		tgt := target.NewFromConfig(harnessName, outputPath, harness)
-		tr := &transform.Transformer{
-			Profile:      harness.Profile,
-			Strict:       harness.Strict,
-			Variables:    harness.Variables,
-			OutputFormat: harness.Format,
-			Keys:         harness.Keys,
-			Values:       harness.Values,
-			Tools:        harness.Tools,
-			References:   convertReferences(harness.References),
+		files, err := supportFiles(sources, harness.Files)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
+			continue
 		}
-		if harness.Profile != "" {
-			profile, err := vendor.Load(harness.Profile, harness.ProjectRoot, harness.UserRoot)
-			if err == nil {
-				tr.Compiler, err = vendor.NewCompiler(profile)
-			}
-			if err != nil {
-				result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
-				continue
-			}
-			tr.Context = vendor.Context{Name: harnessName, Profile: harness.Profile, Path: outputPath, Variables: harness.Variables, Tools: harness.Tools, Keys: harness.Keys}
+		if len(files) > 0 {
+			filtered = append(filtered, &artifact.Artifact{Name: "support files", SourcePath: sources[0], Files: files})
 		}
-
 		for _, art := range filtered {
-			transformed, err := tr.Transform(art)
+			effective, tr, err := transformerFor(harnessName, outputPath, harness, art.Type)
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Errorf("%s: transform %s for %s: %w", art.SourcePath, art.Name, harnessName, err))
+				result.Errors = append(result.Errors, err)
 				continue
+			}
+			tgt := target.NewFromConfig(harnessName, outputPath, effective)
+			transformed := art
+			if art.Type != artifact.TypeUnknown {
+				transformed, err = tr.Transform(art)
+				if err != nil {
+					result.Errors = append(result.Errors, fmt.Errorf("%s: transform %s for %s: %w", art.SourcePath, art.Name, harnessName, err))
+					continue
+				}
 			}
 			for _, warning := range transformed.Warnings {
 				result.Warnings = append(result.Warnings, fmt.Sprintf("%s (%s): %s", art.SourcePath, harnessName, warning))
@@ -148,7 +173,7 @@ func Run(ctx context.Context, sources []string, output string, harnesses map[str
 				if !filepath.IsLocal(relative) {
 					result.Errors = append(result.Errors, fmt.Errorf("output %s escapes build output %s", path, tgt.Path()))
 				}
-				for _, canonical := range allArtifacts {
+				for _, canonical := range protected {
 					protected, err := resolvedPath(canonical.SourcePath)
 					if err != nil {
 						return nil, err
@@ -162,7 +187,7 @@ func Run(ctx context.Context, sources []string, output string, harnesses map[str
 					}
 				}
 			}
-			jobs = append(jobs, writeJob{tgt, transformed})
+			jobs = append(jobs, writeJob{tgt, transformed, effective})
 		}
 	}
 	// File/directory conflicts also fail before writing any artifact.
@@ -177,6 +202,9 @@ func Run(ctx context.Context, sources []string, output string, harnesses map[str
 	if len(result.Errors) > 0 {
 		return result, nil
 	}
+	if clean {
+		return publish(ctx, output, jobs, result)
+	}
 	for _, job := range jobs {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -185,7 +213,9 @@ func Run(ctx context.Context, sources []string, output string, harnesses map[str
 			result.Errors = append(result.Errors, fmt.Errorf("write %s for %s: %w", job.artifact.Name, job.target.Name(), err))
 			continue
 		}
-		result.Built++
+		if job.artifact.Type != artifact.TypeUnknown {
+			result.Built++
+		}
 	}
 	return result, nil
 }
@@ -268,4 +298,87 @@ func convertReferences(refs map[string]henia.ReferenceConfig) map[string]transfo
 		result[k] = transform.ReferenceConfig{Output: v.Output}
 	}
 	return result
+}
+
+func transformerFor(name, output string, h henia.Harness, kind artifact.Type) (henia.Harness, *transform.Transformer, error) {
+	mapping := h.ArtifactMappings[artifact.TypeDirName(kind)]
+	if kind != artifact.TypeSkill {
+		h.Profile = ""
+	}
+	if mapping.Profile != "" {
+		h.Profile = mapping.Profile
+	}
+	if mapping.Structure != "" {
+		h.Structure = mapping.Structure
+	}
+	h.Keys = mergeMap(h.Keys, mapping.Keys)
+	h.Values = mergeMap(h.Values, mapping.Values)
+	tr := &transform.Transformer{
+		Profile: h.Profile, Strict: h.Strict, Variables: h.Variables,
+		OutputFormat: h.Format, Keys: h.Keys, Values: h.Values,
+		Tools: h.Tools, References: convertReferences(h.References),
+	}
+	if h.Profile != "" {
+		profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot)
+		if err == nil {
+			tr.Compiler, err = vendor.NewCompiler(profile)
+		}
+		if err != nil {
+			return h, nil, fmt.Errorf("harness %s: %w", name, err)
+		}
+		tr.Context = vendor.Context{Name: name, Profile: h.Profile, Path: output, Variables: h.Variables, Tools: h.Tools, Keys: h.Keys}
+	}
+	return h, tr, nil
+}
+
+func mergeMap[V any](base, override map[string]V) map[string]V {
+	result := make(map[string]V, len(base)+len(override))
+	maps.Copy(result, base)
+	maps.Copy(result, override)
+	return result
+}
+
+func supportFiles(sources []string, files map[string]henia.File) (map[string][]byte, error) {
+	result := make(map[string][]byte, len(files))
+	for _, path := range slices.Sorted(maps.Keys(files)) {
+		file := files[path]
+		if !filepath.IsLocal(path) || path == "." || filepath.Clean(path) != path || strings.Contains(path, "\\") {
+			return nil, fmt.Errorf("invalid supporting file output %q", path)
+		}
+		if !filepath.IsLocal(file.Source) {
+			return nil, fmt.Errorf("invalid supporting file source %q", file.Source)
+		}
+		for _, source := range sources {
+			root, err := os.OpenRoot(source)
+			if err != nil {
+				return nil, err
+			}
+			data, err := root.ReadFile(file.Source)
+			closeErr := root.Close()
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if closeErr != nil {
+				return nil, closeErr
+			}
+			if _, exists := result[path]; exists {
+				return nil, fmt.Errorf("multiple sources provide supporting file %s", file.Source)
+			}
+			replacements := make([]string, 0, 2*len(file.Replace))
+			for _, old := range slices.Sorted(maps.Keys(file.Replace)) {
+				if old == "" {
+					return nil, fmt.Errorf("empty replacement in supporting file %s", file.Source)
+				}
+				replacements = append(replacements, old, file.Replace[old])
+			}
+			result[path] = []byte(strings.NewReplacer(replacements...).Replace(string(data)))
+		}
+		if _, exists := result[path]; !exists {
+			return nil, fmt.Errorf("supporting file %s not found", file.Source)
+		}
+	}
+	return result, nil
 }

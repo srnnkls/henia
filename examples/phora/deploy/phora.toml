@@ -1,0 +1,11 @@
+[paths]
+cache = "../../../.henia/cache"
+state = "../../../.henia/deploy-state"
+
+[sources]
+claude = { path = "../../../.henia/build/claude", deploy = "link" }
+codex = { path = "../../../.henia/build/codex", deploy = "link" }
+
+[targets]
+claude = { path = "../../../.henia/installed/claude", sources.claude = { collapse = false } }
+codex = { path = "../../../.henia/installed/codex", sources.codex = { collapse = false } }

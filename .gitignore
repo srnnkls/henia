@@ -1,1 +1,3 @@
 /.henia/
+/.worktrees/
+/examples/phora/*/*.lock

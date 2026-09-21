@@ -1,0 +1,15 @@
+[paths]
+cache = "../../../.henia/cache"
+state = "../../../.henia/source-state"
+
+[sources.examples]
+path = "../../.."
+root = "examples"
+include = ["skills/**", "henia.toml"]
+
+[targets.canonical]
+path = "../../../.henia/canonical"
+sources.examples = { collapse = false }
+
+[hooks]
+post_sync = "henia --config ../../../.henia/canonical/henia.toml build ../../../.henia/canonical --output ../../../.henia/build --clean && (cd ../deploy && phora sync --prune --fast-forward)"

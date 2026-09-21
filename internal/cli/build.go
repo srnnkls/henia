@@ -13,6 +13,7 @@ import (
 
 func newBuildCommand() *cobra.Command {
 	var output string
+	var clean bool
 	var selected []string
 	cmd := &cobra.Command{
 		Use:   "build [source-directory]",
@@ -58,7 +59,11 @@ func newBuildCommand() *cobra.Command {
 			if !cmd.Flags().Changed("output") {
 				destination = cfg.Build.Output
 			}
-			result, err := build.Run(cmd.Context(), []string{source}, destination, harnesses)
+			compile := build.Run
+			if clean || cfg.Build.Clean {
+				compile = build.RunClean
+			}
+			result, err := compile(cmd.Context(), []string{source}, destination, harnesses)
 			if err != nil {
 				return err
 			}
@@ -75,6 +80,7 @@ func newBuildCommand() *cobra.Command {
 			return err
 		},
 	}
+	cmd.Flags().BoolVar(&clean, "clean", false, "Replace the entire output tree after a successful build")
 	cmd.Flags().StringVarP(&output, "output", "o", ".henia/build", "Build output directory (overrides [build].output)")
 	cmd.Flags().StringSliceVar(&selected, "harness", nil, "Harnesses to build (comma-separated; default all configured)")
 	return cmd

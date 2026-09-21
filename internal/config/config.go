@@ -22,6 +22,7 @@ type Config struct {
 }
 
 type BuildOptions struct {
+	Clean  bool   `toml:"clean,omitempty"`
 	Output string `toml:"output,omitempty"`
 }
 
@@ -151,6 +152,14 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		cfg.Harness = make(map[string]henia.Harness)
 	}
 	for name, h := range cfg.Harness {
+		for kind, mapping := range h.ArtifactMappings {
+			if kind != "skills" && kind != "agents" && kind != "commands" {
+				return nil, fmt.Errorf("harness %s: unknown artifact mapping %q", name, kind)
+			}
+			if mapping.Structure != "" && mapping.Structure != "flat" && mapping.Structure != "nested" {
+				return nil, fmt.Errorf("harness %s: unsupported artifact structure %q", name, mapping.Structure)
+			}
+		}
 		h.ProjectRoot, h.UserRoot = projectRoot, userRoot
 		cfg.Harness[name] = h
 		if h.Profile != "" {

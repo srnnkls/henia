@@ -166,9 +166,35 @@ All transformations and output collisions are checked before writing. Generated
 paths are relative to the harness root; writes cannot follow symlinks outside it.
 Resources are copied verbatim, executable modes are retained, and resource symlinks
 are rejected. A source sidecar and a generated sidecar cannot claim the same path.
-Write-time filesystem errors can leave partial output. Rebuilds overwrite generated
-files but do not prune stale files; use a clean build directory after removing a
-skill or sidecar declaration.
+Use `[build] clean = true` (or `--clean`) when Phora consumes the output tree.
+Henia then writes every artifact into a temporary sibling and replaces the output
+only after all writes succeed. Removed artifacts and resources disappear on a
+successful rebuild; failures leave the previous output intact. The entire output
+directory is compiler-owned in this mode, including when `--harness` narrows the
+selection. Without `clean`, builds retain the existing overwrite behavior.
+
+Agent metadata and layout can be configured separately from skill profiles:
+
+```toml
+[harness.claude.artifact_mappings.agents]
+profile = "claude-agent"
+structure = "flat"
+```
+
+The custom profile lives at `.henia/harnesses/claude-agent/transform.toml` and uses
+the same declarative fields, computed values and native overrides as skill
+profiles. Artifact mappings also support `keys` and `values`. Support documents
+can be included without a post-processing script:
+
+```toml
+[harness.claude.files]
+"instructions/AGENTS.md" = { source = "instructions/AGENTS.md" }
+"CLAUDE.md" = { source = "instructions/AGENTS.md", replace = { "](../" = "](" } }
+```
+
+Source paths resolve inside the canonical input directory; output paths are
+relative to the harness root. Replacements are literal and simultaneous. These
+files participate in collision checks and clean publication.
 
 ## Development
 

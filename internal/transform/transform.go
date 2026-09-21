@@ -129,7 +129,7 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	result.Frontmatter = ApplyMappings(result.Frontmatter, keyMappings)
 
 	result.Frontmatter = ApplyValueMappings(result.Frontmatter, t.Values)
-	if art.Type == artifact.TypeSkill && t.Profile != "" {
+	if (art.Type == artifact.TypeSkill || art.Type == artifact.TypeAgent) && t.Profile != "" {
 		can, err := canonical.Parse(result.Frontmatter)
 		if err != nil {
 			return nil, err
@@ -199,6 +199,8 @@ func (t *Transformer) transformReferences(body string) string {
 		return body
 	}
 
+	var result strings.Builder
+	end := 0
 	for _, ref := range refs {
 		var replacement string
 
@@ -217,11 +219,13 @@ func (t *Transformer) transformReferences(body string) string {
 		}
 
 		if replacement != "" {
-			body = strings.Replace(body, "`"+ref.Raw+"`", replacement, 1)
+			result.WriteString(body[end:ref.Start])
+			result.WriteString(replacement)
+			end = ref.End
 		}
 	}
-
-	return body
+	result.WriteString(body[end:])
+	return result.String()
 }
 
 func wrapOutput(output string) string {
