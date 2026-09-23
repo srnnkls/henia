@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -251,5 +252,39 @@ func TestArtifactNamespaceField(t *testing.T) {
 
 	if art.Namespace != "mycompany" {
 		t.Errorf("Namespace = %q, want %q", art.Namespace, "mycompany")
+	}
+}
+
+func TestDiscoverLinkedArtifactDirectory(t *testing.T) {
+	root := t.TempDir()
+	checkout := filepath.Join(root, "checkout/code")
+	if err := os.MkdirAll(checkout, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(checkout, "SKILL.md"), []byte("---\nname: code\n---\nSkill.\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "source/skills"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(checkout, filepath.Join(root, "source/skills/code")); err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := Discover(filepath.Join(root, "source"), []string{"skills"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 || !artifacts[0].IsDirectory || artifacts[0].SourcePath != filepath.Join(root, "source/skills/code") {
+		t.Fatalf("linked skill directory: %+v", artifacts)
+	}
+}
+
+func TestWalkRejectsSymlinkCycle(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Symlink(root, filepath.Join(root, "loop")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Walk(root, func(string, fs.FileInfo) error { return nil }); err == nil {
+		t.Fatal("symlink cycle accepted")
 	}
 }

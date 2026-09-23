@@ -137,7 +137,15 @@ func Discover(rootDir string, artifactTypes []string) ([]*Artifact, error) {
 			var art *Artifact
 			var err error
 
-			if entry.IsDir() {
+			isDir := entry.IsDir()
+			if entry.Type()&os.ModeSymlink != 0 {
+				info, err := os.Stat(entryPath)
+				if err != nil {
+					return nil, err
+				}
+				isDir = info.IsDir()
+			}
+			if isDir {
 				art, err = loadDirectoryArtifact(entryPath, name, artType)
 			} else if before, ok := strings.CutSuffix(name, ".md"); ok {
 				art, err = loadFileArtifact(entryPath, before, artType)

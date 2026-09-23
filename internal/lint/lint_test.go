@@ -129,3 +129,22 @@ func TestHeadingReferences(t *testing.T) {
 		t.Fatalf("expected one stale anchor: %+v", diagnostics)
 	}
 }
+
+func TestLinkedLeavesAreLinted(t *testing.T) {
+	root := t.TempDir()
+	target := write(t, root, "checkout/SKILL.md", "---\nname: one\n---\n\n:::broken\n")
+	source := filepath.Join(root, "source/skills/one")
+	if err := os.MkdirAll(source, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(source, "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	diagnostics, err := lint.Run(t.Context(), []string{filepath.Join(root, "source")}, lint.Options{Disable: []string{"metadata"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Severity != "error" {
+		t.Fatalf("linked leaf not linted: %+v", diagnostics)
+	}
+}

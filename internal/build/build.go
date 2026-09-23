@@ -349,20 +349,12 @@ func supportFiles(sources []string, files map[string]henia.File) (map[string][]b
 			return nil, fmt.Errorf("invalid supporting file source %q", file.Source)
 		}
 		for _, source := range sources {
-			root, err := os.OpenRoot(source)
-			if err != nil {
-				return nil, err
-			}
-			data, err := root.ReadFile(file.Source)
-			closeErr := root.Close()
+			data, err := os.ReadFile(filepath.Join(source, file.Source))
 			if os.IsNotExist(err) {
 				continue
 			}
 			if err != nil {
 				return nil, err
-			}
-			if closeErr != nil {
-				return nil, closeErr
 			}
 			if _, exists := result[path]; exists {
 				return nil, fmt.Errorf("multiple sources provide supporting file %s", file.Source)

@@ -64,32 +64,12 @@ func OutputPaths(t Target, art *artifact.Artifact) ([]string, error) {
 	if filepath.Base(main) != artifact.MainFileName(art.Type) {
 		resourceDir = filepath.Join(resourceDir, art.FullName())
 	}
-	if art.IsDirectory {
-		for _, resource := range art.Resources {
-			if !filepath.IsLocal(resource) {
-				return nil, fmt.Errorf("invalid resource path %q", resource)
-			}
-			err := filepath.WalkDir(filepath.Join(art.SourcePath, resource), func(path string, entry fs.DirEntry, err error) error {
-				if err != nil {
-					return err
-				}
-				if entry.Type()&os.ModeSymlink != 0 {
-					return fmt.Errorf("symlink resource is not supported: %s", path)
-				}
-				if entry.IsDir() {
-					return nil
-				}
-				relative, err := filepath.Rel(art.SourcePath, path)
-				if err != nil {
-					return err
-				}
-				paths = append(paths, filepath.Join(resourceDir, relative))
-				return nil
-			})
-			if err != nil {
-				return nil, err
-			}
-		}
+	resources, err := resourceFiles(art)
+	if err != nil {
+		return nil, err
+	}
+	for _, resource := range resources {
+		paths = append(paths, filepath.Join(resourceDir, resource.path))
 	}
 	for _, name := range slices.Sorted(maps.Keys(art.Files)) {
 		if !filepath.IsLocal(name) || filepath.Clean(name) != name || name == "." || strings.Contains(name, "\\") {
@@ -138,36 +118,17 @@ func (t *HarnessTarget) Write(art *artifact.Artifact) error {
 	if t.structure == "flat" {
 		resourceDir = filepath.Join(resourceDir, art.FullName())
 	}
-	if art.IsDirectory && len(art.Resources) > 0 {
-		source, err := os.OpenRoot(art.SourcePath)
+	resources, err := resourceFiles(art)
+	if err != nil {
+		return err
+	}
+	for _, resource := range resources {
+		data, err := os.ReadFile(filepath.Join(art.SourcePath, resource.path))
 		if err != nil {
 			return err
 		}
-		defer source.Close()
-		for _, resource := range art.Resources {
-			err := fs.WalkDir(source.FS(), resource, func(path string, entry fs.DirEntry, err error) error {
-				if err != nil {
-					return err
-				}
-				if entry.Type()&os.ModeSymlink != 0 {
-					return fmt.Errorf("symlink resource is not supported: %s", path)
-				}
-				if entry.IsDir() {
-					return nil
-				}
-				info, err := entry.Info()
-				if err != nil {
-					return err
-				}
-				data, err := source.ReadFile(path)
-				if err != nil {
-					return err
-				}
-				return write(filepath.Join(resourceDir, path), data, info.Mode().Perm())
-			})
-			if err != nil {
-				return err
-			}
+		if err := write(filepath.Join(resourceDir, resource.path), data, resource.mode); err != nil {
+			return err
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(art.Files)) {
@@ -176,4 +137,41 @@ func (t *HarnessTarget) Write(art *artifact.Artifact) error {
 		}
 	}
 	return nil
+}
+
+type resourceFile struct {
+	path string
+	mode os.FileMode
+}
+
+// resourceFiles lists a directory artifact's resource files by their paths
+// below the artifact, following symlinked files and directories.
+func resourceFiles(art *artifact.Artifact) ([]resourceFile, error) {
+	if !art.IsDirectory {
+		return nil, nil
+	}
+	var files []resourceFile
+	for _, resource := range art.Resources {
+		if !filepath.IsLocal(resource) {
+			return nil, fmt.Errorf("invalid resource path %q", resource)
+		}
+		err := artifact.Walk(filepath.Join(art.SourcePath, resource), func(path string, info fs.FileInfo) error {
+			if info.IsDir() {
+				return nil
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("resource is not a regular file: %s", path)
+			}
+			relative, err := filepath.Rel(art.SourcePath, path)
+			if err != nil {
+				return err
+			}
+			files = append(files, resourceFile{relative, info.Mode().Perm()})
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
 }

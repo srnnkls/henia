@@ -200,20 +200,17 @@ func collect(ctx context.Context, paths []string) ([]string, error) {
 	seen := make(map[string]bool)
 	var files []string
 	for _, path := range paths {
-		err := filepath.WalkDir(path, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
+		err := artifact.Walk(path, func(path string, info fs.FileInfo) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if entry.IsDir() {
-				if slices.Contains([]string{".git", ".henia", "node_modules", "vendor"}, entry.Name()) {
+			if info.IsDir() {
+				if slices.Contains([]string{".git", ".henia", "node_modules", "vendor"}, info.Name()) {
 					return fs.SkipDir
 				}
 				return nil
 			}
-			if entry.Type()&os.ModeSymlink != 0 || !strings.EqualFold(filepath.Ext(path), ".md") {
+			if !info.Mode().IsRegular() || !strings.EqualFold(filepath.Ext(path), ".md") {
 				return nil
 			}
 			absolute, err := filepath.Abs(path)
