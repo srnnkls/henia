@@ -157,7 +157,11 @@ local source. See the [Phora integration guide](docs/phora.md) for the phase ord
 and example configurations.
 
 Config merges bundled defaults, `~/.config/henia/henia.toml`, then project
-`henia.toml`: tables merge recursively, scalars override (including `false`), and
+`henia.toml`. Without `--config`, `henia build <source>` reads
+`<source>/henia.toml` when present, else `./henia.toml`; `--config` always wins.
+Relative paths in a project config resolve against its directory, and `--output`,
+`--clean` and `--harness` override its settings. `henia lint` reads
+`--config` or `./henia.toml`. Tables merge recursively, scalars override (including `false`), and
 arrays concatenate. Existing explicit harness configurations without `profile`
 retain the legacy key/value mapper. Legacy flat output, command and agent artifacts
 remain available through explicit configuration; the researched profiles target skills.

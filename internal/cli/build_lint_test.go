@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/srnnkls/henia/internal/lint"
 )
 
@@ -270,4 +271,85 @@ func TestBuildOutputSettingAndCLIOverride(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func executeBuild(t *testing.T, args ...string) error {
+	t.Helper()
+	previous := configPath
+	t.Cleanup(func() { configPath = previous })
+	root := &cobra.Command{Use: "henia", SilenceUsage: true, SilenceErrors: true}
+	root.PersistentFlags().StringVar(&configPath, "config", "henia.toml", "Config file path")
+	root.AddCommand(newBuildCommand())
+	root.SetOut(&bytes.Buffer{})
+	root.SetArgs(append([]string{"build"}, args...))
+	return root.Execute()
+}
+
+// sourceConfigFixture lays out a source directory with its own henia.toml and a
+// working directory whose henia.toml declares a different harness.
+func sourceConfigFixture(t *testing.T, sourceConfig bool) string {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	source := t.TempDir()
+	fixture(t, filepath.Join(source, "skills/example/SKILL.md"), "---\nname: example\ndescription: Example\n---\n# Example\n")
+	if sourceConfig {
+		fixture(t, filepath.Join(source, "henia.toml"), "[build]\noutput = 'artifacts'\n[harness.source-only]\nformat = 'markdown'\n")
+	}
+	cwd := t.TempDir()
+	fixture(t, filepath.Join(cwd, "henia.toml"), "[harness.cwd-only]\nformat = 'markdown'\n")
+	t.Chdir(cwd)
+	return source
+}
+
+func assertHarnesses(t *testing.T, output string, want ...string) {
+	t.Helper()
+	entries, err := os.ReadDir(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, entry := range entries {
+		got = append(got, entry.Name())
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("harnesses in %s = %v, want %v", output, got, want)
+	}
+	for _, name := range want {
+		if _, err := os.Stat(filepath.Join(output, name, "skills/example/SKILL.md")); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestBuildReadsSourceConfig(t *testing.T) {
+	source := sourceConfigFixture(t, true)
+	if err := executeBuild(t, source); err != nil {
+		t.Fatal(err)
+	}
+	assertHarnesses(t, filepath.Join(source, "artifacts"), "source-only")
+	override := filepath.Join(t.TempDir(), "override")
+	if err := executeBuild(t, source, "--output", override); err != nil {
+		t.Fatal(err)
+	}
+	assertHarnesses(t, override, "source-only")
+}
+
+func TestBuildExplicitConfigOverridesSourceConfig(t *testing.T) {
+	source := sourceConfigFixture(t, true)
+	explicit := filepath.Join(t.TempDir(), "explicit.toml")
+	fixture(t, explicit, "[harness.explicit-only]\nformat = 'markdown'\n")
+	output := filepath.Join(t.TempDir(), "out")
+	if err := executeBuild(t, "--config", explicit, source, "--output", output); err != nil {
+		t.Fatal(err)
+	}
+	assertHarnesses(t, output, "explicit-only")
+}
+
+func TestBuildWithoutSourceConfigReadsWorkingDirectoryConfig(t *testing.T) {
+	source := sourceConfigFixture(t, false)
+	output := filepath.Join(t.TempDir(), "out")
+	if err := executeBuild(t, source, "--output", output); err != nil {
+		t.Fatal(err)
+	}
+	assertHarnesses(t, output, "cwd-only")
 }

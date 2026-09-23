@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/srnnkls/henia"
@@ -18,6 +19,7 @@ func newBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build [source-directory]",
 		Short: "Compile local canonical artifacts for multiple harnesses",
+		Long:  "Compile local canonical artifacts for multiple harnesses.\n\nWithout --config, the source directory's henia.toml is read when present, else ./henia.toml.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			source := "."
@@ -31,7 +33,7 @@ func newBuildCommand() *cobra.Command {
 			if !info.IsDir() {
 				return fmt.Errorf("source must be a directory containing skills, commands or agents")
 			}
-			cfg, err := optionalConfig(cmd)
+			cfg, err := optionalConfig(cmd, source)
 			if err != nil {
 				return err
 			}
@@ -86,7 +88,16 @@ func newBuildCommand() *cobra.Command {
 	return cmd
 }
 
-func optionalConfig(cmd *cobra.Command) (*config.Config, error) {
+func optionalConfig(cmd *cobra.Command, source string) (*config.Config, error) {
+	if !cmd.Flags().Changed("config") {
+		cfg, err := config.Load(filepath.Join(source, "henia.toml"))
+		if err == nil {
+			return cfg, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("load config: %w", err)
+		}
+	}
 	cfg, err := config.Load(configPath)
 	if err == nil {
 		return cfg, nil

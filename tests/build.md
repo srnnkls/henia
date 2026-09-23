@@ -26,7 +26,9 @@ Use "henia [command] --help" for more information about a command.
 
 ```scrut
 $ henia build --help
-Compile local canonical artifacts for multiple harnesses
+Compile local canonical artifacts for multiple harnesses.
+
+Without --config, the source directory's henia.toml is read when present, else ./henia.toml.
 
 Usage:
   henia build [source-directory] [flags]
