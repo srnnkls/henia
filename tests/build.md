@@ -18,6 +18,7 @@ Available Commands:
 Flags:
       --config string   Config file path (default "henia.toml")
   -h, --help            help for henia
+  -v, --version         version for henia
 
 Use "henia [command] --help" for more information about a command.
 ```
@@ -74,7 +75,7 @@ Built 3 artifact(s) in /tmp/henia-test-build
 ## Verify Claude Directory Structure
 
 ```scrut
-$ ls -R /tmp/henia-test-build/claude
+$ ls -R /tmp/henia-test-build/claude | sed "1{/:$/d;}"
 agents
 commands
 skills
@@ -184,7 +185,7 @@ Built 3 artifact(s) in /tmp/henia-test-build
 ## Verify OpenCode Directory Structure (Flat)
 
 ```scrut
-$ ls -R /tmp/henia-test-build/opencode
+$ ls -R /tmp/henia-test-build/opencode | sed "1{/:$/d;}"
 agents
 commands
 skills
