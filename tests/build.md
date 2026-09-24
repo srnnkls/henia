@@ -18,6 +18,7 @@ Available Commands:
 Flags:
       --config string   Config file path (default "henia.toml")
   -h, --help            help for henia
+  -v, --version         version for henia
 
 Use "henia [command] --help" for more information about a command.
 ```
