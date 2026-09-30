@@ -112,6 +112,19 @@ vectors for P unique paragraphs and D embedding dimensions, plus model memory.
 Cancellation is checked between encodes and during the comparison loop; it does
 not interrupt an individual model load or encode.
 
+## References
+
+`missing-reference` flags a `$skill`, `/command` or `@agent` span whose name no
+scanned artifact defines. Names are lowercase letters, digits, `.`, `_` and `-`,
+so `$HOME` or `/etc/hosts` are not references. Declare artifacts that live
+outside the scanned tree, such as harness built-ins or Git-ignored deployments,
+as `type:name`:
+
+```toml
+[lint]
+external = ["skill:gestalt", "command:plan"]
+```
+
 ## Custom rule declarations
 
 Declare `[[lint.rules]]` entries in project or user `henia.toml`. Rules augment the

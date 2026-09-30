@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,6 +48,18 @@ func TestRulesAndPositions(t *testing.T) {
 	slices.Sort(want)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("rules = %v, want %v; diagnostics: %+v", got, want, diagnostics)
+	}
+}
+
+func TestExternalReferencesResolve(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\nUse `$vendored`, `/plan` and `$absent`.\n")
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{External: []string{"skill:vendored", "command:plan"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Rule != "missing-reference" || !strings.Contains(diagnostics[0].Message, `"absent"`) {
+		t.Fatalf("diagnostics = %+v, want one missing-reference for absent", diagnostics)
 	}
 }
 
