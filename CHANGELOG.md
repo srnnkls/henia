@@ -5,18 +5,18 @@
 
 ### Features
 
-* render references in support files and declare external lint names ([#7](https://github.com/srnnkls/henia/issues/7)) ([6ba3da1](https://github.com/srnnkls/henia/commit/6ba3da1ff79c83e858fa76ff299ca544ecba203d))
+* render references in support files and declare external lint names ([#7](https://github.com/srnnkls/henia/issues/7)) ([20a45b7](https://github.com/srnnkls/henia/commit/20a45b7af36f8ea08ea7c94abb72ea2eaa4bf9f8))
 
 ## [0.1.0-alpha.3](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.2...v0.1.0-alpha.3) (2026-09-30)
 
 
 ### Features
 
-* **lint:** skip Git-ignored paths ([#5](https://github.com/srnnkls/henia/issues/5)) ([1c22891](https://github.com/srnnkls/henia/commit/1c2289136a593ee5dfaa76d31e04a9cebc81b91d))
+* **lint:** skip Git-ignored paths ([#5](https://github.com/srnnkls/henia/issues/5)) ([b6cd928](https://github.com/srnnkls/henia/commit/b6cd928018111ab0ead517fe3ccdab550803d3b5))
 
 ## [0.1.0-alpha.2](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.1...v0.1.0-alpha.2) (2026-09-30)
 
 
 ### Bug Fixes
 
-* **lint:** skip empty headings instead of panicking ([e338c67](https://github.com/srnnkls/henia/commit/e338c67b5f86d96e5de34d468e715750c902d31f))
+* **lint:** skip empty headings instead of panicking ([c14cafb](https://github.com/srnnkls/henia/commit/c14cafba582fafd87dd67bf5db407b8d36fc44c3))
