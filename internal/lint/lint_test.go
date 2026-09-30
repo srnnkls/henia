@@ -2,6 +2,7 @@ package lint_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -72,6 +73,35 @@ func TestEmptyHeadingsAreIgnored(t *testing.T) {
 	}
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+}
+
+func TestGitIgnoredPathsAreSkipped(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	write(t, root, ".gitignore", "vendored/\nnotes.md\n")
+	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\nBody.\n")
+	write(t, root, "vendored/guide/README.md", "[broken](absent.md)\n")
+	write(t, root, "notes.md", "[broken](absent.md)\n")
+	for _, path := range []string{root, filepath.Join(root, "skills")} {
+		diagnostics, err := lint.Run(t.Context(), []string{path}, lint.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(diagnostics) != 0 {
+			t.Fatalf("lint %s: unexpected diagnostics: %+v", path, diagnostics)
+		}
+	}
+	for _, path := range []string{filepath.Join(root, "vendored"), filepath.Join(root, "notes.md")} {
+		diagnostics, err := lint.Run(t.Context(), []string{path}, lint.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(diagnostics) != 1 {
+			t.Fatalf("lint %s: explicit ignored path not linted: %+v", path, diagnostics)
+		}
 	}
 }
 

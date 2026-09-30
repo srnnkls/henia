@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -199,10 +200,20 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 func collect(ctx context.Context, paths []string) ([]string, error) {
 	seen := make(map[string]bool)
 	var files []string
-	for _, path := range paths {
-		err := artifact.Walk(path, func(path string, info fs.FileInfo) error {
+	for _, root := range paths {
+		ignored, err := gitIgnored(ctx, root)
+		if err != nil {
+			return nil, err
+		}
+		err = artifact.Walk(root, func(path string, info fs.FileInfo) error {
 			if err := ctx.Err(); err != nil {
 				return err
+			}
+			if absolute, err := filepath.Abs(path); err == nil && path != root && ignored[absolute] {
+				if info.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
 			}
 			if info.IsDir() {
 				if slices.Contains([]string{".git", ".henia", "node_modules", "vendor"}, info.Name()) {
@@ -224,7 +235,7 @@ func collect(ctx context.Context, paths []string) ([]string, error) {
 			return nil
 		})
 		if err != nil {
-			return nil, fmt.Errorf("scan %s: %w", path, err)
+			return nil, fmt.Errorf("scan %s: %w", root, err)
 		}
 	}
 	slices.Sort(files)
@@ -445,4 +456,31 @@ func (c *checker) checkOutdated(d document, offset int, value string) {
 			c.add(d, offset+index, "warning", "outdated-reference", fmt.Sprintf("%q is marked outdated; use %q", old, replacement))
 		}
 	}
+}
+
+// gitIgnored returns the absolute paths Git ignores below root. Ignored
+// directories are reported once rather than per file. Outside a repository,
+// or without git, nothing is ignored.
+func gitIgnored(ctx context.Context, root string) (map[string]bool, error) {
+	dir, err := filepath.Abs(root)
+	if err != nil {
+		return nil, err
+	}
+	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+		dir = filepath.Dir(dir)
+	}
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory").Output()
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		return nil, nil
+	}
+	ignored := make(map[string]bool)
+	for entry := range strings.SplitSeq(string(out), "\x00") {
+		if entry != "" {
+			ignored[filepath.Join(dir, filepath.FromSlash(strings.TrimSuffix(entry, "/")))] = true
+		}
+	}
+	return ignored, nil
 }
