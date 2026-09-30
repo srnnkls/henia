@@ -34,7 +34,9 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+changelog:
+  disable: true
+
 release:
-  draft: false
   prerelease: auto
-  mode: replace
+  mode: keep-existing
