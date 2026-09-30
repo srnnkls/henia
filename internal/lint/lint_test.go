@@ -63,6 +63,18 @@ func TestReferencesResolveAndExamplesAreIgnored(t *testing.T) {
 	}
 }
 
+func TestEmptyHeadingsAreIgnored(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\n###\n\nBody.\n\n### \n")
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+}
+
 func TestDuplicateNamesAndCrossFileContent(t *testing.T) {
 	root := t.TempDir()
 	content := "---\nname: same\ndescription: Example\n---\n\nThis is a long paragraph which contains enough words to detect a copy across two different skills.\n"

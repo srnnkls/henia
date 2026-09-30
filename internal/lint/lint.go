@@ -317,6 +317,9 @@ func (c *checker) check(d document) error {
 		case *ast.FencedCodeBlock, *ast.CodeBlock, *ast.HTMLBlock:
 			return ast.WalkSkipChildren, nil
 		case *ast.Heading:
+			if n.Lines().Len() == 0 {
+				return ast.WalkSkipChildren, nil
+			}
 			key := normalize(string(n.Text(d.body)))
 			offset := d.offset + n.Lines().At(0).Start
 			if first, ok := headings[key]; ok {
