@@ -198,8 +198,9 @@ can be included without a post-processing script:
 ```
 
 Source paths resolve inside the canonical input directory; output paths are
-relative to the harness root. Replacements are literal and simultaneous. These
-files participate in collision checks and clean publication.
+relative to the harness root. Markdown sources render references with the
+harness's `references` syntax before replacements, which are literal and
+simultaneous. These files participate in collision checks and clean publication.
 
 ## Development
 

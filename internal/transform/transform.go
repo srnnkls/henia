@@ -157,7 +157,7 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		return nil, fmt.Errorf("render directives: %w", err)
 	}
 
-	body = t.transformReferences(body)
+	body = t.RenderReferences(body)
 
 	result.Body = body
 
@@ -193,7 +193,8 @@ func templateValue(value any, context map[string]any) (any, error) {
 	}
 }
 
-func (t *Transformer) transformReferences(body string) string {
+// RenderReferences rewrites canonical references in body to the configured harness syntax.
+func (t *Transformer) RenderReferences(body string) string {
 	refs := reference.Parse(body)
 	if len(refs) == 0 {
 		return body

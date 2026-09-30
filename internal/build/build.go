@@ -96,7 +96,8 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 		outputPath := filepath.Join(output, harnessName)
 		filtered := filterArtifacts(allArtifacts, harness)
 
-		files, err := supportFiles(sources, harness.Files)
+		references := &transform.Transformer{Tools: harness.Tools, References: convertReferences(harness.References)}
+		files, err := supportFiles(sources, harness.Files, references)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
 			continue
@@ -338,7 +339,7 @@ func mergeMap[V any](base, override map[string]V) map[string]V {
 	return result
 }
 
-func supportFiles(sources []string, files map[string]henia.File) (map[string][]byte, error) {
+func supportFiles(sources []string, files map[string]henia.File, references *transform.Transformer) (map[string][]byte, error) {
 	result := make(map[string][]byte, len(files))
 	for _, path := range slices.Sorted(maps.Keys(files)) {
 		file := files[path]
@@ -359,6 +360,10 @@ func supportFiles(sources []string, files map[string]henia.File) (map[string][]b
 			if _, exists := result[path]; exists {
 				return nil, fmt.Errorf("multiple sources provide supporting file %s", file.Source)
 			}
+			text := string(data)
+			if strings.EqualFold(filepath.Ext(file.Source), ".md") {
+				text = references.RenderReferences(text)
+			}
 			replacements := make([]string, 0, 2*len(file.Replace))
 			for _, old := range slices.Sorted(maps.Keys(file.Replace)) {
 				if old == "" {
@@ -366,7 +371,7 @@ func supportFiles(sources []string, files map[string]henia.File) (map[string][]b
 				}
 				replacements = append(replacements, old, file.Replace[old])
 			}
-			result[path] = []byte(strings.NewReplacer(replacements...).Replace(string(data)))
+			result[path] = []byte(strings.NewReplacer(replacements...).Replace(text))
 		}
 		if _, exists := result[path]; !exists {
 			return nil, fmt.Errorf("supporting file %s not found", file.Source)

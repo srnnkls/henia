@@ -50,6 +50,7 @@ type Options struct {
 	Rules                 []Rule            `toml:"rules,omitempty"`
 	Disable               []string          `toml:"disable,omitempty"`
 	Outdated              map[string]string `toml:"outdated,omitempty"`
+	External              []string          `toml:"external,omitempty"`
 	MaxLines              int               `toml:"max_lines,omitempty"`
 	MaxAgeDays            int               `toml:"max_age_days,omitempty"`
 	DuplicateMinWords     int               `toml:"duplicate_min_words,omitempty"`
@@ -349,7 +350,8 @@ func (c *checker) check(d document) error {
 					c.checkLink(d, offset, ref.Name)
 					continue
 				}
-				if _, ok := c.names[ref.Type.String()+":"+ref.Name]; !ok {
+				key := ref.Type.String() + ":" + ref.Name
+				if _, ok := c.names[key]; !ok && !slices.Contains(c.options.External, key) {
 					c.add(d, offset, "warning", "missing-reference", fmt.Sprintf("%s reference %q is absent from scanned artifacts", ref.Type, ref.Name))
 				}
 			}

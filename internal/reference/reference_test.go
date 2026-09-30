@@ -118,6 +118,14 @@ func TestParse_IgnoresReferencesOutsideBackticks(t *testing.T) {
 	}
 }
 
+func TestParse_IgnoresVariablesAndPaths(t *testing.T) {
+	for _, input := range []string{"`$ARGUMENTS`", "`$HOME`", "`/etc/nixos/idle-suspend.nix`", "`/usr/local/bin/wake-nix`", "`@Team/member`"} {
+		if refs := Parse(input); len(refs) != 0 {
+			t.Errorf("Parse(%q) = %+v, want no references", input, refs)
+		}
+	}
+}
+
 func TestParse_MultipleReferences(t *testing.T) {
 	refs := Parse("Use `$skill-a` and `$skill-b` together with `/command`")
 
