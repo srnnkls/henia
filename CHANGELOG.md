@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-alpha.4](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.3...v0.1.0-alpha.4) (2026-09-30)
+
+
+### Features
+
+* render references in support files and declare external lint names ([#7](https://github.com/srnnkls/henia/issues/7)) ([6ba3da1](https://github.com/srnnkls/henia/commit/6ba3da1ff79c83e858fa76ff299ca544ecba203d))
+
 ## [0.1.0-alpha.3](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.2...v0.1.0-alpha.3) (2026-09-30)
 
 
