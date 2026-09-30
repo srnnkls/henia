@@ -3,6 +3,7 @@ package reference
 import (
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
@@ -35,6 +36,8 @@ type Reference struct {
 
 var referencePattern = regexp.MustCompile(`^([$/@#!])([a-zA-Z0-9._/-]+)$`)
 
+var artifactName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+
 func Parse(body string) []Reference {
 	var refs []Reference
 	source := []byte(body)
@@ -64,6 +67,9 @@ func Parse(body string) []Reference {
 
 		sigil := refMatch[1]
 		name := refMatch[2]
+		if strings.Contains("$/@", sigil) && !artifactName.MatchString(name) {
+			return ast.WalkSkipChildren, nil
+		}
 
 		var refType Type
 		switch sigil {

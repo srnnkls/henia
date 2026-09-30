@@ -83,6 +83,41 @@ func TestNativeAgentsAndSupportingDocuments(t *testing.T) {
 	}
 }
 
+func TestSupportingDocumentsRenderReferences(t *testing.T) {
+	root := t.TempDir()
+	put(t, filepath.Join(root, "skills/code/SKILL.md"), "Skill.\n")
+	put(t, filepath.Join(root, "instructions/AGENTS.md"), "Use `$code` for code.\n")
+	put(t, filepath.Join(root, "instructions/notes.txt"), "Use `$code` for code.\n")
+	harnesses := map[string]henia.Harness{}
+	for name, output := range map[string]string{"claude": "/{{.Name}}", "pi": "/skill:{{.Name}}"} {
+		harnesses[name] = henia.Harness{
+			References: map[string]henia.ReferenceConfig{"skill": {Output: output}},
+			Files: map[string]henia.File{
+				"AGENTS.md": {Source: "instructions/AGENTS.md"},
+				"notes.txt": {Source: "instructions/notes.txt"},
+			},
+		}
+	}
+	output := filepath.Join(root, "build")
+	result, err := RunClean(t.Context(), []string{root}, output, harnesses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Errors) != 0 {
+		t.Fatalf("build: %+v", result)
+	}
+	for name, want := range map[string]string{"claude": "Use `/code` for code.\n", "pi": "Use `/skill:code` for code.\n"} {
+		data, err := os.ReadFile(filepath.Join(output, name, "AGENTS.md"))
+		if err != nil || string(data) != want {
+			t.Fatalf("%s entrypoint: %q, %v", name, data, err)
+		}
+		data, err = os.ReadFile(filepath.Join(output, name, "notes.txt"))
+		if err != nil || string(data) != "Use `$code` for code.\n" {
+			t.Fatalf("%s non-Markdown file changed: %q, %v", name, data, err)
+		}
+	}
+}
+
 func TestCleanBuildPrunesAndKeepsPreviousOutputOnFailure(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source")
