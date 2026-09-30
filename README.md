@@ -96,7 +96,8 @@ with `[lint] duplicate_similarity = 0.7` and `duplicate_containment = 0.9`;
 `duplicate_min_words` defaults to 12. Semantic checks use in-process Model2Vec
 with local weights and an explicit threshold in `[lint.semantic]`. Findings include
 the matching location, method, score and shared phrases where applicable.
-See [configuration and model setup](docs/lint-rules.md).
+Lint skips Git-ignored files and directories below each path it scans; a path
+named on the command line is always linted. See [configuration and model setup](docs/lint-rules.md).
 Add your own rules in `henia.toml`:
 
 ```toml
