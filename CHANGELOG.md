@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-alpha.5](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.4...v0.1.0-alpha.5) (2026-10-02)
+
+
+### Features
+
+* **lint:** check cross-document names with registries ([6324fc4](https://github.com/srnnkls/henia/commit/6324fc4e0d847fb0407276f741efaec4fe1f8a96))
+
 ## [0.1.0-alpha.4](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.3...v0.1.0-alpha.4) (2026-09-30)
 
 
