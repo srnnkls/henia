@@ -48,6 +48,7 @@ type Location struct {
 
 type Options struct {
 	Rules                 []Rule            `toml:"rules,omitempty"`
+	Registries            []Registry        `toml:"registries,omitempty"`
 	Disable               []string          `toml:"disable,omitempty"`
 	Outdated              map[string]string `toml:"outdated,omitempty"`
 	External              []string          `toml:"external,omitempty"`
@@ -78,8 +79,11 @@ func (o Options) Validate() error {
 	if _, err := compileRules(o.Rules); err != nil {
 		return err
 	}
+	if _, err := compileRegistries(o.Registries, o.Rules); err != nil {
+		return err
+	}
 	for _, rule := range o.Disable {
-		if !slices.Contains(rules, rule) && !slices.ContainsFunc(o.Rules, func(r Rule) bool { return r.ID == rule }) {
+		if !slices.Contains(rules, rule) && !slices.ContainsFunc(o.Rules, func(r Rule) bool { return r.ID == rule }) && !slices.ContainsFunc(o.Registries, func(r Registry) bool { return r.ID == rule }) {
 			return fmt.Errorf("unknown lint rule %q", rule)
 		}
 	}
@@ -105,6 +109,7 @@ type document struct {
 
 type checker struct {
 	rules             []compiledRule
+	registries        []compiledRegistry
 	options           Options
 	diagnostics       []Diagnostic
 	names             map[string]Location
@@ -144,6 +149,10 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 	}
 	c := checker{options: options, diagnostics: []Diagnostic{}, names: make(map[string]Location), paragraphs: make(map[string]Diagnostic), anchors: make(map[string]map[string]bool), shingleIndex: make(map[string][]int)}
 	c.rules, err = compileRules(options.Rules)
+	if err != nil {
+		return nil, err
+	}
+	c.registries, err = compileRegistries(options.Registries, options.Rules)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +198,7 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 			return nil, err
 		}
 	}
+	c.checkRegistries(documents)
 	if err := c.checkSemantic(ctx); err != nil {
 		return nil, err
 	}

@@ -210,6 +210,35 @@ assert = 'node.destination startsWith "https://"'
 message = "Use HTTPS documentation links."
 ```
 
+## Name registries
+
+A registry checks names that one document declares and others reference, such as
+slots a skill owns and skills that provide them. Declare `[[lint.registries]]` in
+`henia.toml`:
+
+```toml
+[[lint.registries]]
+id = "unknown-slot"
+declare = 'frontmatter.metadata?.slots ?? ""'
+reference = 'frontmatter.metadata?.provides ?? ""'
+match = "dotted"
+severity = "error"
+```
+
+`declare` and `reference` are Expr expressions over `document` and `frontmatter`,
+evaluated once per scanned file. Each returns a string, split on whitespace, a list
+of strings, each split the same way, or `nil`. Every referenced name must be
+declared by some scanned file; otherwise the registry reports it at the first
+occurrence of the name in the referencing file's frontmatter, or at the file start.
+
+`match = "exact"` (default) requires an identical declared name. `match = "dotted"`
+also accepts a dotted descendant of a declared name: with `code.style` declared,
+`code.style.python` resolves and `code.styles` does not.
+
+`id` follows the custom rule ID format, must not share an ID with a built-in rule,
+custom rule or other registry, and works with `--disable`. `severity` is `warning`
+(default) or `error`. Evaluation failures are errors naming the registry.
+
 ## Templates and literal content
 
 The linter parses Go templates without executing them. Rules skip nodes containing
