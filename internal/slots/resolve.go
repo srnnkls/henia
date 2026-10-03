@@ -27,20 +27,21 @@ func (t Tier) priority() Priority {
 	return Normal
 }
 
-var ProjectDirs = []string{library.ProjectDir + "/" + library.SkillsDir, ".claude/skills", ".agents/skills", ".agent/skills", ".codex/skills", ".pi/skills", ".omp/skills", ".github/skills"}
+var ProjectDirs = []string{".claude/skills", ".agents/skills", ".agent/skills", ".codex/skills", ".pi/skills", ".omp/skills", ".github/skills"}
 
 type Skill struct {
 	Path string
+	Ref  string
 	Tier Tier
 	Metadata
 }
 
 func (s Skill) Name() string { return filepath.Base(filepath.Dir(s.Path)) }
 
-func Discover(root string, globals []string) []Skill {
+func Discover(root string, globals []string, sources []library.Source) []Skill {
 	var skills []Skill
 	seen := make(map[string]bool)
-	scan := func(dir string, tier Tier) {
+	scan := func(dir string, tier Tier, source string) {
 		for _, f := range library.Scan(dir) {
 			if seen[f.Physical] {
 				continue
@@ -50,16 +51,27 @@ func Discover(root string, globals []string) []Skill {
 				continue
 			}
 			seen[f.Physical] = true
-			skills = append(skills, Skill{Path: f.Path, Tier: tier, Metadata: metadata})
+			skill := Skill{Path: f.Path, Tier: tier, Metadata: metadata}
+			if source != "" {
+				skill.Ref = source + ":" + skill.Name()
+			}
+			skills = append(skills, skill)
 		}
+	}
+	for _, source := range sources {
+		tier := Global
+		if source.Tier == library.Project {
+			tier = Project
+		}
+		scan(source.Skills(), tier, source.Name)
 	}
 	if root != "" {
 		for _, dir := range ProjectDirs {
-			scan(filepath.Join(root, dir), Project)
+			scan(filepath.Join(root, dir), Project, "")
 		}
 	}
 	for _, dir := range globals {
-		scan(filepath.Clean(dir), Global)
+		scan(filepath.Clean(dir), Global, "")
 	}
 	return skills
 }
@@ -96,6 +108,7 @@ type Provider struct {
 	Explicit   bool      `json:"explicit"`
 	Status     string    `json:"status"`
 	Value      string    `json:"value,omitempty"`
+	Ref        string    `json:"ref,omitempty"`
 	Reason     string    `json:"reason,omitempty"`
 	ShadowedBy *Provider `json:"shadowed_by,omitempty"`
 }
@@ -147,7 +160,7 @@ func Evaluate(skills []Skill) *Resolution {
 				r.Problems = append(r.Problems, Row{Slot: entry, Kind: Invalid, Path: s.Path})
 				continue
 			}
-			p := &Provider{Slot: d.Slot, Entry: entry, Skill: s.Name(), Path: s.Path, Tier: s.Tier, Priority: d.Priority, Explicit: strings.Contains(entry, "@"), Status: Selected}
+			p := &Provider{Slot: d.Slot, Entry: entry, Skill: s.Name(), Path: s.Path, Ref: s.Ref, Tier: s.Tier, Priority: d.Priority, Explicit: strings.Contains(entry, "@"), Status: Selected}
 			if !r.known(d.Slot) {
 				p.Status = Unknown
 				r.Problems = append(r.Problems, Row{Slot: d.Slot, Kind: Unknown, Path: s.Path})
@@ -233,7 +246,7 @@ func (r *Resolution) Rows(requested []string, check bool) []Row {
 		for _, tier := range []Tier{Project, Global} {
 			for _, p := range r.Providers {
 				if p.Tier == tier && p.Status == Selected && relevant(p.Slot, requested) {
-					rows = append(rows, Row{Slot: p.Slot, Kind: string(p.Tier), Path: p.Path, Value: p.Value})
+					rows = append(rows, Row{Slot: p.Slot, Kind: string(p.Tier), Path: p.location(), Value: p.Value})
 				}
 			}
 		}
@@ -308,6 +321,13 @@ func (p *Provider) assign(r *Resolution, s Skill) error {
 	}
 	p.Value = value
 	return nil
+}
+
+func (p *Provider) location() string {
+	if p.Ref != "" {
+		return "henia show " + p.Ref
+	}
+	return p.Path
 }
 
 func (p *Provider) competes() bool { return p.Status == Selected || p.Status == Shadowed }

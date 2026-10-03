@@ -52,8 +52,7 @@ working directory.`,
 			if project == "" {
 				project = projectRoot(cmd)
 			}
-			globals = append(globals, library.GlobalSkillDirs()...)
-			skills := slots.Discover(project, globals)
+			skills := slots.Discover(project, globals, library.Open(project, nil).Sources)
 			for _, name := range applying {
 				applied, found := slots.Applied(skills, name)
 				if !found {

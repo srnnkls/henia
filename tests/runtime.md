@@ -116,6 +116,15 @@ $ find "$T/cache/henia/render" -type f | wc -l | tr -d ' '
 Updated.
 ```
 
+A source renders with its own harness profiles from `.henia/harnesses`.
+
+```scrut
+$ mk "$L/tropos/.henia/harnesses/mini/transform.toml" 'fields = ["name", "description"]\n'
+> printf '\n[harness.mini]\nprofile = "mini"\nartifacts = ["skills"]\n' >> "$L/tropos/henia.toml"
+> henia show checks --harness mini | head -n 1
+# Checks
+```
+
 ## Resolution
 
 The project source shadows global sources by name; `source:name` names any
@@ -145,15 +154,16 @@ tropos:checks	global	Validation commands.
 
 ## Context
 
-A skill's context lists the providers of the slots it applies and the sections
-of the library skills it references; it never repeats the skill's own text.
+A skill's context lists the providers of the slots it applies, library providers
+as the `henia show` command that reads them, and the sections of the library
+skills it references; it never repeats the skill's own text.
 
 ```scrut
 $ rm -rf "$L/extra" "$P/.henia"
 > henia context code --global "$T/build/claude/skills" | sed "s|$T/||g"
 Slot providers:
-code.check.go	global	data/henia/sources/tropos/skills/checks/SKILL.md	go vet ./...
-code.style.go	global	data/henia/sources/tropos/skills/style-guide/SKILL.md
+code.check.go	global	henia show tropos:checks	go vet ./...
+code.style.go	global	henia show tropos:style-guide
 
 Skill style-guide: House style by language.
 style-guide#style-guide  Style guide

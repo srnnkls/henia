@@ -146,9 +146,8 @@ preload never aborts.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			lib := flags.open(cmd)
 			out := cmd.OutOrStdout()
-			dirs := slices.Concat(globals, sourceSkillDirs(flags.sources), library.GlobalSkillDirs())
-			skills := slots.Discover(flags.project, dirs)
-			body, found := skillBody(args[0], flags.project, dirs)
+			skills := slots.Discover(flags.project, globals, lib.Sources)
+			body, found := skillBody(args[0], flags.project, slices.Concat(globals, sourceSkillDirs(lib.Sources)))
 			if !found {
 				fmt.Fprintf(out, "henia: no skill named %q\n", args[0])
 				return nil
@@ -189,10 +188,10 @@ preload never aborts.`,
 	return cmd
 }
 
-func sourceSkillDirs(roots []string) []string {
+func sourceSkillDirs(sources []library.Source) []string {
 	var dirs []string
-	for _, root := range roots {
-		dirs = append(dirs, filepath.Join(root, library.SkillsDir))
+	for _, source := range sources {
+		dirs = append(dirs, source.Skills())
 	}
 	return dirs
 }
@@ -268,6 +267,7 @@ func (r *renderer) body(e library.Entry) string {
 		if toml.Unmarshal(config, &parsed) == nil {
 			if h, ok := parsed.Harness[r.harness]; ok {
 				harness, name = h, r.harness
+				harness.ProjectRoot, harness.UserRoot = e.Origin.ProjectRoot(), library.ConfigDir()
 			}
 		}
 	}

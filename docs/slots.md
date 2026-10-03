@@ -102,8 +102,10 @@ reached twice, such as a symlinked global skill inside a project, keeps its
 first tier.
 
 Each output line is `<slot>\t<tier>\t<SKILL.md>`, with a fourth `\t<value>`
-for value-typed slots, for a provider of a requested slot, a sub-slot of it or an enclosing slot, project providers first. Problem
-rows follow:
+for value-typed slots, for each provider of a requested slot, a sub-slot of it
+or an enclosing slot, project providers first. A provider from the
+[library](runtime.md) prints the command that reads it,
+`henia show <source>:<skill>`, in place of its path. Problem rows follow:
 
 | Tier | Meaning | Path |
 |---|---|---|

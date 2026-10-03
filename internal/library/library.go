@@ -74,6 +74,15 @@ func SourcesDir() string {
 
 func CacheDir() string { return filepath.Join(xdg("XDG_CACHE_HOME", ".cache"), "henia") }
 
+func ConfigDir() string { return filepath.Join(xdg("XDG_CONFIG_HOME", ".config"), "henia") }
+
+func (s Source) ProjectRoot() string {
+	if filepath.Base(s.Root) == ProjectDir {
+		return filepath.Dir(s.Root)
+	}
+	return s.Root
+}
+
 type Source struct {
 	Name   string `json:"name"`
 	Tier   string `json:"tier"`
@@ -225,18 +234,6 @@ func digest(dir string) string {
 		h.Write([]byte{0})
 	}
 	return hex.EncodeToString(h.Sum(nil))
-}
-
-func GlobalSkillDirs() []string {
-	var dirs []string
-	if entries, err := os.ReadDir(SourcesDir()); err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() {
-				dirs = append(dirs, filepath.Join(SourcesDir(), entry.Name(), SkillsDir))
-			}
-		}
-	}
-	return dirs
 }
 
 const gitignore = "/*\n!/.gitignore\n!/henia.toml\n!/skills/\n!/harnesses/\n"
