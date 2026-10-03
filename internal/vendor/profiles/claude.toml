@@ -2,6 +2,7 @@
 fields = ["name", "description", "license", "compatibility", "metadata", "allowed-tools", "when_to_use", "argument-hint", "arguments", "disable-model-invocation", "user-invocable", "disallowed-tools", "model", "effort", "context", "agent", "background", "hooks", "paths", "shell"]
 controls = ["auto_invoke", "user_invocable"]
 consume = ["tools", "model_tier"]
+preloads = true
 
 [aliases]
 allowed_tools = "allowed-tools"

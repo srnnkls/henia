@@ -43,6 +43,7 @@ silently. `<skill>#<section>` addresses a heading anchor.
 henia ls [--json]
 henia show <skill>[#section] [--harness NAME]
 henia context <skill> [--global DIR]...
+henia preload --skill <skill> -- <command>
 ```
 
 - `ls` prints the catalog; `--json` adds each skill's source, digest and
@@ -117,6 +118,12 @@ subcommands = ["apply", "delete"]
 pattern = "api\\.example\\.com/admin"
 reason = "admin endpoints change state"
 ```
+
+Projected skills keep the same guarantees: `henia build` rewrites each preload
+to `henia preload --skill <skill> -- '<command>'`. Claude runs that natively in
+`!` syntax (and the build adds `Bash(henia preload *)` to a declared
+`allowed-tools`); harnesses without native preloads get a run-first `bash`
+block instead.
 
 When [FAS](https://github.com/srnnkls/fas) is on PATH, Henia also asks
 `fas eval --harness henia` after its own check, so existing rule sets can

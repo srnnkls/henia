@@ -108,6 +108,10 @@ func (r *Runner) Expand(ctx context.Context, body string, c Context) string {
 	return b.String()
 }
 
+func (r *Runner) Block(ctx context.Context, command string, c Context) string {
+	return fence("", command, r.Run(ctx, command, c))
+}
+
 func fence(indent, command, output string) string {
 	ticks := 3
 	for run := strings.Repeat("`", ticks); strings.Contains(command+output, run); run += "`" {

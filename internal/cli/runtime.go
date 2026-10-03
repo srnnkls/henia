@@ -143,6 +143,38 @@ func contents(out io.Writer, name, body string) {
 	}
 }
 
+func newPreloadCommand() *cobra.Command {
+	var flags runtimeFlags
+	var skill string
+	cmd := &cobra.Command{
+		Use:   "preload --skill <skill> -- <command>",
+		Short: "Run one skill preload under Henia's sandbox and refusal rules",
+		Long: `Run one skill preload under Henia's sandbox and refusal rules and print the
+command above its output. Projected skills call this for each preload. Problems
+print as text; the command always exits successfully so a skill preload never
+aborts.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			lib := flags.open(cmd)
+			c := preload.Context{Dir: flags.project, Skill: skill, Source: "projection", Tier: library.Global, Caller: detectHarness(flags.harness)}
+			if entry, err := lib.Resolve(skill); err == nil {
+				c.Skill, c.Source, c.Tier = entry.Name, entry.Source, entry.Tier
+			}
+			runner, err := preloadRunner(flags.project)
+			if err != nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "henia: preload not run: %v\n", err)
+				return nil
+			}
+			fmt.Fprint(cmd.OutOrStdout(), runner.Block(cmd.Context(), args[0], c))
+			return nil
+		},
+	}
+	flags.register(cmd)
+	cmd.Flags().StringVar(&skill, "skill", "", "Skill the preload belongs to")
+	_ = cmd.MarkFlagRequired("skill")
+	return cmd
+}
+
 func preloadRunner(project string) (*preload.Runner, error) {
 	var layers [2]preload.Settings
 	paths := []string{filepath.Join(library.ConfigDir(), "henia.toml"), ""}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/target"
 	"github.com/srnnkls/henia/internal/transform"
 	"github.com/srnnkls/henia/internal/vendor"
@@ -121,6 +122,9 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 					result.Errors = append(result.Errors, fmt.Errorf("%s: transform %s for %s: %w", art.SourcePath, art.Name, harnessName, err))
 					continue
 				}
+			}
+			if art.Type == artifact.TypeSkill || art.Type == artifact.TypeCommand {
+				projectPreloads(transformed, effective)
 			}
 			for _, warning := range transformed.Warnings {
 				result.Warnings = append(result.Warnings, fmt.Sprintf("%s (%s): %s", art.SourcePath, harnessName, warning))
@@ -248,6 +252,32 @@ func resolvedPath(path string) (string, error) {
 			return "", err
 		}
 		ancestor = parent
+	}
+}
+
+func projectPreloads(art *artifact.Artifact, h henia.Harness) {
+	native := false
+	if h.Profile != "" {
+		profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot)
+		native = err == nil && profile.Preloads
+	}
+	body := preload.Project(art.Body, art.Name, native)
+	if body == art.Body {
+		return
+	}
+	art.Body = body
+	if !native {
+		return
+	}
+	switch tools := art.Frontmatter["allowed-tools"].(type) {
+	case string:
+		if tools != "" && !strings.Contains(tools, preload.RunnerTool) {
+			art.Frontmatter["allowed-tools"] = tools + ", " + preload.RunnerTool
+		}
+	case []any:
+		if !slices.Contains(tools, any(preload.RunnerTool)) {
+			art.Frontmatter["allowed-tools"] = append(tools, preload.RunnerTool)
+		}
 	}
 }
 

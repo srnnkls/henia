@@ -33,6 +33,7 @@ type Profile struct {
 	Aliases  map[string]string `toml:"aliases"`
 	Computed map[string]string `toml:"computed"`
 	Files    map[string]File   `toml:"files"`
+	Preloads bool              `toml:"preloads"`
 }
 
 type Context struct {

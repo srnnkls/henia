@@ -96,6 +96,7 @@ The catalog lists each skill once:
 henia ls [--json]
 henia show <skill>[#section] [--harness NAME]
 henia context <skill> [--harness NAME] [--global DIR]...
+henia preload --skill <skill> -- <command>
 henia slots ...
 ```
 
@@ -222,6 +223,18 @@ budget applies to the skill before preloads run.
 Code spans and code blocks that merely show the syntax never run: a preload is
 only a code span directly after `!` in text, or a fence whose info string is
 exactly `!`.
+
+### Projection
+
+A projected skill is loaded by its harness, not by `henia show`, so `henia build`
+rewrites each preload into `henia preload --skill <name> -- '<command>'`, which
+applies the same check, FAS consultation, sandbox and timeout and prints the
+same block. Profiles that run preloads natively (`preloads = true`; Claude) keep
+the `!` syntax around that invocation and gain `Bash(henia preload *)` in a
+declared `allowed-tools`. Other profiles get a run-first instruction: inline
+`` run first: `henia preload …` ``, or a `Run first:` paragraph over a `bash`
+block. Source templates no longer branch on the harness to choose between the
+two forms.
 
 ## Projection
 

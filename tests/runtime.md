@@ -372,6 +372,56 @@ $ printf '#!/bin/sh\ncat > /dev/null\necho "{\\"decision\\":\\"deny\\",\\"rule\\
 henia: blocked by fas/no-uname: uname stays private
 ````
 
+### Projection
+
+`henia build` routes projected preloads through `henia preload`, so they keep
+the sandbox and refusals. Profiles with native preloads (Claude) keep the `!`
+syntax and allow `henia preload` in `allowed-tools`; others get a run-first
+bash block.
+
+````scrut
+$ X="$T/pre-src"; mkdir -p "$X/skills/status"
+> printf -- '---\nname: status\ndescription: Repository status.\nallowed-tools: Bash(git *)\n---\n\n# Status\n\nBranch: !`git branch --show-current`\n\n```!\ngit log --oneline -1\necho '"'"'done'"'"'\n```\n' > "$X/skills/status/SKILL.md"
+> printf '[harness.claude]\nprofile = "claude"\n\n[harness.codex]\nprofile = "codex"\n' > "$X/henia.toml"
+> hn build "$X" --output "$T/pre-build" > /dev/null
+> sed -n '/^allowed-tools/p;/^# Status/,$p' "$T/pre-build/claude/skills/status/SKILL.md"; echo ---; sed -n '/^# Status/,$p' "$T/pre-build/codex/skills/status/SKILL.md"
+allowed-tools: Bash(git *), Bash(henia preload *)
+# Status
+
+Branch: !`henia preload --skill status -- 'git branch --show-current'`
+
+```!
+henia preload --skill status -- 'git log --oneline -1
+echo '\''done'\'''
+```
+---
+# Status
+
+Branch: run first: `henia preload --skill status -- 'git branch --show-current'`
+
+Run first:
+
+```bash
+henia preload --skill status -- 'git log --oneline -1
+echo '\''done'\'''
+```
+````
+
+`henia preload` runs one preload as `henia show` would, for the named skill.
+
+````scrut
+$ printf '#!/bin/sh\ncat > /dev/null\necho "{\\"decision\\":\\"allow\\"}"\n' > "$B/fas"
+> hn preload --skill pre -- 'git --no-optional-locks branch --show-current'; hn preload --skill pre -- 'gh pr create --fill'
+```text
+$ git --no-optional-locks branch --show-current
+main
+```
+```text
+$ gh pr create --fill
+henia: blocked by henia/gh: gh pr create changes GitHub state
+```
+````
+
 ```scrut
 $ rm -rf "$T"
 ```
