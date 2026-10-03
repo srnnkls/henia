@@ -1,8 +1,8 @@
 # Henia
 
 Henia compiles canonical Markdown skills for multiple AI harnesses, lints their
-metadata, directives, references and structure, and resolves the typed slots
-through which installed skills compose at runtime. Write a skill once, use Go
+metadata, directives, references and structure, and runs a skill runtime
+that serves, composes and renders installed skills on demand. Write a skill once, use Go
 templates to compose its body, and select a vendor profile for its output.
 Phora owns source fetching, installation, deployment state and hook orchestration.
 
@@ -157,6 +157,20 @@ henia slots --global ~/.claude/skills --explain code.style.go
 See [slots](docs/slots.md) for types, priorities, output and lineage, and
 [Tropos's COMPOSITION.md](https://github.com/srnnkls/tropos/blob/main/COMPOSITION.md)
 for a generated catalog of real seams.
+
+## Skill runtime
+
+Henia serves skills from a library of installed sources, rendered for the
+calling agent, while each harness lists only the entry skills projected into
+it:
+
+```bash
+henia ls
+henia show style-guide#go
+henia context code --global ~/.claude/skills
+```
+
+See [skill runtime](docs/runtime.md).
 
 ## Build artifacts for Phora
 
