@@ -113,7 +113,7 @@ func TestInvalidSlotEntries(t *testing.T) {
 		"other: slot review.criteria is declared with conflicting types list, unique",
 		`other: slot code.style.go: unknown priority "urgent" (use force, normal or fallback)`,
 		"owner: slot review.criteria is declared with conflicting types list, unique",
-		`owner: slot lint.rules: unknown type "map" (use list, unique, keyed(list) or keyed(unique))`,
+		`owner: slot lint.rules: unknown type "map" (use list, unique or keyed(...), each optionally of command, text or path)`,
 	}
 	if strings.Join(messages, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("invalid-slot diagnostics:\n%s\nwant:\n%s", strings.Join(messages, "\n"), strings.Join(want, "\n"))

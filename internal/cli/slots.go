@@ -23,7 +23,8 @@ func newSlotsCommand() *cobra.Command {
 		Long: `Resolve the installed providers of skill slots.
 
 Prints "<slot>\t<tier>\t<SKILL.md>" for every provider of a requested slot, a
-dotted sub-slot of it or an enclosing slot, then problem rows whose tier is
+dotted sub-slot of it or an enclosing slot, with a fourth "\t<value>" column
+when the slot's type carries command, text or path values, then problem rows whose tier is
 invalid, unknown, undeclared or conflict. --check prints only the problem rows
 of every provider and fails when any exist. --explain shows every provider of
 the requested slots with its status, priority and its origin, the provider that
@@ -69,7 +70,11 @@ working directory.`,
 			}
 			rows := resolution.Rows(args, check)
 			for _, r := range rows {
-				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Slot, r.Kind, r.Path); err != nil {
+				line := r.Slot + "\t" + r.Kind + "\t" + r.Path
+				if r.Value != "" {
+					line += "\t" + r.Value
+				}
+				if _, err := fmt.Fprintln(cmd.OutOrStdout(), line); err != nil {
 					return err
 				}
 			}

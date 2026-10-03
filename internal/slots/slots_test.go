@@ -4,11 +4,15 @@ import "testing"
 
 func TestParseDeclaration(t *testing.T) {
 	for entry, want := range map[string]Declaration{
-		"code.style":               {"code.style", Untyped},
-		"code.style:list":          {"code.style", Type{}},
-		"review.criteria:unique":   {"review.criteria", Type{Unique: true}},
-		"code.style:keyed(list)":   {"code.style", Type{Keyed: true}},
-		"code.style:keyed(unique)": {"code.style", Type{Keyed: true, Unique: true}},
+		"code.style":                      {"code.style", Untyped},
+		"code.style:list":                 {"code.style", Type{}},
+		"review.criteria:unique":          {"review.criteria", Type{Unique: true}},
+		"code.style:keyed(list)":          {"code.style", Type{Keyed: true}},
+		"code.style:keyed(unique)":        {"code.style", Type{Keyed: true, Unique: true}},
+		"code.check:keyed(list(command))": {"code.check", Type{Keyed: true, Value: CommandValue}},
+		"docs.template:unique(path)":      {"docs.template", Type{Unique: true, Value: PathValue}},
+		"git.style:list(text)":            {"git.style", Type{Value: TextValue}},
+		"code.style:list(skill)":          {"code.style", Type{}},
 	} {
 		got, err := ParseDeclaration(entry)
 		if err != nil || got != want {
@@ -19,7 +23,7 @@ func TestParseDeclaration(t *testing.T) {
 			t.Errorf("round trip of %q via %q = %+v, %v", entry, typed, reparsed, err)
 		}
 	}
-	for _, entry := range []string{"", "code..style", ".code", "code.style:", "code.style:map", "code.style:keyed(list", "code.style:keyed(keyed(list))", "code style"} {
+	for _, entry := range []string{"", "code..style", ".code", "code.style:", "code.style:map", "code.style:keyed(list", "code.style:keyed(keyed(list))", "code style", "code.check:list(shell)", "code.check:list(command", "code.check:keyed(list(command)"} {
 		if got, err := ParseDeclaration(entry); err == nil {
 			t.Errorf("ParseDeclaration(%q) = %+v; want an error", entry, got)
 		}
@@ -70,7 +74,7 @@ func TestResolveRanksPriorityBeforeTier(t *testing.T) {
 		{Path: "g", Tier: Global, Metadata: Metadata{Provided: []string{"git.commits@force"}}},
 	}
 	rows := Evaluate(skills).Rows([]string{"git.commits"}, false)
-	if len(rows) != 1 || rows[0] != (Row{"git.commits", "global", "g"}) {
+	if len(rows) != 1 || rows[0] != (Row{Slot: "git.commits", Kind: "global", Path: "g"}) {
 		t.Fatalf("rows = %+v", rows)
 	}
 }
@@ -83,7 +87,7 @@ func TestResolveUniquePerKey(t *testing.T) {
 		{Path: "python2", Tier: Global, Metadata: Metadata{Provided: []string{"code.style.python"}}},
 	}
 	conflicts := Evaluate(skills).Rows(nil, true)
-	if len(conflicts) != 1 || conflicts[0] != (Row{"code.style.python", Conflict, "-"}) {
+	if len(conflicts) != 1 || conflicts[0] != (Row{Slot: "code.style.python", Kind: Conflict, Path: "-"}) {
 		t.Fatalf("conflicts = %+v", conflicts)
 	}
 }

@@ -1,6 +1,7 @@
 package slots
 
 import (
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -16,6 +17,8 @@ const (
 	Project Tier = "project"
 	Global  Tier = "global"
 )
+
+func (t Tier) String() string { return string(t) }
 
 func (t Tier) priority() Priority {
 	if t == Global {
@@ -79,9 +82,10 @@ func Discover(root string, globals []string) []Skill {
 }
 
 type Row struct {
-	Slot string `json:"slot"`
-	Kind string `json:"kind"`
-	Path string `json:"path"`
+	Slot  string `json:"slot"`
+	Kind  string `json:"kind"`
+	Path  string `json:"path"`
+	Value string `json:"value,omitempty"`
 }
 
 const (
@@ -108,6 +112,8 @@ type Provider struct {
 	Priority   Priority  `json:"priority"`
 	Explicit   bool      `json:"explicit"`
 	Status     string    `json:"status"`
+	Value      string    `json:"value,omitempty"`
+	Reason     string    `json:"reason,omitempty"`
 	ShadowedBy *Provider `json:"shadowed_by,omitempty"`
 }
 
@@ -133,7 +139,7 @@ func Evaluate(skills []Skill) *Resolution {
 		for _, entry := range s.Declared {
 			d, err := ParseDeclaration(entry)
 			if err != nil {
-				r.Problems = append(r.Problems, Row{entry, Invalid, s.Path})
+				r.Problems = append(r.Problems, Row{Slot: entry, Kind: Invalid, Path: s.Path})
 				continue
 			}
 			owner := Owner{d.Slot, d.Type, s.Path}
@@ -147,7 +153,7 @@ func Evaluate(skills []Skill) *Resolution {
 	}
 	for _, owner := range r.Owners {
 		if len(types[owner.Slot]) > 1 {
-			r.Problems = append(r.Problems, Row{owner.Slot, Conflict, owner.Path})
+			r.Problems = append(r.Problems, Row{Slot: owner.Slot, Kind: Conflict, Path: owner.Path})
 		}
 	}
 
@@ -155,13 +161,16 @@ func Evaluate(skills []Skill) *Resolution {
 		for _, entry := range s.Provided {
 			d, err := ParseDefinition(entry, s.Tier.priority())
 			if err != nil {
-				r.Problems = append(r.Problems, Row{entry, Invalid, s.Path})
+				r.Problems = append(r.Problems, Row{Slot: entry, Kind: Invalid, Path: s.Path})
 				continue
 			}
 			p := &Provider{Slot: d.Slot, Entry: entry, Skill: s.Name(), Path: s.Path, Tier: s.Tier, Priority: d.Priority, Explicit: strings.Contains(entry, "@"), Status: Selected}
 			if !r.known(d.Slot) {
 				p.Status = Unknown
-				r.Problems = append(r.Problems, Row{d.Slot, Unknown, s.Path})
+				r.Problems = append(r.Problems, Row{Slot: d.Slot, Kind: Unknown, Path: s.Path})
+			} else if err := p.assign(r, s); err != nil {
+				p.Status, p.Reason = Invalid, err.Error()
+				r.Problems = append(r.Problems, Row{Slot: d.Slot, Kind: Invalid, Path: s.Path})
 			}
 			r.Providers = append(r.Providers, p)
 		}
@@ -171,22 +180,22 @@ func Evaluate(skills []Skill) *Resolution {
 		for _, entry := range s.Applied {
 			slot, err := ParseApplication(entry)
 			if err != nil {
-				r.Problems = append(r.Problems, Row{entry, Invalid, s.Path})
+				r.Problems = append(r.Problems, Row{Slot: entry, Kind: Invalid, Path: s.Path})
 				continue
 			}
 			r.Consumers = append(r.Consumers, Consumer{slot, s.Name(), s.Path, s.Tier})
 			if !r.declares(slot) {
-				r.Problems = append(r.Problems, Row{slot, Undeclared, s.Path})
+				r.Problems = append(r.Problems, Row{Slot: slot, Kind: Undeclared, Path: s.Path})
 			}
 		}
 	}
 
 	for _, p := range r.Providers {
-		if p.Status == Unknown {
+		if !p.competes() {
 			continue
 		}
 		for _, e := range r.Providers {
-			if e.Status != Unknown && e.Priority < p.Priority && Within(p.Slot, e.Slot) && (p.ShadowedBy == nil || e.Priority < p.ShadowedBy.Priority) {
+			if e.competes() && e.Priority < p.Priority && Within(p.Slot, e.Slot) && (p.ShadowedBy == nil || e.Priority < p.ShadowedBy.Priority) {
 				p.Status, p.ShadowedBy = Shadowed, e
 			}
 		}
@@ -203,7 +212,7 @@ func Evaluate(skills []Skill) *Resolution {
 	}
 	for _, slot := range slices.Sorted(maps.Keys(unique)) {
 		if len(unique[slot]) > 1 {
-			r.Problems = append(r.Problems, Row{slot, Conflict, "-"})
+			r.Problems = append(r.Problems, Row{Slot: slot, Kind: Conflict, Path: "-"})
 		}
 	}
 	return r
@@ -241,13 +250,13 @@ func (r *Resolution) Rows(requested []string, check bool) []Row {
 		for _, tier := range []Tier{Project, Global} {
 			for _, p := range r.Providers {
 				if p.Tier == tier && p.Status == Selected && relevant(p.Slot, requested) {
-					rows = append(rows, Row{p.Slot, string(p.Tier), p.Path})
+					rows = append(rows, Row{Slot: p.Slot, Kind: string(p.Tier), Path: p.Path, Value: p.Value})
 				}
 			}
 		}
 		for _, request := range requested {
 			if !r.declares(request) {
-				problems = append(problems, Row{request, Undeclared, "-"})
+				problems = append(problems, Row{Slot: request, Kind: Undeclared, Path: "-"})
 			}
 		}
 	}
@@ -258,7 +267,7 @@ func (r *Resolution) Select(requested []string) *Resolution {
 	selected := &Resolution{Owners: []Owner{}, Providers: []*Provider{}, Problems: r.Rows(requested, true), declared: r.declared}
 	for _, request := range requested {
 		if !r.declares(request) {
-			selected.Problems = append(selected.Problems, Row{request, Undeclared, "-"})
+			selected.Problems = append(selected.Problems, Row{Slot: request, Kind: Undeclared, Path: "-"})
 		}
 	}
 	for _, owner := range r.Owners {
@@ -290,6 +299,35 @@ func Applied(skills []Skill, skill string) ([]string, bool) {
 	}
 	return applied, found
 }
+
+func (p *Provider) assign(r *Resolution, s Skill) error {
+	owner, _ := r.Owner(p.Slot)
+	value, given := s.Values[p.Slot]
+	switch owner.Type.Value {
+	case SkillValue:
+		if given {
+			return fmt.Errorf("%s takes a skill, not a value", owner.Slot)
+		}
+		return nil
+	case PathValue:
+		if !given || value == "" {
+			return fmt.Errorf("%s needs a path", owner.Slot)
+		}
+		path := filepath.Join(filepath.Dir(s.Path), value)
+		if _, err := os.Stat(path); err != nil {
+			return err
+		}
+		p.Value = path
+		return nil
+	}
+	if !given || value == "" {
+		return fmt.Errorf("%s needs a %s", owner.Slot, owner.Type.Value)
+	}
+	p.Value = value
+	return nil
+}
+
+func (p *Provider) competes() bool { return p.Status == Selected || p.Status == Shadowed }
 
 func relevant(slot string, requested []string) bool {
 	return slices.ContainsFunc(requested, func(request string) bool { return related(slot, request) })

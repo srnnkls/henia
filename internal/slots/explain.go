@@ -57,11 +57,16 @@ func (r *Resolution) Explain(w io.Writer, requested []string) error {
 				}
 				listed++
 				fmt.Fprintf(&b, "    %-8s %s [%s] %s\n", p.Status, p.Skill, p.origin(), p.Path)
+				if p.Value != "" {
+					fmt.Fprintf(&b, "      = %s\n", p.Value)
+				}
 				switch p.Status {
 				case Shadowed:
 					fmt.Fprintf(&b, "      by %s [%s] for %s, %s\n", p.ShadowedBy.Skill, p.ShadowedBy.origin(), p.ShadowedBy.Slot, p.ShadowedBy.Path)
 				case Unknown:
 					fmt.Fprintf(&b, "      %s\n", r.unknownReason(slot))
+				case Invalid:
+					fmt.Fprintf(&b, "      %s\n", p.Reason)
 				case Selected:
 					selected++
 				}
@@ -75,7 +80,10 @@ func (r *Resolution) Explain(w io.Writer, requested []string) error {
 		}
 	}
 	for _, problem := range r.Problems {
-		if problem.Kind == Invalid || problem.Kind == Conflict && problem.Path != "-" {
+		explained := slices.ContainsFunc(r.Providers, func(p *Provider) bool {
+			return p.Status == problem.Kind && p.Slot == problem.Slot && p.Path == problem.Path
+		})
+		if !explained && (problem.Kind == Invalid || problem.Kind == Conflict && problem.Path != "-") {
 			fmt.Fprintf(&b, "%s %s %s\n", problem.Kind, problem.Slot, problem.Path)
 		}
 	}

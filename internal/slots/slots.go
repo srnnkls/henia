@@ -12,7 +12,17 @@ import (
 type Type struct {
 	Keyed  bool
 	Unique bool
+	Value  Value
 }
+
+type Value string
+
+const (
+	SkillValue   Value = ""
+	CommandValue Value = "command"
+	TextValue    Value = "text"
+	PathValue    Value = "path"
+)
 
 var Untyped = Type{Keyed: true}
 
@@ -20,6 +30,9 @@ func (t Type) String() string {
 	base := "list"
 	if t.Unique {
 		base = "unique"
+	}
+	if t.Value != SkillValue {
+		base += "(" + string(t.Value) + ")"
 	}
 	if t.Keyed {
 		return "keyed(" + base + ")"
@@ -35,13 +48,29 @@ func ParseType(source string) (Type, error) {
 			return Type{}, fmt.Errorf("unclosed type %q", source)
 		}
 	}
-	switch inner {
-	case "list":
-		return Type{Keyed: keyed}, nil
-	case "unique":
-		return Type{Keyed: keyed, Unique: true}, nil
+	t := Type{Keyed: keyed}
+	base, value, valued := strings.Cut(inner, "(")
+	if valued {
+		var closed bool
+		if value, closed = strings.CutSuffix(value, ")"); !closed {
+			return Type{}, fmt.Errorf("unclosed type %q", source)
+		}
+		switch Value(value) {
+		case CommandValue, TextValue, PathValue:
+			t.Value = Value(value)
+		case "skill":
+		default:
+			return Type{}, fmt.Errorf("unknown value %q in type %q (use skill, command, text or path)", value, source)
+		}
 	}
-	return Type{}, fmt.Errorf("unknown type %q (use list, unique, keyed(list) or keyed(unique))", source)
+	switch base {
+	case "list":
+		return t, nil
+	case "unique":
+		t.Unique = true
+		return t, nil
+	}
+	return Type{}, fmt.Errorf("unknown type %q (use list, unique or keyed(...), each optionally of command, text or path)", source)
 }
 
 // Priority orders definitions of one slot; lower values win.
@@ -162,6 +191,7 @@ type Metadata struct {
 	Declared []string
 	Provided []string
 	Applied  []string
+	Values   map[string]string
 }
 
 func Entries(frontmatter map[string]any) (Metadata, error) {
@@ -176,6 +206,14 @@ func Entries(frontmatter map[string]any) (Metadata, error) {
 			return Metadata{}, fmt.Errorf("metadata.%s: %w", field.key, err)
 		}
 		*field.entries = names
+	}
+	for key, value := range metadata {
+		if text, ok := value.(string); ok && strings.Contains(key, ".") {
+			if m.Values == nil {
+				m.Values = make(map[string]string)
+			}
+			m.Values[key] = text
+		}
 	}
 	return m, nil
 }

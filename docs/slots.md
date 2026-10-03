@@ -17,8 +17,22 @@ The type composes the providers that survive priority filtering:
 | `unique` | one; several produce a `conflict` row | `types.uniq` |
 | `keyed(list)` | every surviving provider of each dotted sub-slot, such as `code.style.python` | `types.attrsOf (types.listOf …)` |
 | `keyed(unique)` | one per dotted sub-slot | `types.attrsOf (types.uniq …)` |
+| `list(command)`, … | values instead of skills | `types.listOf types.str`, … |
 
-An untyped slot is `keyed(list)`. A sub-slot of a slot that is not keyed is
+A type may name what providers contribute: `list(command)`, `unique(text)`,
+`keyed(list(path))`. Without one they contribute `skill`s, whose SKILL.md the
+consumer reads; a `command` is run as is, a `text` used as is, and a `path`
+resolves against the providing skill's directory and must exist. A provider
+sets the value under the name of the slot it provides:
+
+```yaml
+metadata:
+  provides: "code.check.go"
+  code.check.go: "go vet ./... && go test ./..."
+```
+
+A missing value, a value for a `skill` slot or a missing path makes the
+provider `invalid`. An untyped slot is `keyed(list)`. A sub-slot of a slot that is not keyed is
 unknown. Two declarations of one slot with different types conflict.
 
 ```yaml
@@ -87,8 +101,8 @@ root: `--project`, else the Git top level, else the working directory. A skill
 reached twice, such as a symlinked global skill inside a project, keeps its
 first tier.
 
-Each output line is `<slot>\t<tier>\t<SKILL.md>` for a provider of a requested
-slot, a sub-slot of it or an enclosing slot, project providers first. Problem
+Each output line is `<slot>\t<tier>\t<SKILL.md>`, with a fourth `\t<value>`
+for value-typed slots, for a provider of a requested slot, a sub-slot of it or an enclosing slot, project providers first. Problem
 rows follow:
 
 | Tier | Meaning | Path |
@@ -119,7 +133,7 @@ code.style.go
       by house-go [project, normal from tier] for code.style.go, ~/repo/.agents/skills/house-go/SKILL.md
 ```
 
-Each provider shows its status (`selected`, `shadowed` or `unknown`), its tier,
+Each provider shows its status (`selected`, `shadowed`, `unknown` or `invalid`), its tier,
 its priority and whether that priority comes from the tier or the entry. A
 shadowed provider names the provider that shadows it, at the best priority, and
 the slot it provides; an unknown one names why no declaration covers it. Each
