@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-alpha.6](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.5...v0.1.0-alpha.6) (2026-10-03)
+
+
+### Features
+
+* **slots:** resolve typed skill slots at runtime ([bec2547](https://github.com/srnnkls/henia/commit/bec25472d1ed3e5ee984280a63c86b91d615308d))
+
 ## [0.1.0-alpha.5](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.4...v0.1.0-alpha.5) (2026-10-02)
 
 
