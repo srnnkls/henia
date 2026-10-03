@@ -14,7 +14,7 @@ staged
 ```
 
 ```scrut
-$ cd "$W/project" && env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID ZDOTDIR="$W/zdotdir" CLAUDE_CONFIG_DIR="$W/home/claude" claude -p --model "${CLAUDE_MODEL:-sonnet}" --allowedTools Read --add-dir "$W/home/claude" 'Use the code skill, then read every SKILL.md listed in its slot providers context. Reply with each canary token you found, one per line, and nothing else.' > "$W/claude.txt" 2>&1; grep -o 'CANARY-[A-Z][A-Z-]*' "$W/claude.txt" | sort -u
+$ cd "$W/project" && env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID ZDOTDIR="$W/zdotdir" CLAUDE_CONFIG_DIR="$W/home/claude" claude -p 'Use the code skill, then read every SKILL.md listed in its slot providers context. Reply with each canary token you found, one per line, and nothing else.' --model "${CLAUDE_MODEL:-sonnet}" --allowedTools Read --add-dir "$W/home/claude" > "$W/claude.txt" 2>&1; grep -o 'CANARY-[A-Z][A-Z-]*' "$W/claude.txt" | sort -u
 CANARY-ACME-REVIEW
 CANARY-HOUSE-GO
 CANARY-HOUSE-REVIEW
