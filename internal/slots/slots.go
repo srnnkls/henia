@@ -103,6 +103,11 @@ func ParseDeclaration(entry string) (Declaration, error) {
 	return d, nil
 }
 
+// ParseApplication parses a metadata.applies entry, a slot name.
+func ParseApplication(entry string) (string, error) {
+	return entry, validName(entry)
+}
+
 // ParseDefinition parses a metadata.provides entry, name[@priority].
 func ParseDefinition(entry string, implied Priority) (Definition, error) {
 	slot, source, explicit := strings.Cut(entry, "@")
@@ -153,13 +158,24 @@ func Names(value any) ([]string, error) {
 	return nil, fmt.Errorf("value is %T, expected a string or a list of strings", value)
 }
 
-func Entries(frontmatter map[string]any) (declared, provided []string, err error) {
+type Metadata struct {
+	Declared []string
+	Provided []string
+	Applied  []string
+}
+
+func Entries(frontmatter map[string]any) (Metadata, error) {
 	metadata, _ := frontmatter["metadata"].(map[string]any)
-	if declared, err = Names(metadata["slots"]); err != nil {
-		return nil, nil, fmt.Errorf("metadata.slots: %w", err)
+	var m Metadata
+	for _, field := range []struct {
+		key     string
+		entries *[]string
+	}{{"slots", &m.Declared}, {"provides", &m.Provided}, {"applies", &m.Applied}} {
+		names, err := Names(metadata[field.key])
+		if err != nil {
+			return Metadata{}, fmt.Errorf("metadata.%s: %w", field.key, err)
+		}
+		*field.entries = names
 	}
-	if provided, err = Names(metadata["provides"]); err != nil {
-		return nil, nil, fmt.Errorf("metadata.provides: %w", err)
-	}
-	return declared, provided, nil
+	return m, nil
 }

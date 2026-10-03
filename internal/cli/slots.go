@@ -15,6 +15,7 @@ import (
 func newSlotsCommand() *cobra.Command {
 	var globals []string
 	var project string
+	var applying []string
 	var check, explain, asJSON bool
 	cmd := &cobra.Command{
 		Use:   "slots [slot...]",
@@ -29,6 +30,8 @@ the requested slots with its status, priority and its origin, the provider that
 shadows it and the declaration that types it, or of every slot without any;
 --json emits the same as JSON.
 
+--for <skill> adds the slots that skill's metadata.applies names to the request.
+
 Without --project, project skills are read from the Git top level, else the
 working directory.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -38,13 +41,24 @@ working directory.`,
 			if explain && asJSON {
 				return fmt.Errorf("--explain and --json are exclusive")
 			}
-			if !check && !explain && !asJSON && len(args) == 0 {
+			if check && len(applying) > 0 {
+				return fmt.Errorf("--check takes no --for")
+			}
+			if !check && !explain && !asJSON && len(args) == 0 && len(applying) == 0 {
 				return nil
 			}
 			if project == "" {
 				project = projectRoot(cmd)
 			}
-			resolution := slots.Evaluate(slots.Discover(project, globals))
+			skills := slots.Discover(project, globals)
+			for _, name := range applying {
+				applied, found := slots.Applied(skills, name)
+				if !found {
+					return fmt.Errorf("no installed skill named %q", name)
+				}
+				args = append(args, applied...)
+			}
+			resolution := slots.Evaluate(skills)
 			switch {
 			case explain:
 				return resolution.Explain(cmd.OutOrStdout(), args)
@@ -67,6 +81,7 @@ working directory.`,
 	}
 	cmd.Flags().StringArrayVar(&globals, "global", nil, "Global skills directory (repeatable)")
 	cmd.Flags().StringVar(&project, "project", "", "Project root whose skill directories are read")
+	cmd.Flags().StringArrayVar(&applying, "for", nil, "Resolve the slots that metadata.applies of this skill names (repeatable)")
 	cmd.Flags().BoolVar(&check, "check", false, "Report problems of every provider and fail when any exist")
 	cmd.Flags().BoolVar(&explain, "explain", false, "Show why each provider of the requested slots is selected, shadowed or unknown")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "Emit declarations, providers and problems of the requested slots, or of all, as JSON")

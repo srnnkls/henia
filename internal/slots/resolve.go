@@ -27,11 +27,12 @@ func (t Tier) priority() Priority {
 var ProjectDirs = []string{".claude/skills", ".agents/skills", ".agent/skills", ".codex/skills", ".pi/skills", ".omp/skills", ".github/skills"}
 
 type Skill struct {
-	Path     string
-	Tier     Tier
-	Declared []string
-	Provided []string
+	Path string
+	Tier Tier
+	Metadata
 }
+
+func (s Skill) Name() string { return filepath.Base(filepath.Dir(s.Path)) }
 
 func Discover(root string, globals []string) []Skill {
 	var skills []Skill
@@ -58,12 +59,12 @@ func Discover(root string, globals []string) []Skill {
 			if err != nil {
 				continue
 			}
-			declared, provided, err := Entries(art.Frontmatter)
+			metadata, err := Entries(art.Frontmatter)
 			if err != nil {
 				continue
 			}
 			seen[physical] = true
-			skills = append(skills, Skill{Path: path, Tier: tier, Declared: declared, Provided: provided})
+			skills = append(skills, Skill{Path: path, Tier: tier, Metadata: metadata})
 		}
 	}
 	if root != "" {
@@ -110,15 +111,23 @@ type Provider struct {
 	ShadowedBy *Provider `json:"shadowed_by,omitempty"`
 }
 
+type Consumer struct {
+	Slot  string `json:"slot"`
+	Skill string `json:"skill"`
+	Path  string `json:"path"`
+	Tier  Tier   `json:"tier"`
+}
+
 type Resolution struct {
 	Owners    []Owner     `json:"declarations"`
 	Providers []*Provider `json:"providers"`
+	Consumers []Consumer  `json:"consumers"`
 	Problems  []Row       `json:"problems"`
 	declared  map[string]Owner
 }
 
 func Evaluate(skills []Skill) *Resolution {
-	r := &Resolution{Owners: []Owner{}, Providers: []*Provider{}, Problems: []Row{}, declared: make(map[string]Owner)}
+	r := &Resolution{Owners: []Owner{}, Providers: []*Provider{}, Consumers: []Consumer{}, Problems: []Row{}, declared: make(map[string]Owner)}
 	types := make(map[string]map[Type]bool)
 	for _, s := range skills {
 		for _, entry := range s.Declared {
@@ -149,12 +158,26 @@ func Evaluate(skills []Skill) *Resolution {
 				r.Problems = append(r.Problems, Row{entry, Invalid, s.Path})
 				continue
 			}
-			p := &Provider{Slot: d.Slot, Entry: entry, Skill: filepath.Base(filepath.Dir(s.Path)), Path: s.Path, Tier: s.Tier, Priority: d.Priority, Explicit: strings.Contains(entry, "@"), Status: Selected}
+			p := &Provider{Slot: d.Slot, Entry: entry, Skill: s.Name(), Path: s.Path, Tier: s.Tier, Priority: d.Priority, Explicit: strings.Contains(entry, "@"), Status: Selected}
 			if !r.known(d.Slot) {
 				p.Status = Unknown
 				r.Problems = append(r.Problems, Row{d.Slot, Unknown, s.Path})
 			}
 			r.Providers = append(r.Providers, p)
+		}
+	}
+
+	for _, s := range skills {
+		for _, entry := range s.Applied {
+			slot, err := ParseApplication(entry)
+			if err != nil {
+				r.Problems = append(r.Problems, Row{entry, Invalid, s.Path})
+				continue
+			}
+			r.Consumers = append(r.Consumers, Consumer{slot, s.Name(), s.Path, s.Tier})
+			if !r.declares(slot) {
+				r.Problems = append(r.Problems, Row{slot, Undeclared, s.Path})
+			}
 		}
 	}
 
@@ -248,7 +271,24 @@ func (r *Resolution) Select(requested []string) *Resolution {
 			selected.Providers = append(selected.Providers, p)
 		}
 	}
+	for _, c := range r.Consumers {
+		if len(requested) == 0 || relevant(c.Slot, requested) {
+			selected.Consumers = append(selected.Consumers, c)
+		}
+	}
 	return selected
+}
+
+func Applied(skills []Skill, skill string) ([]string, bool) {
+	var applied []string
+	found := false
+	for _, s := range skills {
+		if s.Name() == skill {
+			found = true
+			applied = append(applied, s.Applied...)
+		}
+	}
+	return applied, found
 }
 
 func relevant(slot string, requested []string) bool {

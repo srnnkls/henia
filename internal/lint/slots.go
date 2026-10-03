@@ -17,12 +17,12 @@ func (c *checker) checkSlots(documents []document) {
 	}
 	var declarations []declaration
 	for _, d := range documents {
-		declared, provided, err := slots.Entries(d.art.Frontmatter)
+		entries, err := slots.Entries(d.art.Frontmatter)
 		if err != nil {
 			c.add(d, 0, "error", "invalid-slot", err.Error())
 			continue
 		}
-		for _, entry := range declared {
+		for _, entry := range entries.Declared {
 			if strings.Contains(entry, "{{") {
 				continue
 			}
@@ -34,11 +34,19 @@ func (c *checker) checkSlots(documents []document) {
 			}
 			declarations = append(declarations, declaration{d, offset, parsed})
 		}
-		for _, entry := range provided {
+		for _, entry := range entries.Provided {
 			if strings.Contains(entry, "{{") {
 				continue
 			}
 			if _, err := slots.ParseDefinition(entry, slots.Normal); err != nil {
+				c.add(d, entryOffset(d, entry), "error", "invalid-slot", err.Error())
+			}
+		}
+		for _, entry := range entries.Applied {
+			if strings.Contains(entry, "{{") {
+				continue
+			}
+			if _, err := slots.ParseApplication(entry); err != nil {
 				c.add(d, entryOffset(d, entry), "error", "invalid-slot", err.Error())
 			}
 		}

@@ -47,6 +47,21 @@ metadata:
   provides: "code.style.python review.criteria@fallback"
 ```
 
+## Applying
+
+`metadata.applies` lists the slots a skill preloads providers for, so owners,
+providers and consumers form one graph. A skill preloads its providers with
+`henia slots --for <skill>`, which resolves the slots that skill applies; the
+command names no slot itself.
+
+```yaml
+metadata:
+  applies: "code.style code.validation review.criteria"
+```
+
+Applying a slot that no declaration covers is an `undeclared` problem naming the
+applying skill.
+
 ## Lineage
 
 Slots follow the [Nix module system](https://nixos.org/manual/nixos/stable/#sec-writing-modules):
@@ -61,7 +76,7 @@ runs over whatever is installed when a skill runs.
 ## Resolving
 
 ```
-henia slots [--global DIR]... [--project ROOT] <slot>...
+henia slots [--global DIR]... [--project ROOT] [--for SKILL]... <slot>...
 henia slots [--global DIR]... --check
 ```
 
@@ -81,6 +96,7 @@ rows follow:
 | `invalid` | malformed entry | declaring or providing skill |
 | `unknown` | provided slot that no declaration covers | providing skill |
 | `undeclared` | requested slot without an owner | `-` |
+| `undeclared` | applied slot without an owner | applying skill |
 | `conflict` | slot declared with different types | each declaring skill |
 | `conflict` | `unique` slot or key with several providers | `-` |
 
@@ -107,9 +123,9 @@ Each provider shows its status (`selected`, `shadowed` or `unknown`), its tier,
 its priority and whether that priority comes from the tier or the entry. A
 shadowed provider names the provider that shadows it, at the best priority, and
 the slot it provides; an unknown one names why no declaration covers it. Each
-slot names the declaration that types it. `--json` emits the declarations,
-providers (with `status`, `priority`, `explicit` and `shadowed_by`) and problems
-of the requested slots, or of all.
+slot names the declaration that types it and the skills that apply it. `--json` emits the declarations,
+providers (with `status`, `priority`, `explicit` and `shadowed_by`), consumers
+and problems of the requested slots, or of all.
 
 ## Harness wiring
 
@@ -135,7 +151,7 @@ what is installed; check it over the scanned set with a
 [[lint.registries]]
 id = "unknown-slot"
 declare = 'map(split(frontmatter.metadata?.slots ?? "", " "), split(#, ":")[0])'
-reference = 'map(split(frontmatter.metadata?.provides ?? "", " "), split(#, "@")[0])'
+reference = 'map(split((frontmatter.metadata?.provides ?? "") + " " + (frontmatter.metadata?.applies ?? ""), " "), split(#, "@")[0])'
 match = "dotted"
 ```
 

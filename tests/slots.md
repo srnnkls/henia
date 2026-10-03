@@ -290,3 +290,44 @@ docs
     no providers
 exit 0
 ```
+
+## Consumers
+
+`metadata.applies` names the slots a skill preloads; `--for` resolves them.
+
+```scrut
+$ mk "$G/gconsumer/SKILL.md" '---\nname: gconsumer\nmetadata:\n  applies: "review.criteria git.commits"\n---\n'
+> slots "$P" --for gconsumer
+review.criteria project my repo/.claude/skills/criteria/SKILL.md
+git.commits global global skills/gcommits/SKILL.md
+exit 0
+```
+
+```scrut
+$ slots "$P" --explain review.criteria
+review.criteria
+  review.criteria (unique, declared by global skills/gowner/SKILL.md)
+    applied by gconsumer
+    selected criteria [project, normal from tier] my repo/.claude/skills/criteria/SKILL.md
+    shadowed gcriteria [global, fallback from tier] global skills/gcriteria/SKILL.md
+      by criteria [project, normal from tier] for review.criteria, my repo/.claude/skills/criteria/SKILL.md
+    shadowed gstyle2 [global, fallback from tier] global skills/gstyle2/SKILL.md
+      by criteria [project, normal from tier] for review.criteria, my repo/.claude/skills/criteria/SKILL.md
+exit 0
+```
+
+An application of a slot no skill declares is a problem.
+
+```scrut
+$ mk "$G/gconsumer/SKILL.md" '---\nname: gconsumer\nmetadata:\n  applies: "review.criteria lint.rules"\n---\n'
+> slots "$P" --check
+lint.rules undeclared global skills/gconsumer/SKILL.md
+Error: slots found 1 problem(s)
+exit 1
+```
+
+```scrut
+$ slots "$P" --for nosuch
+Error: no installed skill named "nosuch"
+exit 1
+```

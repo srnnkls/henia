@@ -66,8 +66,8 @@ func TestWithin(t *testing.T) {
 
 func TestResolveRanksPriorityBeforeTier(t *testing.T) {
 	skills := []Skill{
-		{Path: "p", Tier: Project, Provided: []string{"git.commits"}},
-		{Path: "g", Tier: Global, Provided: []string{"git.commits@force"}},
+		{Path: "p", Tier: Project, Metadata: Metadata{Provided: []string{"git.commits"}}},
+		{Path: "g", Tier: Global, Metadata: Metadata{Provided: []string{"git.commits@force"}}},
 	}
 	rows := Evaluate(skills).Rows([]string{"git.commits"}, false)
 	if len(rows) != 1 || rows[0] != (Row{"git.commits", "global", "g"}) {
@@ -77,10 +77,10 @@ func TestResolveRanksPriorityBeforeTier(t *testing.T) {
 
 func TestResolveUniquePerKey(t *testing.T) {
 	skills := []Skill{
-		{Path: "owner", Tier: Global, Declared: []string{"code.style:keyed(unique)"}},
-		{Path: "go", Tier: Global, Provided: []string{"code.style.go"}},
-		{Path: "python", Tier: Global, Provided: []string{"code.style.python"}},
-		{Path: "python2", Tier: Global, Provided: []string{"code.style.python"}},
+		{Path: "owner", Tier: Global, Metadata: Metadata{Declared: []string{"code.style:keyed(unique)"}}},
+		{Path: "go", Tier: Global, Metadata: Metadata{Provided: []string{"code.style.go"}}},
+		{Path: "python", Tier: Global, Metadata: Metadata{Provided: []string{"code.style.python"}}},
+		{Path: "python2", Tier: Global, Metadata: Metadata{Provided: []string{"code.style.python"}}},
 	}
 	conflicts := Evaluate(skills).Rows(nil, true)
 	if len(conflicts) != 1 || conflicts[0] != (Row{"code.style.python", Conflict, "-"}) {

@@ -33,9 +33,23 @@ func (r *Resolution) Explain(w io.Writer, requested []string) error {
 				slots = append(slots, p.Slot)
 			}
 		}
+		for _, c := range r.Consumers {
+			if related(c.Slot, request) && !slices.Contains(slots, c.Slot) {
+				slots = append(slots, c.Slot)
+			}
+		}
 		slices.Sort(slots)
 		for _, slot := range slots {
 			fmt.Fprintf(&b, "  %s %s\n", slot, r.typing(slot))
+			var consumers []string
+			for _, c := range r.Consumers {
+				if c.Slot == slot && !slices.Contains(consumers, c.Skill) {
+					consumers = append(consumers, c.Skill)
+				}
+			}
+			if len(consumers) > 0 {
+				fmt.Fprintf(&b, "    applied by %s\n", strings.Join(consumers, ", "))
+			}
 			selected, listed := 0, 0
 			for _, p := range r.Providers {
 				if p.Slot != slot {
@@ -82,6 +96,9 @@ func (r *Resolution) roots() []string {
 	}
 	for _, p := range r.Providers {
 		add(p.Slot)
+	}
+	for _, c := range r.Consumers {
+		add(c.Slot)
 	}
 	slices.Sort(roots)
 	return roots
