@@ -101,10 +101,12 @@ henia slots ...
 
 - **Rendering.** `show` renders a skill for the caller through the owning
   source's `henia.toml`: its templates, variables, references and profile for
-  that harness. The caller is `--harness`, then `HENIA_HARNESS`, then the
-  `AI_AGENT` prefix (`claude-code` is `claude`), then `CLAUDECODE` or
-  `CODEX_THREAD_ID`. Without a caller, or for a harness the source does not
-  configure, rendering is neutral.
+  that harness. The caller is `--harness`, then `HENIA_HARNESS` (`none` is
+  neutral), then the nearest agent among Henia's ancestor processes, then the
+  `AI_AGENT` prefix (`claude-code` is `claude`), `CODEX_THREAD_ID` or
+  `CLAUDECODE`. Environment markers come last: outer agents leak them into
+  nested ones, and Codex sets no `AI_AGENT`. Without a caller, or for a harness
+  the source does not configure, rendering is neutral.
 - **References.** A reference to a skill the caller's harness projects renders in
   that harness's syntax; any other skill reference renders as
   `henia show <skill>`, qualified when the bare name is ambiguous.

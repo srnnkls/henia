@@ -48,9 +48,11 @@ henia context <skill> [--global DIR]...
 - `ls` prints the catalog; `--json` adds each skill's source, digest and
   sections.
 - `show` prints a skill or one section, rendered through its source's
-  `henia.toml` for the caller: `--harness`, then `HENIA_HARNESS`, then the agent
-  named by the `AI_AGENT` prefix (`claude-code` is `claude`), then `CLAUDECODE` or
-  `CODEX_THREAD_ID`. References to skills that harness projects keep its syntax;
+  `henia.toml` for the caller: `--harness`, then `HENIA_HARNESS` (`none`
+  renders neutrally), then the nearest agent among Henia's ancestor processes,
+  then the `AI_AGENT` prefix (`claude-code` is `claude`), `CODEX_THREAD_ID` or
+  `CLAUDECODE`. Environment markers come last because outer agents leak them
+  into nested ones, and Codex does not set `AI_AGENT`. References to skills that harness projects keep its syntax;
   others render as `henia show <skill>`. Without a caller, rendering is neutral.
   Output over the budget prints the sections instead.
 - `context` prints a skill's dynamic context for a preload: the providers of the
