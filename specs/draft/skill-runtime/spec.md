@@ -282,7 +282,9 @@ commands. FAS stays stateless; Henia generates nothing for it.
   notes; configured refusals; FAS deny, rewrite and failure through a stub.
 - Acceptance: a fixture library with a canary skill, a projected entry skill and
   FAS hooks in isolated homes; Claude Code and Codex read the canary through
-  `henia show`, and a direct read is denied.
+  `henia show`, and a direct read is denied. A library skill's preload prints
+  a canary only its command produces, and a preload the project's FAS rules
+  deny shows the rule instead of running.
 - Tropos: its source installs as `$XDG_DATA_HOME/henia/sources/tropos`, Claude
   projects only the entry skills, and `henia slots --for code` still resolves
   Loqui.

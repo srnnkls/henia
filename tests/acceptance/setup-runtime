@@ -2,15 +2,18 @@
 # Usage: setup-runtime
 # Installs the runtime fixture as a library source in a fresh directory,
 # projects its entry skill into isolated Claude Code and Codex homes whose
-# PreToolUse hooks run FAS with the library rule, and prints the directory.
+# PreToolUse hooks run FAS with the library rule, gives the project a FAS rule
+# for preloads, and prints the directory.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd -P)
 henia=$(command -v henia)
 fas=$(command -v fas)
 w=$(cd "$(mktemp -d)" && pwd -P)
-mkdir -p "$w/data/henia/sources" "$w/home/claude" "$w/home/codex" "$w/project" "$w/zdotdir" "$w/fas/rules" "$w/fas/empty"
+mkdir -p "$w/data/henia/sources" "$w/home/claude" "$w/home/codex" "$w/project/.fas/rules" "$w/zdotdir" "$w/fas/rules" "$w/fas/empty" "$w/codex-config/henia"
 cp -R "$here/runtime/source" "$w/data/henia/sources/fixture"
 cp "$here/runtime/henia_library.cue" "$w/fas/rules/"
+cp "$here/runtime/preload_rules.cue" "$w/project/.fas/rules/"
+printf '[preload]\nunsandboxed = "run"\n' > "$w/codex-config/henia/henia.toml"
 "$henia" build "$w/data/henia/sources/fixture" --output "$w/build" > /dev/null
 cp -R "$w/build/claude/skills" "$w/home/claude/skills"
 cp -R "$w/build/codex/skills" "$w/home/codex/skills"
