@@ -59,8 +59,68 @@ henia context <skill> [--global DIR]...
 - `context` prints a skill's dynamic context for a preload: the providers of the
   slots it applies and the sections of the library skills it references. It
   never repeats the skill's own text.
-- Renders are cached by content under `$XDG_CACHE_HOME/henia/render`.
+- Renders are cached by content under `$XDG_CACHE_HOME/henia/render`;
+  preload output never is.
 - Runtime commands print problems as text and exit 0, so a preload never aborts.
+
+## Preloads
+
+A skill can embed commands with Claude Code's preload syntax, `` !`cmd` ``
+inline or a fenced block with the info string `!`:
+
+````markdown
+Branch: !`git --no-optional-locks branch --show-current`
+
+```!
+gh pr list --limit 5
+```
+````
+
+`henia show` runs each preload in the project directory and prints the command
+above its output. Code spans and blocks that only show the syntax never run.
+
+Preloads have no side effects, and Henia enforces that itself:
+
+- a sandbox denies file writes (macOS `sandbox-exec`, Linux `bwrap`); reads and
+  network stay open. Without a working sandbox preloads do not run, unless the
+  user's own `henia.toml` sets `unsandboxed = "run"`.
+- every preload has a timeout.
+- commands that change state the sandbox cannot see are refused before they
+  run: `git push`, `gh pr merge`, non-GET/POST HTTP methods in `curl`, `wget`
+  and `gh api`, GraphQL mutations, package installs, `ssh`, `kill`, `docker`,
+  redirection into files, and more. Commands Henia cannot inspect, such as a
+  shell fed by a pipe or a non-literal command name, are refused too.
+
+A refusal prints instead of the output:
+
+```text
+$ gh pr merge 12
+henia: blocked by henia/gh: gh pr merge changes GitHub state
+```
+
+Use read-only forms of commands that write as a side effect, for example
+`git --no-optional-locks status`.
+
+`henia.toml` (user or project) tunes limits and adds refusals; nothing removes
+a built-in one:
+
+```toml
+[preload]
+timeout = "10s"
+output = 8000
+
+[[preload.refuse]]
+command = "kubectl"
+subcommands = ["apply", "delete"]
+
+[[preload.refuse]]
+pattern = "api\\.example\\.com/admin"
+reason = "admin endpoints change state"
+```
+
+When [FAS](https://github.com/srnnkls/fas) is on PATH, Henia also asks
+`fas eval --harness henia` after its own check, so existing rule sets can
+refuse more; its rule name appears as `blocked by fas/<rule>`.
 
 ## Projection
 

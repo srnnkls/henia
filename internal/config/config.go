@@ -11,6 +11,7 @@ import (
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/defaults"
 	"github.com/srnnkls/henia/internal/lint"
+	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/vendor"
 )
 
@@ -19,6 +20,7 @@ type Config struct {
 	Artifacts []string                 `toml:"artifacts,omitempty"`
 	Build     BuildOptions             `toml:"build,omitempty"`
 	Harness   map[string]henia.Harness `toml:"harness,omitempty"`
+	Preload   preload.Settings         `toml:"preload,omitempty"`
 }
 
 type BuildOptions struct {

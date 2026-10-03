@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -18,8 +19,10 @@ import (
 	henia "github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/build"
 	"github.com/srnnkls/henia/internal/caller"
+	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
+	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/reference"
 	"github.com/srnnkls/henia/internal/slots"
 )
@@ -82,7 +85,15 @@ text; the command always exits successfully so a skill preload never aborts.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			lib := flags.open(cmd)
-			show(cmd.OutOrStdout(), lib, newRenderer(detectHarness(flags.harness), lib), args[0])
+			harness := detectHarness(flags.harness)
+			runner, err := preloadRunner(flags.project)
+			expand := func(e library.Entry, text string) string {
+				if err != nil {
+					return fmt.Sprintf("henia: preloads not run: %v\n\n%s", err, text)
+				}
+				return runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, Skill: e.Name, Source: e.Source, Tier: e.Tier, Caller: harness})
+			}
+			show(cmd.OutOrStdout(), lib, newRenderer(harness, lib), args[0], expand)
 			return nil
 		},
 	}
@@ -90,7 +101,7 @@ text; the command always exits successfully so a skill preload never aborts.`,
 	return cmd
 }
 
-func show(out io.Writer, lib *library.Library, r *renderer, target string) {
+func show(out io.Writer, lib *library.Library, r *renderer, target string, expand func(library.Entry, string) string) {
 	ref, anchor, sectioned := strings.Cut(target, "#")
 	entry, err := lib.Resolve(ref)
 	if err != nil {
@@ -102,7 +113,7 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string) {
 	if sectioned {
 		if _, text, ok := library.Section(body, anchor); ok {
 			if len(text) <= outputBudget {
-				fmt.Fprint(out, text)
+				fmt.Fprint(out, expand(entry, text))
 				return
 			}
 			fmt.Fprintf(out, "%s#%s exceeds the output budget; read its subsections with henia show:\n", name, anchor)
@@ -114,7 +125,7 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string) {
 		return
 	}
 	if len(body) <= outputBudget {
-		fmt.Fprint(out, body)
+		fmt.Fprint(out, expand(entry, body))
 		return
 	}
 	fmt.Fprintf(out, "%s exceeds the output budget; read its sections with henia show %s#<section>:\n", name, name)
@@ -130,6 +141,33 @@ func contents(out io.Writer, name, body string) {
 	for _, section := range sections {
 		fmt.Fprintf(out, "%s%s#%s  %s\n", strings.Repeat("  ", max(section.Level-1, 0)), name, section.Anchor, section.Title)
 	}
+}
+
+func preloadRunner(project string) (*preload.Runner, error) {
+	var layers [2]preload.Settings
+	paths := []string{filepath.Join(library.ConfigDir(), "henia.toml"), ""}
+	if path, err := config.Find(project); err == nil {
+		paths[1] = path
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	for i, path := range paths {
+		data, err := os.ReadFile(path)
+		if path == "" || errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		var file struct {
+			Preload preload.Settings `toml:"preload"`
+		}
+		if err := toml.Unmarshal(data, &file); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		layers[i] = file.Preload
+	}
+	return preload.NewRunner(layers[0], layers[1])
 }
 
 func newContextCommand() *cobra.Command {
