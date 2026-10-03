@@ -42,16 +42,39 @@ func LoadOptional(path string) (*Config, error) {
 	return loadLayers(path, data)
 }
 
+func Find(dir string) (string, error) {
+	var found []string
+	for _, candidate := range []string{filepath.Join(dir, "henia.toml"), filepath.Join(dir, ".henia", "henia.toml")} {
+		if _, err := os.Stat(candidate); err == nil {
+			found = append(found, candidate)
+		}
+	}
+	switch len(found) {
+	case 0:
+		return filepath.Join(dir, "henia.toml"), os.ErrNotExist
+	case 1:
+		return found[0], nil
+	}
+	return "", fmt.Errorf("both %s and %s configure the project; keep one", found[0], found[1])
+}
+
 func loadLayers(path string, projectData []byte) (*Config, error) {
 	projectRoot, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
 		return nil, err
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
+	if filepath.Base(projectRoot) == ".henia" {
+		projectRoot = filepath.Dir(projectRoot)
 	}
-	userRoot := filepath.Join(home, ".config", "henia")
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if !filepath.IsAbs(configHome) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		configHome = filepath.Join(home, ".config")
+	}
+	userRoot := filepath.Join(configHome, "henia")
 	userData, err := os.ReadFile(filepath.Join(userRoot, "henia.toml"))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err

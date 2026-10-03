@@ -95,8 +95,9 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 		}
 		outputPath := filepath.Join(output, harnessName)
 		filtered := filterArtifacts(allArtifacts, harness)
+		served := Served(allArtifacts, filtered)
 
-		references := &transform.Transformer{Tools: harness.Tools, References: convertReferences(harness.References)}
+		references := &transform.Transformer{Tools: harness.Tools, References: convertReferences(harness.References), Served: served}
 		files, err := supportFiles(sources, harness.Files, references)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
@@ -111,6 +112,7 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 				result.Errors = append(result.Errors, err)
 				continue
 			}
+			tr.Served = served
 			tgt := target.NewFromConfig(harnessName, outputPath, effective)
 			transformed := art
 			if art.Type != artifact.TypeUnknown {
@@ -247,6 +249,25 @@ func resolvedPath(path string) (string, error) {
 		}
 		ancestor = parent
 	}
+}
+
+func Render(art *artifact.Artifact, name string, h henia.Harness, served map[string]bool) (*artifact.Artifact, error) {
+	_, tr, err := transformerFor(name, "", h, art.Type)
+	if err != nil {
+		return nil, err
+	}
+	tr.Served = served
+	return tr.Transform(art)
+}
+
+func Served(all, projected []*artifact.Artifact) map[string]bool {
+	served := make(map[string]bool)
+	for _, art := range all {
+		if art.Type == artifact.TypeSkill && !slices.Contains(projected, art) {
+			served[art.FullName()] = true
+		}
+	}
+	return served
 }
 
 func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifact.Artifact {

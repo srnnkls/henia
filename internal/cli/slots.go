@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/slots"
 )
 
@@ -51,6 +52,7 @@ working directory.`,
 			if project == "" {
 				project = projectRoot(cmd)
 			}
+			globals = append(globals, library.GlobalSkillDirs()...)
 			skills := slots.Discover(project, globals)
 			for _, name := range applying {
 				applied, found := slots.Applied(skills, name)

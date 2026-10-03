@@ -7,6 +7,7 @@ under the skill directories of a Git repository.
 
 ```scrut
 $ T=$(cd "$(mktemp -d)" && pwd -P); G="$T/global skills"; P="$T/my repo"
+> henia() { env -u AI_AGENT -u CLAUDECODE -u CODEX_THREAD_ID -u HENIA_HARNESS XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia "$@"; }
 > mk() { mkdir -p "$(dirname "$1")"; printf -- "$2" > "$1"; }
 > slots() { dir=$1; shift; (cd "$dir" && henia slots --global "$G" "$@"; echo "exit $?") 2>&1 | sed "s|$T/||g" | tr '\t' ' '; }
 > mk "$G/loqui/SKILL.md"   '---\nname: loqui\nmetadata:\n  provides: "code.style"\n---\n'

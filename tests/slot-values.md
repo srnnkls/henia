@@ -4,6 +4,7 @@
 
 ```scrut
 $ T=$(cd "$(mktemp -d)" && pwd -P); G="$T/global"; P="$T/repo"
+> henia() { env -u AI_AGENT -u CLAUDECODE -u CODEX_THREAD_ID -u HENIA_HARNESS XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia "$@"; }
 > mk() { mkdir -p "$(dirname "$1")"; printf -- "$2" > "$1"; }
 > slots() { (cd "$P" && henia slots --global "$G" "$@"; echo "exit $?") 2>&1 | sed "s|$T/||g" | tr '\t' ' '; }
 > mk "$G/owner/SKILL.md" '---\nname: owner\nmetadata:\n  slots: "code.check:keyed(list(command)) docs.template:unique(path) git.style:unique(text) code.style"\n---\n'

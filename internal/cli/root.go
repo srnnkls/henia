@@ -21,6 +21,6 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(newBuildCommand(), newLintCommand(), newSlotsCommand())
+	rootCmd.AddCommand(newBuildCommand(), newLintCommand(), newSlotsCommand(), newLsCommand(), newShowCommand(), newContextCommand())
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "henia.toml", "Config file path")
 }

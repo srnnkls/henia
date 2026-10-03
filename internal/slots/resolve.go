@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/library"
 )
 
 type Tier string
@@ -27,7 +27,7 @@ func (t Tier) priority() Priority {
 	return Normal
 }
 
-var ProjectDirs = []string{".claude/skills", ".agents/skills", ".agent/skills", ".codex/skills", ".pi/skills", ".omp/skills", ".github/skills"}
+var ProjectDirs = []string{library.ProjectDir + "/" + library.SkillsDir, ".claude/skills", ".agents/skills", ".agent/skills", ".codex/skills", ".pi/skills", ".omp/skills", ".github/skills"}
 
 type Skill struct {
 	Path string
@@ -41,33 +41,16 @@ func Discover(root string, globals []string) []Skill {
 	var skills []Skill
 	seen := make(map[string]bool)
 	scan := func(dir string, tier Tier) {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return
-		}
-		for _, entry := range entries {
-			path := filepath.Join(dir, entry.Name(), "SKILL.md")
-			physical, err := filepath.EvalSymlinks(path)
-			if err != nil || seen[physical] {
+		for _, f := range library.Scan(dir) {
+			if seen[f.Physical] {
 				continue
 			}
-			if info, err := os.Stat(physical); err != nil || !info.Mode().IsRegular() {
-				continue
-			}
-			data, err := os.ReadFile(physical)
+			metadata, err := Entries(f.Artifact.Frontmatter)
 			if err != nil {
 				continue
 			}
-			art, err := artifact.Parse(data)
-			if err != nil {
-				continue
-			}
-			metadata, err := Entries(art.Frontmatter)
-			if err != nil {
-				continue
-			}
-			seen[physical] = true
-			skills = append(skills, Skill{Path: path, Tier: tier, Metadata: metadata})
+			seen[f.Physical] = true
+			skills = append(skills, Skill{Path: f.Path, Tier: tier, Metadata: metadata})
 		}
 	}
 	if root != "" {

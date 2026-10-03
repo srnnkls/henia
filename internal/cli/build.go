@@ -10,6 +10,7 @@ import (
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/build"
 	"github.com/srnnkls/henia/internal/config"
+	"github.com/srnnkls/henia/internal/library"
 )
 
 func newBuildCommand() *cobra.Command {
@@ -78,6 +79,14 @@ func newBuildCommand() *cobra.Command {
 			if result.Built == 0 {
 				return fmt.Errorf("no artifacts found for selected harnesses")
 			}
+			for dir := filepath.Clean(destination); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+				if filepath.Base(dir) == library.ProjectDir {
+					if err := library.EnsureGitignore(dir); err != nil {
+						return err
+					}
+					break
+				}
+			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Built %d artifact(s) in %s\n", result.Built, destination)
 			return err
 		},
@@ -90,12 +99,21 @@ func newBuildCommand() *cobra.Command {
 
 func optionalConfig(cmd *cobra.Command, source string) (*config.Config, error) {
 	if !cmd.Flags().Changed("config") {
-		cfg, err := config.Load(filepath.Join(source, "henia.toml"))
+		path, err := config.Find(source)
 		if err == nil {
+			cfg, err := config.Load(path)
+			if err != nil {
+				return nil, fmt.Errorf("load config: %w", err)
+			}
 			return cfg, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("load config: %w", err)
+			return nil, err
+		}
+		if path, err := config.Find("."); err == nil && configPath == "henia.toml" {
+			configPath = path
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
 		}
 	}
 	cfg, err := config.Load(configPath)

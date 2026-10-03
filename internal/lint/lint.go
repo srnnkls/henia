@@ -22,7 +22,6 @@ import (
 	"github.com/srnnkls/henia/internal/reference"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -228,7 +227,8 @@ func collect(ctx context.Context, paths []string) ([]string, error) {
 				return nil
 			}
 			if info.IsDir() {
-				if slices.Contains([]string{".git", ".henia", "node_modules", "vendor"}, info.Name()) {
+				if slices.Contains([]string{".git", "node_modules", "vendor"}, info.Name()) ||
+					filepath.Base(filepath.Dir(path)) == ".henia" && slices.Contains([]string{"build", "cache", "state"}, info.Name()) {
 					return fs.SkipDir
 				}
 				return nil
@@ -447,17 +447,13 @@ func (c *checker) headingAnchors(path string) (map[string]bool, error) {
 		c.anchors[path] = nil
 		return nil, nil
 	}
-	anchors := make(map[string]bool)
-	root := goldmark.New(goldmark.WithParserOptions(parser.WithAutoHeadingID())).Parser().Parse(text.NewReader([]byte(art.Body)))
-	if err := ast.Walk(root, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
-		if entering && node.Kind() == ast.KindHeading {
-			if id, ok := node.AttributeString("id"); ok {
-				anchors[string(id.([]byte))] = true
-			}
-		}
-		return ast.WalkContinue, nil
-	}); err != nil {
+	sections, err := markup.Sections([]byte(art.Body))
+	if err != nil {
 		return nil, err
+	}
+	anchors := make(map[string]bool)
+	for _, section := range sections {
+		anchors[section.Anchor] = true
 	}
 	c.anchors[path] = anchors
 	return anchors, nil

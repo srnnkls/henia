@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,5 +45,27 @@ func TestRejectDeploymentSettings(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "Phora") {
 			t.Fatalf("want actionable migration error: %v", err)
 		}
+	}
+}
+
+func TestFindRejectsTwoProjectConfigs(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := Find(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Find without config = %v; want ErrNotExist", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".henia"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".henia", "henia.toml"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Find(dir); err != nil || got != filepath.Join(dir, ".henia", "henia.toml") {
+		t.Fatalf("Find = %q, %v", got, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "henia.toml"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Find(dir); err == nil || !strings.Contains(err.Error(), "keep one") {
+		t.Fatalf("Find with both configs = %v; want an error", err)
 	}
 }

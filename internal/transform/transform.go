@@ -30,6 +30,7 @@ type Transformer struct {
 	Values       map[string]map[string]string
 	References   map[string]ReferenceConfig
 	Tools        map[string]string
+	Served       map[string]bool
 }
 
 func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
@@ -209,6 +210,8 @@ func (t *Transformer) RenderReferences(body string) string {
 			if mapped, ok := t.Tools[ref.Name]; ok {
 				replacement = "`" + mapped + "`"
 			}
+		} else if ref.Type == reference.TypeSkill && t.Served[ref.Name] {
+			replacement = "`henia show " + ref.Name + "`"
 		} else {
 			refConfig, ok := t.References[ref.Type.String()]
 			if ok {
