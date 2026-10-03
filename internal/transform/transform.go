@@ -158,7 +158,7 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		return nil, fmt.Errorf("render directives: %w", err)
 	}
 
-	body = t.RenderReferences(body)
+	body = t.renderReferences(body, art.FullName())
 
 	result.Body = body
 
@@ -195,7 +195,9 @@ func templateValue(value any, context map[string]any) (any, error) {
 }
 
 // RenderReferences rewrites canonical references in body to the configured harness syntax.
-func (t *Transformer) RenderReferences(body string) string {
+func (t *Transformer) RenderReferences(body string) string { return t.renderReferences(body, "") }
+
+func (t *Transformer) renderReferences(body, self string) string {
 	refs := reference.Parse(body)
 	if len(refs) == 0 {
 		return body
@@ -210,7 +212,7 @@ func (t *Transformer) RenderReferences(body string) string {
 			if mapped, ok := t.Tools[ref.Name]; ok {
 				replacement = "`" + mapped + "`"
 			}
-		} else if ref.Type == reference.TypeSkill && t.Served[ref.Name] {
+		} else if ref.Type == reference.TypeSkill && t.Served[ref.Name] && ref.Name != self {
 			replacement = "`henia show " + ref.Name + "`"
 		} else {
 			refConfig, ok := t.References[ref.Type.String()]

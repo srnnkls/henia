@@ -135,14 +135,18 @@ See `henia show style-guide` and `/code`.
 ```
 
 A skill the model may not invoke, such as a slash-only command, is referenced
-through `henia show` even where it is projected.
+through `henia show` even where it is projected; its own text keeps naming it in
+the harness's syntax.
 
 ```scrut
 $ mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nhenia:\n  auto_invoke: false\nmetadata:\n  slots: "code.style code.check:keyed(list(command))"\n  applies: "code.style code.check"\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n'
 > henia show checks --harness claude | grep '^See'
 > henia build "$L/tropos" --harness pi --output "$T/slash" > /dev/null && grep '^See' "$T/slash/pi/skills/checks/SKILL.md" | sed 's/ Flavor.*//'
+> printf 'Run `$code` yourself.\n' >> "$L/tropos/skills/code/SKILL.md"
+> henia build "$L/tropos" --harness pi --output "$T/slash" > /dev/null && tail -n 1 "$T/slash/pi/skills/code/SKILL.md"
 See `henia show style-guide` and `henia show code`.
 See `/skill:style-guide` and `henia show code`.
+Run `/skill:code` yourself.
 ```
 
 ## Resolution
