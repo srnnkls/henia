@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.0-alpha.8](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.7...v0.1.0-alpha.8) (2026-10-03)
+
+
+### Features
+
+* **runtime:** serve library skills through henia ls, show and context ([9201691](https://github.com/srnnkls/henia/commit/9201691845b5c8f7c126a3e79d3be8b3c9ba9c6a))
+
+
+### Bug Fixes
+
+* **runtime:** render for the nearest calling agent process ([1f8bd0f](https://github.com/srnnkls/henia/commit/1f8bd0f9fa4c241bedccd6485a123de95025e32b))
+* **slots:** point library providers at henia show, not their files ([06a3cc2](https://github.com/srnnkls/henia/commit/06a3cc288cd1ea452b36a9bf51ae291bacf25c5c))
+
 ## [0.1.0-alpha.7](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.6...v0.1.0-alpha.7) (2026-10-03)
 
 
