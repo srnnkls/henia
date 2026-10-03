@@ -14,6 +14,7 @@ Available Commands:
   completion  Generate the autocompletion script for the specified shell
   help        Help about any command
   lint        Check skill metadata, references, duplication and freshness
+  slots       Resolve the installed providers of skill slots
 
 Flags:
       --config string   Config file path (default "henia.toml")

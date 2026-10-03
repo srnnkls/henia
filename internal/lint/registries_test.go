@@ -94,3 +94,28 @@ func TestInvalidRegistries(t *testing.T) {
 		t.Fatalf("registry id should be disableable: %v", err)
 	}
 }
+
+func TestInvalidSlotEntries(t *testing.T) {
+	root := t.TempDir()
+	writeSkill(t, root, "owner", "metadata:\n  slots: \"code.style:keyed(list) review.criteria:unique lint.rules:map\"\n")
+	writeSkill(t, root, "other", "metadata:\n  slots: \"review.criteria:list\"\n  provides: \"code.style.go@urgent git.commits@force {{.provided}}\"\n")
+	diagnostics, err := Run(t.Context(), []string{root}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var messages []string
+	for _, d := range diagnostics {
+		if d.Rule == "invalid-slot" {
+			messages = append(messages, filepath.Base(filepath.Dir(d.Path))+": "+d.Message)
+		}
+	}
+	want := []string{
+		"other: slot review.criteria is declared with conflicting types list, unique",
+		`other: slot code.style.go: unknown priority "urgent" (use force, normal or fallback)`,
+		"owner: slot review.criteria is declared with conflicting types list, unique",
+		`owner: slot lint.rules: unknown type "map" (use list, unique, keyed(list) or keyed(unique))`,
+	}
+	if strings.Join(messages, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("invalid-slot diagnostics:\n%s\nwant:\n%s", strings.Join(messages, "\n"), strings.Join(want, "\n"))
+	}
+}

@@ -62,7 +62,7 @@ type Options struct {
 	Now                   time.Time         `toml:"-"`
 }
 
-var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-heading", "duplicate-content", "similar-content", "semantic-content", "duplicate-skill", "outdated-reference", "large-skill", "stale-review"}
+var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-heading", "duplicate-content", "similar-content", "semantic-content", "duplicate-skill", "outdated-reference", "large-skill", "stale-review", "invalid-slot"}
 
 func (o Options) Validate() error {
 	for _, limit := range []struct {
@@ -199,6 +199,7 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 		}
 	}
 	c.checkRegistries(documents)
+	c.checkSlots(documents)
 	if err := c.checkSemantic(ctx); err != nil {
 		return nil, err
 	}

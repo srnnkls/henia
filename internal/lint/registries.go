@@ -3,11 +3,13 @@ package lint
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
 	"github.com/expr-lang/expr/vm"
 	"github.com/srnnkls/henia/internal/expression"
+	"github.com/srnnkls/henia/internal/slots"
 )
 
 type Registry struct {
@@ -72,45 +74,14 @@ func registryNames(program *vm.Program, env registryEnvironment) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
-	switch v := value.(type) {
-	case nil:
-		return nil, nil
-	case string:
-		return strings.Fields(v), nil
-	case []string:
-		var names []string
-		for _, s := range v {
-			names = append(names, strings.Fields(s)...)
-		}
-		return names, nil
-	case []any:
-		var names []string
-		for _, item := range v {
-			switch s := item.(type) {
-			case nil:
-			case string:
-				names = append(names, strings.Fields(s)...)
-			default:
-				return nil, fmt.Errorf("list item is %T, expected string", item)
-			}
-		}
-		return names, nil
-	}
-	return nil, fmt.Errorf("returned %T, expected a string or a list of strings", value)
+	return slots.Names(value)
 }
 
 func (r compiledRegistry) resolves(name string, declared map[string]bool) bool {
 	if declared[name] {
 		return true
 	}
-	if r.Match == "dotted" {
-		for i := strings.LastIndexByte(name, '.'); i > 0; i = strings.LastIndexByte(name[:i], '.') {
-			if declared[name[:i]] {
-				return true
-			}
-		}
-	}
-	return false
+	return r.Match == "dotted" && slices.ContainsFunc(slices.Collect(maps.Keys(declared)), func(slot string) bool { return slots.Within(name, slot) })
 }
 
 func (c *checker) checkRegistries(documents []document) {

@@ -213,7 +213,7 @@ message = "Use HTTPS documentation links."
 ## Name registries
 
 A registry checks names that one document declares and others reference, such as
-slots a skill owns and skills that provide them. Declare `[[lint.registries]]` in
+[slots](slots.md#linting) a skill owns and skills that provide them. Declare `[[lint.registries]]` in
 `henia.toml`:
 
 ```toml

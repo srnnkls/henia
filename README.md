@@ -125,6 +125,19 @@ The linter does not execute templates or fetch URLs. Dynamic nodes are skipped b
 custom rules by default; lint compiled output to check expanded values. Errors
 fail lint; `--strict` also fails on warnings. JSON output is an array of diagnostics.
 
+## Slots
+
+Skills declare typed extension points in `metadata.slots` and fill them in
+`metadata.provides`, with priorities deciding which providers shadow others.
+`henia slots` resolves them at runtime over a harness's global skills directory
+and the project's skill directories:
+
+```bash
+henia slots --global ~/.claude/skills code.style review.criteria
+```
+
+See [slots](docs/slots.md) for types, priorities and output.
+
 ## Build artifacts for Phora
 
 ```bash
@@ -210,6 +223,7 @@ go test -race ./...
 go vet ./...
 ```
 
-The repository also has Scrut CLI tests (`mise run test:integration`). Specs live
+The repository also has Scrut CLI tests (`mise run test:integration`) and live
+harness acceptance tests (`mise run test:acceptance`, see [slots](docs/slots.md#acceptance-tests)). Specs live
 under [`specs/draft`](specs/draft); the harness scope now uses TOML + Expr. Starlark
 and CUE are not required or executed.

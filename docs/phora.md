@@ -35,3 +35,4 @@ one phase without invoking compilers; generated links still require their build
 directory. Rebuilding from cached canonical inputs recreates that directory.
 
 Henia never reads deployment state or installs into harness home directories.
+`henia slots` reads only the skill directories it is given.
