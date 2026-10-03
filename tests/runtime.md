@@ -125,6 +125,15 @@ $ mk "$L/tropos/.henia/harnesses/mini/transform.toml" 'fields = ["name", "descri
 # Checks
 ```
 
+A harness's `exclude` keeps skills out of its projection, so references to them
+render as `henia show`.
+
+```scrut
+$ printf '\n[harness.nostyle]\nartifacts = ["skills"]\nexclude = ["style-guide"]\n\n[harness.nostyle.references.skill]\noutput = "/{{.Name}}"\n' >> "$L/tropos/henia.toml"
+> henia show checks --harness nostyle | grep '^See'
+See `henia show style-guide` and `/code`.
+```
+
 A skill the model may not invoke, such as a slash-only command, is referenced
 through `henia show` even where it is projected.
 

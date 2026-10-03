@@ -310,6 +310,8 @@ func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifa
 	return filtered
 }
 
+func Projects(harness henia.Harness, name string) bool { return shouldBuild(name, harness) }
+
 func shouldBuild(name string, harness henia.Harness) bool {
 	if len(harness.Include) > 0 {
 		found := slices.Contains(harness.Include, name)
