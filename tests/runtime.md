@@ -7,7 +7,7 @@ and projections for two harnesses.
 
 ```scrut
 $ T=$(cd "$(mktemp -d)" && pwd -P); L="$T/data/henia/sources"; P="$T/repo"
-> henia() { env -u AI_AGENT -u CLAUDECODE -u CODEX_THREAD_ID -u HENIA_HARNESS XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia "$@"; }
+> henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia "$@"; }
 > mk() { mkdir -p "$(dirname "$1")"; printf -- "$2" > "$1"; }
 > mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nmetadata:\n  slots: "code.style code.check:keyed(list(command))"\n  applies: "code.style code.check"\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n'
 > mk "$L/tropos/skills/style-guide/SKILL.md" '---\nname: style-guide\ndescription: House style by language.\nmetadata:\n  provides: "code.style.go"\n---\n\n# Style guide\n\nShared rules.\n\n## Go\n\nRun gofmt. Canary: CANARY-GO.\n\n### Errors\n\nWrap with %%w.\n\n## Python\n\nUse ruff.\n'
@@ -81,7 +81,8 @@ exit 0
 ## Rendering
 
 `henia show` renders through the owning source's configuration for the caller:
-`--harness`, then `HENIA_HARNESS`, then `AI_AGENT` or a vendor marker. References
+`--harness`, then `HENIA_HARNESS` (`none` is neutral), then the nearest agent
+process, then `AI_AGENT` or a vendor marker. References
 to skills the caller's harness projects keep its syntax; the rest render as
 `henia show`. Without a caller, every reference is a `henia show`.
 
@@ -101,7 +102,7 @@ See `/skill:style-guide` and `/skill:code`. Flavor: pi.
 ```
 
 ```scrut
-$ env AI_AGENT=pi_0-74-0_agent XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia show checks | tail -n 1
+$ env HENIA_HARNESS=pi XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia show checks | tail -n 1
 See `/skill:style-guide` and `/skill:code`. Flavor: pi.
 ```
 

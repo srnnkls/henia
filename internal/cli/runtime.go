@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	henia "github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/build"
+	"github.com/srnnkls/henia/internal/caller"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
@@ -226,29 +227,8 @@ func skillBody(name, project string, dirs []string) (string, bool) {
 	return "", false
 }
 
-var agentHarness = map[string]string{"claude-code": "claude"}
-
 func detectHarness(flag string) string {
-	if flag != "" {
-		return flag
-	}
-	if harness := os.Getenv("HENIA_HARNESS"); harness != "" {
-		return harness
-	}
-	if agent := os.Getenv("AI_AGENT"); agent != "" {
-		name, _, _ := strings.Cut(agent, "_")
-		if harness, ok := agentHarness[name]; ok {
-			return harness
-		}
-		return name
-	}
-	switch {
-	case os.Getenv("CLAUDECODE") != "":
-		return "claude"
-	case os.Getenv("CODEX_THREAD_ID") != "":
-		return "codex"
-	}
-	return ""
+	return caller.Harness(flag, os.Getenv, caller.Ancestors())
 }
 
 type renderer struct {
