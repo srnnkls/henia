@@ -1,0 +1,7 @@
+[harness.claude]
+artifacts = ["skills"]
+include = ["entry"]
+
+[harness.codex]
+artifacts = ["skills"]
+include = ["entry"]

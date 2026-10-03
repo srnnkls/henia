@@ -1,0 +1,23 @@
+#!/bin/sh
+# Usage: setup-runtime
+# Installs the runtime fixture as a library source in a fresh directory,
+# projects its entry skill into isolated Claude Code and Codex homes whose
+# PreToolUse hooks run FAS with the library rule, and prints the directory.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd -P)
+henia=$(command -v henia)
+fas=$(command -v fas)
+w=$(cd "$(mktemp -d)" && pwd -P)
+mkdir -p "$w/data/henia/sources" "$w/home/claude" "$w/home/codex" "$w/project" "$w/zdotdir" "$w/fas/rules" "$w/fas/empty"
+cp -R "$here/runtime/source" "$w/data/henia/sources/fixture"
+cp "$here/runtime/henia_library.cue" "$w/fas/rules/"
+"$henia" build "$w/data/henia/sources/fixture" --output "$w/build" > /dev/null
+cp -R "$w/build/claude/skills" "$w/home/claude/skills"
+cp -R "$w/build/codex/skills" "$w/home/codex/skills"
+hook() {
+	printf '{"hooks":{"PreToolUse":[{"matcher":"%s","hooks":[{"type":"command","command":"%s eval --harness %s --config %s --global-config %s"}]}]}}\n' "$2" "$fas" "$1" "$w/fas/empty" "$w/fas/rules"
+}
+hook claude 'Read|Grep|Glob|Bash' > "$w/home/claude/settings.json"
+hook codex '*' > "$w/home/codex/hooks.json"
+git -C "$w/project" init -q
+printf '%s\n' "$w"
