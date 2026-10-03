@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.7](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.6...v0.1.0-alpha.7) (2026-10-03)
+
+
+### Features
+
+* **slots:** model consumers with metadata.applies and resolve them with --for ([94dd8ca](https://github.com/srnnkls/henia/commit/94dd8ca8ab86bd0d2060fe1f172ee375b27199e9))
+* **slots:** type slot values as commands, text or paths ([15f2560](https://github.com/srnnkls/henia/commit/15f25602a8c6e97fd37ff9232e80e8acf94b9ce3))
+
 ## [0.1.0-alpha.6](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.5...v0.1.0-alpha.6) (2026-10-03)
 
 
