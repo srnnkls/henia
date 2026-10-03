@@ -263,11 +263,21 @@ func Render(art *artifact.Artifact, name string, h henia.Harness, served map[str
 func Served(all, projected []*artifact.Artifact) map[string]bool {
 	served := make(map[string]bool)
 	for _, art := range all {
-		if art.Type == artifact.TypeSkill && !slices.Contains(projected, art) {
+		if art.Type == artifact.TypeSkill && (!slices.Contains(projected, art) || !Invocable(art.Frontmatter)) {
 			served[art.FullName()] = true
 		}
 	}
 	return served
+}
+
+func Invocable(frontmatter map[string]any) bool {
+	auto, set := frontmatter["auto_invoke"].(bool)
+	if settings, ok := frontmatter["henia"].(map[string]any); ok {
+		if value, ok := settings["auto_invoke"].(bool); ok {
+			auto, set = value, true
+		}
+	}
+	return !set || auto
 }
 
 func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifact.Artifact {

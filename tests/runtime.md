@@ -125,6 +125,17 @@ $ mk "$L/tropos/.henia/harnesses/mini/transform.toml" 'fields = ["name", "descri
 # Checks
 ```
 
+A skill the model may not invoke, such as a slash-only command, is referenced
+through `henia show` even where it is projected.
+
+```scrut
+$ mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nhenia:\n  auto_invoke: false\nmetadata:\n  slots: "code.style code.check:keyed(list(command))"\n  applies: "code.style code.check"\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n'
+> henia show checks --harness claude | grep '^See'
+> henia build "$L/tropos" --harness pi --output "$T/slash" > /dev/null && grep '^See' "$T/slash/pi/skills/checks/SKILL.md" | sed 's/ Flavor.*//'
+See `henia show style-guide` and `henia show code`.
+See `/skill:style-guide` and `henia show code`.
+```
+
 ## Resolution
 
 The project source shadows global sources by name; `source:name` names any

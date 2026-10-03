@@ -277,7 +277,7 @@ func (r *renderer) body(e library.Entry) string {
 	served := r.lib.Names()
 	if name != "" {
 		for _, other := range r.lib.Entries {
-			if other.Source == e.Source && (len(harness.Include) == 0 || slices.Contains(harness.Include, other.Name)) {
+			if other.Source == e.Source && (len(harness.Include) == 0 || slices.Contains(harness.Include, other.Name)) && build.Invocable(other.Artifact.Frontmatter) {
 				delete(served, other.Name)
 			}
 		}

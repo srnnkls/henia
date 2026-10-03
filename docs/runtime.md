@@ -52,8 +52,9 @@ henia context <skill> [--global DIR]...
   renders neutrally), then the nearest agent among Henia's ancestor processes,
   then the `AI_AGENT` prefix (`claude-code` is `claude`), `CODEX_THREAD_ID` or
   `CLAUDECODE`. Environment markers come last because outer agents leak them
-  into nested ones, and Codex does not set `AI_AGENT`. References to skills that harness projects keep its syntax;
-  others render as `henia show <skill>`. Without a caller, rendering is neutral.
+  into nested ones, and Codex does not set `AI_AGENT`. References to skills that harness projects and the model may
+  invoke keep its syntax; others, including projected skills with
+  `auto_invoke: false`, render as `henia show <skill>`. Without a caller, rendering is neutral.
   Output over the budget prints the sections instead.
 - `context` prints a skill's dynamic context for a preload: the providers of the
   slots it applies and the sections of the library skills it references. It
