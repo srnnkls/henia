@@ -1,0 +1,20 @@
+#!/bin/sh
+# Usage: setup-slots
+# Stages the slots fixture in a fresh directory, deploys the pinned Tropos and
+# the fixture's global skills into isolated harness homes through Phora, with
+# the henia on PATH granted as Tropos's build tool, and prints the directory.
+# TROPOS=<checkout> links a local Tropos working tree instead of the pin.
+# Harnesses run commands in login shells; pointing ZDOTDIR at the empty
+# <directory>/zdotdir keeps a user profile from putting another henia first.
+set -eu
+henia=$(command -v henia)
+workspace=$(cd "$(mktemp -d)" && pwd -P)
+cp -R "$(dirname "$0")/slots/." "$workspace/"
+printf '[tools."github:srnnkls/henia"]\npath = "%s"\n' "$henia" > "$workspace/phora.local.toml"
+if [ -n "${TROPOS:-}" ]; then
+	printf '\n[sources.tropos]\npath = "%s"\ndeploy = "link"\n' "$TROPOS" >> "$workspace/phora.local.toml"
+fi
+phora -C "$workspace" sync --no-progress > "$workspace/sync.log" 2>&1 || { cat "$workspace/sync.log" >&2; exit 1; }
+git -C "$workspace/project" init -q
+mkdir "$workspace/zdotdir"
+printf '%s\n' "$workspace"

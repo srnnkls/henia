@@ -1,0 +1,25 @@
+[paths]
+cache = ".phora/cache"
+state = ".phora/state"
+
+[tools."github:srnnkls/henia"]
+mise = true
+
+[sources.tropos]
+git = "https://github.com/srnnkls/tropos.git"
+rev = "58ac749f61e6844d43f5ef2930d7cad00a17cb70"
+transitive = true
+
+[sources.global]
+path = "global"
+deploy = "link"
+
+[targets.claude]
+path = "home/claude/skills"
+sources.tropos = { offer = "claude", take = [{ "skills/" = "." }], collapse = false }
+sources.global = { collapse = false }
+
+[targets.codex]
+path = "home/codex/skills"
+sources.tropos = { offer = "codex", take = [{ "skills/" = "." }], collapse = false }
+sources.global = { collapse = false }

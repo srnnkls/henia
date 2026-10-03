@@ -18,3 +18,8 @@ run = "go test ./internal/... ./cmd/..."
 description = "Run scrut integration tests"
 depends = ["build"]
 run = "PATH=$PWD:$PATH scrut test tests/*.md"
+
+[tasks."test:acceptance"]
+description = "Run live harness acceptance tests (claude -p, codex exec); TROPOS=<checkout> links a local Tropos"
+depends = ["build"]
+run = "PATH=$PWD:$PATH scrut test --timeout-seconds 900 tests/acceptance/*.md"
