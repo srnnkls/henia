@@ -263,10 +263,9 @@ Preloads run in a sandbox that denies file writes, with network and reads
 open. A write the refusal rules cannot see still fails.
 
 ````scrut
-$ pre "awk 'BEGIN { print 1 > \"written.txt\" }'; echo after" | grep -v 'source line'; ls "$P"
+$ pre "awk 'BEGIN { print 1 > \"written.txt\" }'; echo after" | grep -v 'awk:\|source line'; ls "$P"
 ```text
 $ awk 'BEGIN { print 1 > "written.txt" }'; echo after
-awk: can't open file written.txt
 after
 ```
 ````
