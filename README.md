@@ -1,7 +1,8 @@
 # Henia
 
-Henia compiles canonical Markdown skills for multiple AI harnesses and lints their
-metadata, directives, references and structure. Write a skill once, use Go
+Henia compiles canonical Markdown skills for multiple AI harnesses, lints their
+metadata, directives, references and structure, and resolves the typed slots
+through which installed skills compose at runtime. Write a skill once, use Go
 templates to compose its body, and select a vendor profile for its output.
 Phora owns source fetching, installation, deployment state and hook orchestration.
 
@@ -128,15 +129,34 @@ fail lint; `--strict` also fails on warnings. JSON output is an array of diagnos
 ## Slots
 
 Skills declare typed extension points in `metadata.slots` and fill them in
-`metadata.provides`, with priorities deciding which providers shadow others.
-`henia slots` resolves them at runtime over a harness's global skills directory
-and the project's skill directories:
+`metadata.provides`; priorities decide which providers shadow others. Types and
+priorities follow the Nix module system (`listOf`, `uniq`, `attrsOf`; `mkForce`,
+plain definitions, `mkDefault`):
+
+```yaml
+# skills/code/SKILL.md
+metadata:
+  slots: "code.style:keyed(list) review.criteria:unique"
+
+# .agents/skills/house-go/SKILL.md, in a repository
+metadata:
+  provides: "code.style.go review.criteria@fallback"
+```
+
+Installed skills stay open for extension, so `henia slots` resolves them when a
+skill runs, over a harness's global skills directory and the project's skill
+directories. Skills preload the resulting rows; `--explain` shows where each
+provider and override comes from, `--json` emits the same, and `--check`
+reports problems:
 
 ```bash
 henia slots --global ~/.claude/skills code.style review.criteria
+henia slots --global ~/.claude/skills --explain code.style.go
 ```
 
-See [slots](docs/slots.md) for types, priorities and output.
+See [slots](docs/slots.md) for types, priorities, output and lineage, and
+[Tropos's COMPOSITION.md](https://github.com/srnnkls/tropos/blob/main/COMPOSITION.md)
+for a generated catalog of real seams.
 
 ## Build artifacts for Phora
 
@@ -224,6 +244,7 @@ go vet ./...
 ```
 
 The repository also has Scrut CLI tests (`mise run test:integration`) and live
-harness acceptance tests (`mise run test:acceptance`, see [slots](docs/slots.md#acceptance-tests)). Specs live
-under [`specs/draft`](specs/draft); the harness scope now uses TOML + Expr. Starlark
-and CUE are not required or executed.
+harness acceptance tests that compose slots through `claude -p` and `codex exec`
+(`mise run test:acceptance`, see [slots](docs/slots.md#acceptance-tests)). Specs
+live under [`specs/draft`](specs/draft); the harness scope now uses TOML + Expr.
+Starlark and CUE are not required or executed.
