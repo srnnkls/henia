@@ -21,5 +21,5 @@ CANARY-HOUSE-REVIEW
 ```
 
 ```scrut
-$ trash "$W"
+$ rm -rf "$W"
 ```

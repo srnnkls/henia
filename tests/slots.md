@@ -182,7 +182,7 @@ exit 1
 ```
 
 ```scrut
-$ trash "$P/.claude/skills/typo" "$G/gstyles" && slots "$P" --check
+$ rm -rf "$P/.claude/skills/typo" "$G/gstyles" && slots "$P" --check
 exit 0
 ```
 
@@ -213,7 +213,7 @@ exit 0
 
 ```scrut
 $ mk "$P/.claude/skills/effect/SKILL.md" '---\nname: effect\nmetadata:\n  provides: "code.style.python@fallback"\n---\n'
-> trash "$P/.agents/skills/effect2" && slots "$P" code.style.python
+> rm -rf "$P/.agents/skills/effect2" && slots "$P" code.style.python
 code.style.python project my repo/.claude/skills/effect/SKILL.md
 code.style.python global global skills/gpy/SKILL.md
 code.style global global skills/gstyle2/SKILL.md
@@ -257,7 +257,7 @@ Error: --check takes no slots, --explain or --json
 provider that shadows it and the declaration that types its slot.
 
 ```scrut
-$ trash "$G/bad" && slots "$P" --explain code.style.python git.commits
+$ rm -rf "$G/bad" && slots "$P" --explain code.style.python git.commits
 code.style.python
   code.style (keyed(list), declared by global skills/gowner/SKILL.md)
     selected gstyle2 [global, fallback from tier] global skills/gstyle2/SKILL.md
