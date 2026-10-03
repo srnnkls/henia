@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.0-alpha.9](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.8...v0.1.0-alpha.9) (2026-10-03)
+
+
+### Bug Fixes
+
+* **runtime:** honour a harness's exclude list when rendering references ([5151b93](https://github.com/srnnkls/henia/commit/5151b934c53842af843044df22c01ee82691145d))
+* **runtime:** keep a skill's references to itself in harness syntax ([6322649](https://github.com/srnnkls/henia/commit/632264971ce996c74395783e26ac1b9dfa1cf1d5))
+* **runtime:** reference skills the model may not invoke through henia show ([a94d7f1](https://github.com/srnnkls/henia/commit/a94d7f118e84ca7f5abf9d008a85ff5e82cfad34))
+
 ## [0.1.0-alpha.8](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.7...v0.1.0-alpha.8) (2026-10-03)
 
 
