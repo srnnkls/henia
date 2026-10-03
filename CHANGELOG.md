@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.10](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.9...v0.1.0-alpha.10) (2026-10-03)
+
+
+### Features
+
+* **build:** route projected preloads through henia preload ([170bf03](https://github.com/srnnkls/henia/commit/170bf0343a5fd8b7e6527e2b8873cb891f14b3b8))
+* **runtime:** run skill preloads in henia show ([3976dec](https://github.com/srnnkls/henia/commit/3976decb757d5f3b5c8c72fd3910ac9171f130dd))
+
 ## [0.1.0-alpha.9](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.8...v0.1.0-alpha.9) (2026-10-03)
 
 
