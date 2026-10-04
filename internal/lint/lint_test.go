@@ -1,6 +1,7 @@
 package lint_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -201,5 +202,30 @@ func TestLinkedLeavesAreLinted(t *testing.T) {
 	}
 	if len(diagnostics) != 1 || diagnostics[0].Severity != "error" {
 		t.Fatalf("linked leaf not linted: %+v", diagnostics)
+	}
+}
+
+func TestShownSectionLinks(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "skills/guide/SKILL.md", "---\nname: guide\ndescription: Guide skill\n---\n\n# Guide\n\n## Go\n\nText.\n")
+	write(t, root, "skills/guide/ref.md", "# Ref\n\n## Errors\n")
+	write(t, root, "skills/user/SKILL.md", "---\nname: user\ndescription: User skill\n---\n\n# User\n\nRead `henia show guide#go`, `henia show guide#rust`, `henia show tropos:guide/ref.md#errors`,\n`henia show guide/ref.md#panics`, `henia show guide/missing.md` and `henia show elsewhere#x`.\n")
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, d := range diagnostics {
+		if d.Rule == "broken-link" {
+			got = append(got, fmt.Sprintf("%d:%s", d.Line, d.Message))
+		}
+	}
+	want := []string{
+		"8:Markdown heading anchor does not exist: henia show guide#rust",
+		"9:Markdown heading anchor does not exist: henia show guide/ref.md#panics",
+		"9:local reference does not exist: henia show guide/missing.md",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q\nwant %q", got, want)
 	}
 }

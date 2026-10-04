@@ -114,6 +114,12 @@ not interrupt an individual model load or encode.
 
 ## References
 
+`broken-link` flags local links and `` `henia show skill[/path]#section` ``
+spans whose file or heading anchor does not exist. A `henia show` reference is
+checked when its skill is among the scanned artifacts; targets with template
+actions or HTML anchors are skipped, since their anchors exist only once
+rendered.
+
 `missing-reference` flags a `$skill`, `/command` or `@agent` span whose name no
 scanned artifact defines. Names are lowercase letters, digits, `.`, `_` and `-`,
 so `$HOME` or `/etc/hosts` are not references. Declare artifacts that live

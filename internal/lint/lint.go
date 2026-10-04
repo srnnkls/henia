@@ -353,6 +353,7 @@ func (c *checker) check(d document) error {
 		case *ast.CodeSpan:
 			value := string(n.Text(d.body))
 			offset := d.offset + nodeOffset(n)
+			c.checkShown(d, offset, value)
 			for _, ref := range reference.Parse("`" + value + "`") {
 				if ref.Type == reference.TypeTool {
 					continue
@@ -410,6 +411,31 @@ func (c *checker) checkLink(d document, offset int, destination string) {
 	if u.Path != "" {
 		path = filepath.Join(filepath.Dir(d.path), filepath.FromSlash(u.Path))
 	}
+	c.checkTarget(d, offset, path, u.Fragment, destination)
+}
+
+func (c *checker) checkShown(d document, offset int, value string) {
+	for _, ref := range reference.Skills("`" + value + "`") {
+		if ref.Resource == "" && ref.Anchor == "" {
+			continue
+		}
+		_, name, qualified := strings.Cut(ref.Name, ":")
+		if !qualified {
+			name = ref.Name
+		}
+		skill, ok := c.names[string(artifact.TypeSkill)+":"+name]
+		if !ok {
+			continue
+		}
+		path := skill.Path
+		if ref.Resource != "" {
+			path = filepath.Join(filepath.Dir(skill.Path), filepath.FromSlash(ref.Resource))
+		}
+		c.checkTarget(d, offset, path, ref.Anchor, ref.Raw)
+	}
+}
+
+func (c *checker) checkTarget(d document, offset int, path, fragment, destination string) {
 	if _, err := os.Stat(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			c.add(d, offset, "warning", "broken-link", "local reference does not exist: "+destination)
@@ -418,13 +444,13 @@ func (c *checker) checkLink(d document, offset int, destination string) {
 		}
 		return
 	}
-	if u.Fragment != "" && strings.EqualFold(filepath.Ext(path), ".md") {
+	if fragment != "" && strings.EqualFold(filepath.Ext(path), ".md") {
 		anchors, err := c.headingAnchors(path)
 		if err != nil {
 			c.add(d, offset, "error", "broken-link", err.Error())
 			return
 		}
-		if anchors != nil && !anchors[u.Fragment] {
+		if anchors != nil && !anchors[fragment] {
 			c.add(d, offset, "warning", "broken-link", "Markdown heading anchor does not exist: "+destination)
 		}
 	}
