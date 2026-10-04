@@ -85,9 +85,9 @@ Code.
 
 Preloads have no side effects, and Henia enforces that itself:
 
-- a sandbox denies file writes (macOS `sandbox-exec`, Linux `bwrap`); reads and
-  network stay open. Without a working sandbox preloads do not run, unless the
-  user's own `henia.toml` sets `unsandboxed = "run"`.
+- a sandbox denies file writes (macOS `sandbox-exec`; Linux Landlock, else
+  `bwrap`); reads and network stay open. Without a working sandbox preloads do
+  not run, unless the user's own `henia.toml` sets `unsandboxed = "run"`.
 - every preload has a timeout.
 - commands that change state the sandbox cannot see are refused before they
   run: `git push`, `gh pr merge`, non-GET/POST HTTP methods in `curl`, `wget`
@@ -128,6 +128,17 @@ to `henia preload --skill <skill> -- '<command>'`. Claude runs that natively in
 `!` syntax (and the build adds `Bash(henia preload *)` to a declared
 `allowed-tools`); harnesses without native preloads get a run-first `bash`
 block instead.
+
+macOS cannot nest one sandbox inside another, so inside Codex's sandbox
+Henia's cannot start. Let Codex run `henia show` and `henia preload` outside its
+sandbox; Henia then sandboxes each preload itself, and `henia preload` runs only
+commands a library skill declares:
+
+```
+# ~/.codex/rules/henia.rules
+prefix_rule(pattern=["henia", "show"], decision="allow")
+prefix_rule(pattern=["henia", "preload"], decision="allow")
+```
 
 When [FAS](https://github.com/srnnkls/fas) is on PATH, Henia also asks
 `fas eval --harness henia` after its own check, so existing rule sets can

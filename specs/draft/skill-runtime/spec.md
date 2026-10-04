@@ -137,7 +137,10 @@ FAS, Tropos or any rule set:
 
 1. Write sandbox. Every preload runs in an OS sandbox that denies file writes
    except to `/dev/null`; reads and network stay open. macOS uses
-   `sandbox-exec` (`(deny file-write*)`), Linux `bwrap` with a read-only root.
+   `sandbox-exec` (`(deny file-write*)`). Linux uses Landlock, applied by a
+   Henia helper process before it execs the shell; it needs no user namespaces
+   and stacks inside another sandbox. Without Landlock, Linux falls back to
+   `bwrap` with a read-only root.
    Henia probes the sandbox once per process; where none works, preloads do
    not run unless the user's own `henia.toml` sets `unsandboxed = "run"`.
 2. Timeout. Every preload is killed with its process group after

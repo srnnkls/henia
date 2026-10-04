@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+func TestMain(m *testing.M) {
+	RunSandboxHelper(os.Args)
+	os.Exit(m.Run())
+}
+
 func stubFAS(t *testing.T, script string) string {
 	t.Helper()
 	bin := t.TempDir()

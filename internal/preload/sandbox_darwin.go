@@ -25,3 +25,5 @@ func sandbox(_ string, command []string) ([]string, bool) {
 	}
 	return append([]string{path, "-p", seatbelt}, command...), true
 }
+
+func execSandboxed([]string) error { return errSandboxHelper }

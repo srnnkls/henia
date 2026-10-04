@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/srnnkls/henia/internal/cli"
+	"github.com/srnnkls/henia/internal/preload"
 )
 
 // version is set at release-build time via -ldflags "-X main.version=...";
@@ -11,6 +12,7 @@ import (
 var version = "dev"
 
 func main() {
+	preload.RunSandboxHelper(os.Args)
 	if err := cli.Execute(version); err != nil {
 		os.Exit(1)
 	}
