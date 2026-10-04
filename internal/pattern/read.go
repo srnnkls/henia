@@ -15,20 +15,36 @@ type Query struct {
 }
 
 type Pattern struct {
-	Type    string
-	Alts    []*Pattern
-	Attrs   []Attr
-	Chains  []Chain
-	Nots    []*Pattern
-	Reaches []*Pattern
-	Quant   byte
-	Capture string
-	Pos     int
+	Type      string
+	Alts      []*Pattern
+	Attrs     []Attr
+	Chains    []Chain
+	Nots      []Negation
+	Relations []Relation
+	Quant     byte
+	Capture   string
+	Pos       int
 }
 
 type Chain struct {
 	Links                 []Link
 	FirstChild, LastChild bool
+}
+
+type Relation struct {
+	Kind   string
+	Target *Pattern
+}
+
+type Negation struct {
+	Pattern  *Pattern
+	Relation *Relation
+}
+
+var relations = []string{"reaches", "inbound"}
+
+func isForm(t token) bool {
+	return t.kind == tSymbol && (t.text == "not" || slices.Contains(relations, t.text))
 }
 
 type Link struct {
@@ -285,7 +301,7 @@ func (r *reader) pattern(top bool) (*Pattern, error) {
 		if head.kind != tSymbol {
 			return nil, &Error{Offset: head.pos, Message: "expected a type after (", Hint: "types: " + strings.Join(typeNames(), " ")}
 		}
-		if head.text == "not" || head.text == "reaches" {
+		if isForm(head) {
 			return nil, &Error{Offset: head.pos, Message: fmt.Sprintf("(%s ...) belongs inside a pattern", head.text), Hint: `e.g. (skill :id "X" (` + head.text + ` (skill) @t))`}
 		}
 		if _, known := types[head.text]; !known && head.text != "_" {
@@ -363,23 +379,38 @@ func (r *reader) body(p *Pattern, open token) error {
 			if direct {
 				r.next()
 			}
-			if form := r.tokens[r.at+1]; r.peek().kind == tOpen && form.kind == tSymbol && (form.text == "not" || form.text == "reaches") {
+			if form := r.tokens[r.at+1]; r.peek().kind == tOpen && isForm(form) {
 				if direct || connect || firstChild {
 					return &Error{Offset: t.pos, Message: fmt.Sprintf("(%s ...) cannot be anchored or marked direct", form.text)}
 				}
+				if form.text != "not" {
+					relation, err := r.relation()
+					if err != nil {
+						return err
+					}
+					p.Relations = append(p.Relations, relation)
+					afterPattern = false
+					continue
+				}
 				r.at += 2
-				inner, err := r.pattern(false)
-				if err != nil {
-					return err
+				var negation Negation
+				if inner := r.tokens[r.at+1]; r.peek().kind == tOpen && isForm(inner) && inner.text != "not" {
+					relation, err := r.relation()
+					if err != nil {
+						return err
+					}
+					negation.Relation = &relation
+				} else {
+					pattern, err := r.pattern(false)
+					if err != nil {
+						return err
+					}
+					negation.Pattern = pattern
 				}
 				if c := r.next(); c.kind != tClose {
-					return r.unexpected(c, fmt.Sprintf(") closing (%s", form.text))
+					return r.unexpected(c, ") closing (not")
 				}
-				if form.text == "not" {
-					p.Nots = append(p.Nots, inner)
-				} else {
-					p.Reaches = append(p.Reaches, inner)
-				}
+				p.Nots = append(p.Nots, negation)
 				afterPattern = false
 				continue
 			}
@@ -401,6 +432,19 @@ func (r *reader) body(p *Pattern, open token) error {
 			return r.unexpected(r.next(), "a key, a nested pattern or )")
 		}
 	}
+}
+
+func (r *reader) relation() (Relation, error) {
+	r.next()
+	form := r.next()
+	target, err := r.pattern(false)
+	if err != nil {
+		return Relation{}, err
+	}
+	if c := r.next(); c.kind != tClose {
+		return Relation{}, r.unexpected(c, fmt.Sprintf(") closing (%s", form.text))
+	}
+	return Relation{Kind: form.text, Target: target}, nil
 }
 
 func (r *reader) attr(kind string) (Attr, error) {

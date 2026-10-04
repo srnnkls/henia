@@ -29,8 +29,15 @@ type binding map[string][]*markup.Element
 type matcher struct {
 	resolve  Resolver
 	memo     map[memoKey][]binding
-	reached  map[*markup.Element][]*markup.Element
+	reached  map[relationKey][]*markup.Element
+	linkers  map[*markup.Element][]*markup.Element
+	root     *markup.Element
 	produced int
+}
+
+type relationKey struct {
+	kind  string
+	skill *markup.Element
 }
 
 type memoKey struct {
@@ -39,7 +46,7 @@ type memoKey struct {
 }
 
 func (q *Query) Run(root *markup.Element, resolve Resolver) ([]Row, error) {
-	m := &matcher{resolve: resolve, memo: map[memoKey][]binding{}, reached: map[*markup.Element][]*markup.Element{}}
+	m := &matcher{resolve: resolve, memo: map[memoKey][]binding{}, reached: map[relationKey][]*markup.Element{}, root: root}
 	order := 0
 	root.Walk(func(e *markup.Element) bool {
 		e.Order = order
@@ -129,15 +136,14 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 		}
 	}
 	for _, not := range p.Nots {
-		found := false
-		for _, d := range descendants(e, false) {
-			if m.matches(not, d) {
-				found = true
-				break
-			}
+		candidates, target := descendants(e, false), not.Pattern
+		if not.Relation != nil {
+			candidates, target = m.related(not.Relation.Kind, e), not.Relation.Target
 		}
-		if found {
-			return nil, nil
+		for _, d := range candidates {
+			if m.matches(target, d) {
+				return nil, nil
+			}
 		}
 	}
 	type partial struct {
@@ -164,13 +170,13 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 		}
 		results = next
 	}
-	for _, reach := range p.Reaches {
+	for _, relation := range p.Relations {
 		if e.Type != "skill" {
 			return nil, nil
 		}
 		var targets []binding
-		for _, s := range m.reach(e) {
-			bindings, err := m.at(reach, s)
+		for _, s := range m.related(relation.Kind, e) {
+			bindings, err := m.at(relation.Target, s)
 			if err != nil {
 				return nil, err
 			}
@@ -300,9 +306,17 @@ func (m *matcher) take(p *Pattern, siblings []*markup.Element, i, step int) ([]*
 	return nodes, i, true
 }
 
-func (m *matcher) reach(skill *markup.Element) []*markup.Element {
-	if cached, ok := m.reached[skill]; ok || m.resolve == nil {
+func (m *matcher) related(kind string, skill *markup.Element) []*markup.Element {
+	if skill.Type != "skill" || m.resolve == nil {
+		return nil
+	}
+	key := relationKey{kind, skill}
+	if cached, ok := m.reached[key]; ok {
 		return cached
+	}
+	step := m.targets
+	if kind == "inbound" {
+		step = m.sources
 	}
 	seen := map[*markup.Element]bool{}
 	var out []*markup.Element
@@ -310,20 +324,47 @@ func (m *matcher) reach(skill *markup.Element) []*markup.Element {
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
-		current.Walk(func(n *markup.Element) bool {
-			if target := n.Attrs["target"]; n.Type == "link" && target != "" {
-				if t := m.resolve.Skill(target); t != nil && !seen[t] {
-					seen[t] = true
-					out = append(out, t)
-					queue = append(queue, t)
-				}
+		for _, t := range step(current) {
+			if !seen[t] {
+				seen[t] = true
+				out = append(out, t)
+				queue = append(queue, t)
 			}
-			return true
-		})
+		}
 	}
 	slices.SortFunc(out, func(a, b *markup.Element) int { return a.Order - b.Order })
-	m.reached[skill] = out
+	m.reached[key] = out
 	return out
+}
+
+func (m *matcher) targets(skill *markup.Element) []*markup.Element {
+	var out []*markup.Element
+	skill.Walk(func(n *markup.Element) bool {
+		if target := n.Attrs["target"]; n.Type == "link" && target != "" {
+			if t := m.resolve.Skill(target); t != nil {
+				out = append(out, t)
+			}
+		}
+		return true
+	})
+	return out
+}
+
+func (m *matcher) sources(skill *markup.Element) []*markup.Element {
+	if m.linkers == nil {
+		m.linkers = map[*markup.Element][]*markup.Element{}
+		for _, s := range m.root.Children {
+			if s.Type != "skill" {
+				continue
+			}
+			for _, t := range m.targets(s) {
+				if !slices.Contains(m.linkers[t], s) {
+					m.linkers[t] = append(m.linkers[t], s)
+				}
+			}
+		}
+	}
+	return m.linkers[skill]
 }
 
 func descendants(e *markup.Element, direct bool) []*markup.Element {

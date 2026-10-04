@@ -11,6 +11,7 @@ henia query '(skill :id "gestalt" (paragraph)? @prev . (paragraph :contains "coz
 henia query '(section :id "usage" (code :lang "bash") @c)'
 henia query '(skill (link :target "gestalt")) @s'
 henia query '(skill :id "gestalt" (reaches (skill) @t))'
+henia query '(skill (not (inbound (skill)))) @orphan'
 henia query '(skill :id "gestalt" > (file :main true (heading :level 1..2) @h))'
 henia query '(section > (heading) @title (code :lang "bash") @c)'
 henia query '(skill :id "gestalt" (link :url /^https:/) @l)'
@@ -48,7 +49,8 @@ query    := pattern+                        ; rows of every pattern, united
 pattern  := "(" type item* ")" quant? capture?
           | "[" pattern+ "]" quant? capture?  ; alternatives
 item     := :key value | capture | pattern | ">" pattern | "."
-          | "(" "not" pattern ")" | "(" "reaches" pattern ")"
+          | "(" "not" (pattern | relation) ")" | relation
+relation := "(" ("reaches" | "inbound") pattern ")"
 quant    := "?" | "*" | "+"
 capture  := "@" name
 comment  := ";" to the end of the line
@@ -61,8 +63,10 @@ comment  := ";" to the end of the line
   or after the last it pins the first or last child. Unanchored nested patterns
   match in document order.
 - `?`, `*` and `+` make a sibling optional or repeated.
-- `(not P)` rejects a node with a descendant matching P.
-- `(reaches P)` inside a `skill` matches the skills its links reach, transitively.
+- `(not P)` rejects a node with a descendant matching P; `(not (reaches P))`
+  and `(not (inbound P))` reject a skill with such a related skill.
+- `(reaches P)` inside a `skill` matches the skills its links reach,
+  transitively; `(inbound P)` matches the skills whose links reach it.
 - A capture names a result column; a query without captures prints the matched
   node.
 
