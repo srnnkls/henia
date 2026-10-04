@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.0-alpha.12](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.11...v0.1.0-alpha.12) (2026-10-04)
+
+
+### Features
+
+* **runtime:** sandbox Linux preloads with Landlock ([4c0dc60](https://github.com/srnnkls/henia/commit/4c0dc60ae628c312adea58dd49a2b80828c4038e))
+
+
+### Bug Fixes
+
+* **runtime:** run only a skill's declared preloads through henia preload ([e440c0c](https://github.com/srnnkls/henia/commit/e440c0cba04f1861b4743ee14b8849befbd6e6b4))
+
 ## [0.1.0-alpha.11](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.10...v0.1.0-alpha.11) (2026-10-04)
 
 
