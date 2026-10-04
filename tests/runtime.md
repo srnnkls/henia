@@ -230,6 +230,76 @@ henia: no skill named "nothing"
 exit 0
 ```
 
+## Resources
+
+A skill's resources are the other files in its directory. Markdown resources
+may carry frontmatter with a `description`; otherwise their first heading
+describes them. `henia show <skill>` ends with a list of them, and
+`henia show <skill>/<path>` reads one without its frontmatter.
+
+```scrut
+$ R="$L/tropos/skills/res"; mkdir -p "$R/reference" "$R/scripts"
+> printf -- '---\nname: res\ndescription: Resources.\n---\n\n# Res\n\nSee the reference.\n' > "$R/SKILL.md"
+> printf -- '---\ndescription: Configuration keys and defaults.\n---\n\n# Configuration\n\n## Keys\n\nOne key.\n' > "$R/reference/config.md"
+> printf -- '# Task flow\n\nSteps.\n' > "$R/reference/flow.md"
+> printf -- 'echo run\n' > "$R/scripts/run.sh"
+> henia show res
+# Res
+
+See the reference.
+
+## Resources
+
+Read one with `henia show res/<path>`:
+
+- `reference/config.md`: Configuration keys and defaults.
+- `reference/flow.md`: Task flow
+- `scripts/run.sh`
+```
+
+```scrut
+$ henia show res/reference/config.md; echo ---; henia show res/reference/config.md#keys; echo ---; henia show res/reference/
+# Configuration
+
+## Keys
+
+One key.
+---
+## Keys
+
+One key.
+---
+
+## Resources
+
+Read one with `henia show res/<path>`:
+
+- `reference/config.md`: Configuration keys and defaults.
+- `reference/flow.md`: Task flow
+```
+
+```scrut
+$ henia show res/../code/SKILL.md; henia show res/reference/missing.md 2>&1 | sed "s|$T/||"
+henia: res/../code/SKILL.md: resource paths stay inside the skill directory
+henia: res/reference/missing.md: lstat data/henia/sources/tropos/skills/res/reference/missing.md: no such file or directory
+```
+
+`resources.disclosure = false` turns the list off, globally in a user or project
+`henia.toml`, or for one skill in its `henia:` frontmatter; the skill's setting
+wins.
+
+```scrut
+$ mkdir -p "$T/config/henia"; printf '[resources]\ndisclosure = false\n' > "$T/config/henia/henia.toml"
+> env XDG_CONFIG_HOME="$T/config" HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia show res | grep -c '## Resources'
+> printf -- '---\nname: res\ndescription: Resources.\nhenia:\n  resources:\n    disclosure: true\n---\n\n# Res\n' > "$R/SKILL.md"
+> env XDG_CONFIG_HOME="$T/config" HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia show res | grep -c '## Resources'
+> printf -- '---\nname: res\ndescription: Resources.\nhenia:\n  resources:\n    disclosure: false\n---\n\n# Res\n' > "$R/SKILL.md"
+> henia show res | grep -c '## Resources'; rm "$T/config/henia/henia.toml"
+0
+1
+0
+```
+
 ## Preloads
 
 `henia show` runs a skill's preloads, `` !`cmd` `` inline or a fence whose info

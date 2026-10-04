@@ -155,3 +155,29 @@ func TestProfileRejectsNonDataAndInvalidOutputTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestResourcesSetting(t *testing.T) {
+	p, err := Load("claude", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := NewCompiler(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := func(resources any) map[string]any {
+		return map[string]any{"name": "example", "description": "Example", "henia": map[string]any{"resources": resources}}
+	}
+	result, err := c.Compile("example", input(map[string]any{"disclosure": false}), Context{Profile: "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, leaked := result.Frontmatter["henia"]; leaked {
+		t.Fatal("henia settings reached the output")
+	}
+	for _, bad := range []any{map[string]any{"disclosure": "no"}, map[string]any{"toc": false}, "off"} {
+		if _, err := c.Compile("example", input(bad), Context{Profile: "claude"}); err == nil {
+			t.Errorf("accepted %v", bad)
+		}
+	}
+}

@@ -212,8 +212,17 @@ func (c *Compiler) Compile(directory string, input map[string]any, context Conte
 			}
 		}
 	}
+	resources, err := object(settings["resources"], "henia.resources")
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range resources {
+		if _, ok := value.(bool); key != "disclosure" || !ok {
+			return nil, fmt.Errorf("henia.resources accepts only disclosure, a boolean")
+		}
+	}
 	for key := range settings {
-		if !slices.Contains([]string{"auto_invoke", "user_invocable", "variables", "targets"}, key) {
+		if !slices.Contains([]string{"auto_invoke", "user_invocable", "variables", "targets", "resources"}, key) {
 			return nil, fmt.Errorf("unknown henia field %q", key)
 		}
 	}

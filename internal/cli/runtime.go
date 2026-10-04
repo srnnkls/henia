@@ -75,25 +75,28 @@ func newLsCommand() *cobra.Command {
 func newShowCommand() *cobra.Command {
 	var flags runtimeFlags
 	cmd := &cobra.Command{
-		Use:   "show <skill>[#section]",
+		Use:   "show <skill>[/<resource>][#section]",
 		Short: "Print a library skill or one of its sections, rendered for the caller",
 		Long: `Print a library skill or one of its sections, rendered for the caller.
 
 A skill is <name> or <source>:<name>. Output longer than the budget prints the
-sections instead, each addressable as <skill>#<section>. Problems print as
+sections instead, each addressable as <skill>#<section>. A full skill ends with
+the list of its resources; <skill>/<path> reads one and <skill>/<dir>/ lists a
+directory. Problems print as
 text; the command always exits successfully so a skill preload never aborts.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			lib := flags.open(cmd)
 			harness := detectHarness(flags.harness)
-			runner, err := preloadRunner(flags.project)
+			settings, err := loadRuntime(flags.project)
 			expand := func(e library.Entry, text string) string {
 				if err != nil {
 					return fmt.Sprintf("henia: preloads not run: %v\n\n%s", err, text)
 				}
-				return runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, Skill: e.Name, Source: e.Source, Tier: e.Tier, Caller: harness})
+				return settings.runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, Skill: e.Name, Source: e.Source, Tier: e.Tier, Caller: harness})
 			}
-			show(cmd.OutOrStdout(), lib, newRenderer(harness, lib), args[0], expand)
+			disclose := func(e library.Entry) bool { return discloses(settings.disclosure, e) }
+			show(cmd.OutOrStdout(), lib, newRenderer(harness, lib), args[0], expand, disclose)
 			return nil
 		},
 	}
@@ -101,14 +104,19 @@ text; the command always exits successfully so a skill preload never aborts.`,
 	return cmd
 }
 
-func show(out io.Writer, lib *library.Library, r *renderer, target string, expand func(library.Entry, string) string) {
+func show(out io.Writer, lib *library.Library, r *renderer, target string, expand func(library.Entry, string) string, disclose func(library.Entry) bool) {
 	ref, anchor, sectioned := strings.Cut(target, "#")
+	ref, resource, isResource := strings.Cut(ref, "/")
 	entry, err := lib.Resolve(ref)
 	if err != nil {
 		fmt.Fprintf(out, "henia: %v\n", err)
 		return
 	}
 	name := lib.Reference(entry)
+	if isResource {
+		showResource(out, name, filepath.Dir(entry.Path), resource, anchor, sectioned)
+		return
+	}
 	body := r.body(entry)
 	if sectioned {
 		if _, text, ok := library.Section(body, anchor); ok {
@@ -126,6 +134,9 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string, expan
 	}
 	if len(body) <= outputBudget {
 		fmt.Fprint(out, expand(entry, body))
+		if disclose(entry) {
+			resourceList(out, name, filepath.Dir(entry.Path), "")
+		}
 		return
 	}
 	fmt.Fprintf(out, "%s exceeds the output budget; read its sections with henia show %s#<section>:\n", name, name)
@@ -200,13 +211,19 @@ func declaresPreload(lib *library.Library, entry library.Entry, command string) 
 	return false
 }
 
-func preloadRunner(project string) (*preload.Runner, error) {
+type runtimeSettings struct {
+	runner     *preload.Runner
+	disclosure bool
+}
+
+func loadRuntime(project string) (runtimeSettings, error) {
+	settings := runtimeSettings{disclosure: true}
 	var layers [2]preload.Settings
 	paths := []string{filepath.Join(library.ConfigDir(), "henia.toml"), ""}
 	if path, err := config.Find(project); err == nil {
 		paths[1] = path
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
+		return settings, err
 	}
 	for i, path := range paths {
 		data, err := os.ReadFile(path)
@@ -214,17 +231,94 @@ func preloadRunner(project string) (*preload.Runner, error) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return settings, err
 		}
 		var file struct {
-			Preload preload.Settings `toml:"preload"`
+			Preload   preload.Settings       `toml:"preload"`
+			Resources config.ResourceOptions `toml:"resources"`
 		}
 		if err := toml.Unmarshal(data, &file); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+			return settings, fmt.Errorf("%s: %w", path, err)
 		}
 		layers[i] = file.Preload
+		if file.Resources.Disclosure != nil {
+			settings.disclosure = *file.Resources.Disclosure
+		}
 	}
-	return preload.NewRunner(layers[0], layers[1])
+	runner, err := preload.NewRunner(layers[0], layers[1])
+	settings.runner = runner
+	return settings, err
+}
+
+func preloadRunner(project string) (*preload.Runner, error) {
+	settings, err := loadRuntime(project)
+	return settings.runner, err
+}
+
+func discloses(global bool, e library.Entry) bool {
+	if settings, ok := e.Artifact.Frontmatter["henia"].(map[string]any); ok {
+		if resources, ok := settings["resources"].(map[string]any); ok {
+			if disclosure, ok := resources["disclosure"].(bool); ok {
+				return disclosure
+			}
+		}
+	}
+	return global
+}
+
+func resourceList(out io.Writer, name, skillDir, sub string) {
+	resources := library.Resources(skillDir, sub)
+	if len(resources) == 0 {
+		return
+	}
+	fmt.Fprintf(out, "\n## Resources\n\nRead one with `henia show %s/<path>`:\n\n", name)
+	for _, r := range resources {
+		line := "- `" + r.Path + "`"
+		if r.Files > 0 {
+			line += fmt.Sprintf(" (%d files)", r.Files)
+		}
+		if r.Description != "" {
+			line += ": " + r.Description
+		}
+		fmt.Fprintln(out, line)
+	}
+}
+
+func showResource(out io.Writer, name, skillDir, path, anchor string, sectioned bool) {
+	full, err := library.ResourcePath(skillDir, path)
+	if err != nil {
+		fmt.Fprintf(out, "henia: %s/%s: %v\n", name, path, err)
+		return
+	}
+	if info, err := os.Stat(full); err == nil && info.IsDir() {
+		rel, _ := filepath.Rel(skillDir, full)
+		if rel == "." {
+			rel = ""
+		}
+		resourceList(out, name, skillDir, rel)
+		return
+	}
+	text, err := library.ReadResource(full)
+	if err != nil {
+		fmt.Fprintf(out, "henia: %s/%s: %v\n", name, path, err)
+		return
+	}
+	address := name + "/" + path
+	if sectioned {
+		_, section, ok := library.Section(text, anchor)
+		if !ok {
+			fmt.Fprintf(out, "henia: %s has no section %q\n", address, anchor)
+			contents(out, address, text)
+			return
+		}
+		text = section
+	}
+	if len(text) > outputBudget {
+		fmt.Fprintf(out, "%s exceeds the output budget; read its sections with henia show %s#<section>:\n", address, address)
+		contents(out, address, text)
+		return
+	}
+	fmt.Fprint(out, text)
 }
 
 func newContextCommand() *cobra.Command {

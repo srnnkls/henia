@@ -42,7 +42,7 @@ silently. `<skill>#<section>` addresses a heading anchor.
 
 ```
 henia ls [--json]
-henia show <skill>[#section] [--harness NAME]
+henia show <skill>[/<resource>][#section] [--harness NAME]
 henia context <skill> [--global DIR]...
 henia preload --skill <skill> -- <command>
 ```
@@ -64,6 +64,18 @@ henia preload --skill <skill> -- <command>
 - Renders are cached by content under `$XDG_CACHE_HOME/henia/render`;
   preload output never is.
 - Runtime commands print problems as text and exit 0, so a preload never aborts.
+
+## Resources
+
+Files next to a skill's `SKILL.md` are its resources. A Markdown resource may
+carry frontmatter with a `description` (else its first heading describes it).
+`henia show <skill>` ends with a list of the skill's resources and their
+descriptions, and `henia show <skill>/<path>` reads one, without frontmatter;
+`<skill>/<dir>/` lists a directory. Large skills list directories with file
+counts, each readable the same way.
+
+Turn the list off with `resources.disclosure = false`, under `[resources]` in a
+user or project `henia.toml`, or for one skill under `henia:` in its frontmatter.
 
 ## Preloads
 

@@ -21,7 +21,12 @@ type Config struct {
 	Build     BuildOptions             `toml:"build,omitempty"`
 	Harness   map[string]henia.Harness `toml:"harness,omitempty"`
 	Preload   preload.Settings         `toml:"preload,omitempty"`
+	Resources ResourceOptions          `toml:"resources,omitempty"`
 	Warnings  []string                 `toml:"-"`
+}
+
+type ResourceOptions struct {
+	Disclosure *bool `toml:"disclosure,omitempty"`
 }
 
 type BuildOptions struct {
