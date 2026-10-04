@@ -39,9 +39,14 @@ func newCorpus(t *testing.T, skills map[string]map[string]string, links map[stri
 			file.Parent, file.Index = skill, len(skill.Children)
 			skill.Children = append(skill.Children, file)
 		}
-		for _, target := range links[name] {
+		for _, spec := range links[name] {
+			target, anchor, _ := strings.Cut(spec, "#")
+			attrs := map[string]string{"target": target, "path": "SKILL.md"}
+			if anchor != "" {
+				attrs["anchor"] = anchor
+			}
 			main := skill.Children[0]
-			main.Children = append(main.Children, &markup.Element{Type: "link", Attrs: map[string]string{"target": target}, Parent: main, Index: len(main.Children)})
+			main.Children = append(main.Children, &markup.Element{Type: "link", Attrs: attrs, Text: spec, Parent: main, Index: len(main.Children)})
 		}
 	}
 	return c
@@ -54,8 +59,8 @@ func fixture(t *testing.T) corpus {
 			"refs/more.md": "# More\n\nResource para with term.\n",
 		},
 		"b": {"SKILL.md": "# B\n\nPlain.\n"},
-		"c": {"SKILL.md": "# C\n\nNo links.\n"},
-	}, map[string][]string{"a": {"b"}, "b": {"a", "c"}})
+		"c": {"SKILL.md": "# C\n\nNo links.\n\n## Usage\n\nC usage.\n"},
+	}, map[string][]string{"a": {"b", "c#usage", "c#nope"}, "b": {"a", "c"}})
 }
 
 func run(t *testing.T, c corpus, query string) []Row {
@@ -108,17 +113,21 @@ func TestRun(t *testing.T) {
 		{"direct children only", `(section :id "usage" > (code :lang "bash") @c)`, []string{"c=echo top\n"}},
 		{"cross-skill links", `(skill @s (link :target "a"))`, []string{"s=" + c.skills["b"].Text}},
 		{"inbound", `(skill :id "c" (inbound (skill) @from))`, []string{"from=", "from="}},
+		{"join on shared text across skills", `(join (skill :id ?x (heading :text ?t) @h1) (skill :id (not ?x) (heading :text ?t) @h2))`, []string{"h1=Usage h2=Usage", "h1=Usage h2=Usage"}},
+		{"anti-join finds broken anchors", `(join (skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a)))))`, []string{"l=c#nope"}},
+		{"correlated negation", `(skill :id "a" (code :lang ?l) @c (not (section :id "usage" > (code :lang ?l))))`, []string{"c=func x() {}\n"}},
+		{"literal inequality", `(section :level 2 :title (not "Usage") > (heading) @h)`, []string{"h=Other"}},
 		{"orphans", `(skill (not (inbound (skill)))) @s`, []string{}},
 		{"skills reaching nothing", `(skill (not (reaches (skill)))) @s`, []string{"s="}},
 		{"transitive reach with a cycle", `(skill :id "a" (reaches (skill) @t))`, []string{"t=", "t=", "t="}},
-		{"negation", `(section :level 2 (not (code)) (heading) @h)`, []string{"h=Other"}},
+		{"negation", `(section :level 2 (not (code)) (heading) @h)`, []string{"h=Other", "h=Usage"}},
 		{"pairs in document order", `(section :level 3 (heading) @title (code) @c)`, []string{"title=Deeper c=echo deep\n", "title=Deeper c=func x() {}\n"}},
 		{"implicit capture", `(heading :level 1..1 :matches "^[BC]$")`, []string{"=B", "=C"}},
 		{"alternation", `(section :id "deeper" [(code :lang "go") (code :lang "rust")] @c)`, []string{"c=func x() {}\n"}},
 		{"first child anchor", `(item . (paragraph) @p)`, []string{"p=item one", "p=item two"}},
 		{"file scope", `(file :main "false" (heading) @h)`, []string{"h=More"}},
 		{"regexp value", `(section :title /^D/ > (heading) @h)`, []string{"h=Deeper"}},
-		{"own heading only", `(section :id "usage" > (heading) @h)`, []string{"h=Usage"}},
+		{"own heading only", `(skill :id "a" (section :id "usage" > (heading) @h))`, []string{"h=Usage"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -156,6 +165,8 @@ func TestReadErrors(t *testing.T) {
 		{`(heading)?`, "quantifiers apply to patterns nested", "", 9},
 		{`(section . )`, "anchor . needs a pattern after it", "", 11},
 		{`(link :url /^https)`, "unterminated /regexp/", "", 11},
+		{`(join (heading :text ?t) (skill))`, "a join prints its captures", "", 0},
+		{`(heading :contains ?t)`, ":contains takes a string, not a variable", "bind the text with :text ?x", 19},
 	}
 	for _, tc := range cases {
 		_, err := Read(tc.query)

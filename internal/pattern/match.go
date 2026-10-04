@@ -2,6 +2,7 @@ package pattern
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -24,7 +25,13 @@ type Cell struct {
 
 type Row []Cell
 
-type binding map[string][]*markup.Element
+type binding struct {
+	captures map[string][]*markup.Element
+	vars     map[string]string
+	unequal  []constraint
+}
+
+type constraint struct{ name, value string }
 
 type matcher struct {
 	resolve  Resolver
@@ -55,39 +62,148 @@ func (q *Query) Run(root *markup.Element, resolve Resolver) ([]Row, error) {
 	})
 	seen := map[string]bool{}
 	var rows []Row
-	for _, p := range q.Patterns {
-		var failure error
-		root.Walk(func(e *markup.Element) bool {
-			bindings, err := m.at(p, e)
-			if err != nil {
-				failure = err
-				return false
+	for _, term := range q.Terms {
+		var bindings []binding
+		var err error
+		if term.Join != nil {
+			bindings, err = m.join(term.Join)
+		} else {
+			bindings, err = m.everywhere(term.Pattern, q.Captures[0] == "")
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range bindings {
+			row, key := q.row(b)
+			if !seen[key] {
+				seen[key] = true
+				rows = append(rows, row)
 			}
-			for _, b := range bindings {
-				if q.Captures[0] == "" {
-					b = binding{"": {e}}
-				}
-				row, key := q.row(b)
-				if !seen[key] {
-					seen[key] = true
-					rows = append(rows, row)
-				}
-			}
-			return true
-		})
-		if failure != nil {
-			return nil, failure
 		}
 	}
 	return rows, nil
+}
+
+func (m *matcher) everywhere(p *Pattern, implicit bool) ([]binding, error) {
+	var out []binding
+	var failure error
+	m.root.Walk(func(e *markup.Element) bool {
+		bindings, err := m.at(p, e)
+		if err != nil {
+			failure = err
+			return false
+		}
+		for _, b := range bindings {
+			if implicit {
+				b.captures = map[string][]*markup.Element{"": {e}}
+			}
+			out = append(out, b)
+		}
+		return true
+	})
+	return out, failure
+}
+
+func (m *matcher) join(j *Join) ([]binding, error) {
+	rows := []binding{{}}
+	for _, member := range j.Members {
+		bindings, err := m.everywhere(member, false)
+		if err != nil {
+			return nil, err
+		}
+		index := indexBy(bindings, shared(rows, bindings))
+		var next []binding
+		for _, row := range rows {
+			for _, b := range index.candidates(row) {
+				if m.produced++; m.produced > maxBindings {
+					return nil, ErrTooMany
+				}
+				if joined, ok := row.join(b); ok {
+					next = append(next, joined)
+				}
+			}
+		}
+		rows = next
+	}
+	for _, absent := range j.Absent {
+		bindings, err := m.everywhere(absent, false)
+		if err != nil {
+			return nil, err
+		}
+		index := indexBy(bindings, shared(rows, bindings))
+		rows = slices.DeleteFunc(rows, func(row binding) bool {
+			for _, b := range index.candidates(row) {
+				if _, ok := row.join(b); ok {
+					return true
+				}
+			}
+			return false
+		})
+	}
+	return rows, nil
+}
+
+type bindingIndex struct {
+	keys    []string
+	buckets map[string][]binding
+	loose   []binding
+}
+
+func shared(left, right []binding) []string {
+	if len(left) == 0 || len(right) == 0 {
+		return nil
+	}
+	var keys []string
+	for name := range left[0].vars {
+		if _, ok := right[0].vars[name]; ok {
+			keys = append(keys, name)
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+func indexBy(bindings []binding, keys []string) bindingIndex {
+	index := bindingIndex{keys: keys, buckets: map[string][]binding{}}
+	for _, b := range bindings {
+		if key, ok := b.key(keys); ok && len(keys) > 0 {
+			index.buckets[key] = append(index.buckets[key], b)
+		} else {
+			index.loose = append(index.loose, b)
+		}
+	}
+	return index
+}
+
+func (i bindingIndex) candidates(row binding) []binding {
+	if key, ok := row.key(i.keys); ok && len(i.keys) > 0 {
+		return slices.Concat(i.buckets[key], i.loose)
+	}
+	var all []binding
+	for _, bucket := range i.buckets {
+		all = append(all, bucket...)
+	}
+	return append(all, i.loose...)
+}
+
+func (b binding) key(names []string) (string, bool) {
+	var key strings.Builder
+	for _, name := range names {
+		value, ok := b.vars[name]
+		if !ok {
+			return "", false
+		}
+		key.WriteString(strconv.Quote(value))
+	}
+	return key.String(), true
 }
 
 func (q *Query) row(b binding) (Row, string) {
 	row := make(Row, 0, len(q.Captures))
 	var key strings.Builder
 	for _, name := range q.Captures {
-		row = append(row, Cell{Name: name, Elements: b[name]})
-		for _, e := range b[name] {
+		row = append(row, Cell{Name: name, Elements: b.captures[name]})
+		for _, e := range b.captures[name] {
 			key.WriteString(strconv.Itoa(e.Order) + ",")
 		}
 		key.WriteByte(';')
@@ -122,7 +238,7 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 				return nil, err
 			}
 			for _, b := range bindings {
-				out = append(out, capture(b, p.Capture, e))
+				out = append(out, b.capture(p.Capture, e))
 			}
 		}
 		return out, nil
@@ -130,27 +246,31 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 	if p.Type != "" && e.Type != p.Type || e.Type == "corpus" {
 		return nil, nil
 	}
+	seed := binding{}
 	for _, a := range p.Attrs {
-		if !a.test(e) {
-			return nil, nil
-		}
-	}
-	for _, not := range p.Nots {
-		candidates, target := descendants(e, false), not.Pattern
-		if not.Relation != nil {
-			candidates, target = m.related(not.Relation.Kind, e), not.Relation.Target
-		}
-		for _, d := range candidates {
-			if m.matches(target, d) {
+		if a.Var == "" {
+			if a.test(e) == a.Negate {
 				return nil, nil
 			}
+			continue
+		}
+		value, ok := a.value(e)
+		if !ok {
+			return nil, nil
+		}
+		bound := binding{vars: map[string]string{a.Var: value}}
+		if a.Negate {
+			bound = binding{unequal: []constraint{{a.Var, value}}}
+		}
+		if seed, ok = seed.join(bound); !ok {
+			return nil, nil
 		}
 	}
 	type partial struct {
 		b    binding
 		last int
 	}
-	results := []partial{{binding{}, -1}}
+	results := []partial{{seed, -1}}
 	for _, chain := range p.Chains {
 		matched, err := m.chain(chain, e)
 		if err != nil {
@@ -165,7 +285,9 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 				if m.produced++; m.produced > maxBindings {
 					return nil, ErrTooMany
 				}
-				next = append(next, partial{merge(r.b, c.b), max(r.last, c.last)})
+				if joined, ok := r.b.join(c.b); ok {
+					next = append(next, partial{joined, max(r.last, c.last)})
+				}
 			}
 		}
 		results = next
@@ -188,14 +310,38 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 				if m.produced++; m.produced > maxBindings {
 					return nil, ErrTooMany
 				}
-				next = append(next, partial{merge(r.b, t), r.last})
+				if joined, ok := r.b.join(t); ok {
+					next = append(next, partial{joined, r.last})
+				}
 			}
 		}
 		results = next
 	}
+	for _, not := range p.Nots {
+		candidates, target := descendants(e, false), not.Pattern
+		if not.Relation != nil {
+			candidates, target = m.related(not.Relation.Kind, e), not.Relation.Target
+		}
+		var found []binding
+		for _, d := range candidates {
+			bindings, err := m.at(target, d)
+			if err != nil {
+				return nil, err
+			}
+			found = append(found, bindings...)
+		}
+		results = slices.DeleteFunc(results, func(r partial) bool {
+			for _, b := range found {
+				if _, ok := r.b.join(b); ok {
+					return true
+				}
+			}
+			return false
+		})
+	}
 	out := make([]binding, 0, len(results))
 	for _, r := range results {
-		out = append(out, capture(r.b, p.Capture, e))
+		out = append(out, r.b.capture(p.Capture, e))
 	}
 	return out, nil
 }
@@ -268,11 +414,15 @@ func (m *matcher) chain(c Chain, e *markup.Element) ([]chainMatch, error) {
 						if m.produced++; m.produced > maxBindings {
 							return nil, ErrTooMany
 						}
+						joined, ok := cm.b.join(b)
+						if !ok {
+							continue
+						}
 						first := cm.first
 						if first < 0 || n.Order < first {
 							first = n.Order
 						}
-						next = append(next, chainMatch{merge(cm.b, b), first, max(cm.last, n.Order)})
+						next = append(next, chainMatch{joined, first, max(cm.last, n.Order)})
 					}
 				}
 				matches = next
@@ -341,7 +491,7 @@ func (m *matcher) targets(skill *markup.Element) []*markup.Element {
 	var out []*markup.Element
 	skill.Walk(func(n *markup.Element) bool {
 		if target := n.Attrs["target"]; n.Type == "link" && target != "" {
-			if t := m.resolve.Skill(target); t != nil {
+			if t := m.resolve.Skill(target); t != nil && t != skill {
 				out = append(out, t)
 			}
 		}
@@ -381,24 +531,49 @@ func descendants(e *markup.Element, direct bool) []*markup.Element {
 	return out
 }
 
-func capture(b binding, name string, e *markup.Element) binding {
+func (b binding) capture(name string, e *markup.Element) binding {
 	if name == "" {
 		return b
 	}
-	out := merge(b, nil)
-	out[name] = append(out[name], e)
-	return out
+	captures := maps.Clone(b.captures)
+	if captures == nil {
+		captures = map[string][]*markup.Element{}
+	}
+	captures[name] = append(slices.Clip(captures[name]), e)
+	return binding{captures: captures, vars: b.vars, unequal: b.unequal}
 }
 
-func merge(a, b binding) binding {
-	out := make(binding, len(a)+len(b))
-	for k, v := range a {
-		out[k] = v
+func (b binding) join(other binding) (binding, bool) {
+	out := binding{vars: maps.Clone(b.vars), unequal: slices.Concat(b.unequal, other.unequal), captures: maps.Clone(b.captures)}
+	for name, value := range other.vars {
+		if existing, ok := out.vars[name]; ok && existing != value {
+			return binding{}, false
+		}
+		if out.vars == nil {
+			out.vars = map[string]string{}
+		}
+		out.vars[name] = value
 	}
-	for k, v := range b {
-		out[k] = append(out[k][:len(out[k]):len(out[k])], v...)
+	for _, c := range out.unequal {
+		if value, bound := out.vars[c.name]; bound && value == c.value {
+			return binding{}, false
+		}
 	}
-	return out
+	for name, elements := range other.captures {
+		if out.captures == nil {
+			out.captures = map[string][]*markup.Element{}
+		}
+		out.captures[name] = append(slices.Clip(out.captures[name]), elements...)
+	}
+	return out, true
+}
+
+func (a Attr) value(e *markup.Element) (string, bool) {
+	if a.Key == "text" {
+		return strings.TrimSpace(e.Text), true
+	}
+	value, ok := e.Attrs[a.Key]
+	return value, ok
 }
 
 func (a Attr) test(e *markup.Element) bool {
@@ -408,10 +583,7 @@ func (a Attr) test(e *markup.Element) bool {
 	case "matches":
 		return a.Re.MatchString(e.Text)
 	}
-	value, ok := e.Attrs[a.Key]
-	if a.Key == "text" {
-		value, ok = strings.TrimSpace(e.Text), true
-	}
+	value, ok := a.value(e)
 	if !ok {
 		return false
 	}

@@ -2,6 +2,7 @@ package library
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"os"
 	"path"
@@ -79,7 +80,7 @@ func (c *Corpus) file(skill *markup.Element, entry Entry, path, rel string) {
 		if err != nil {
 			c.Problems = append(c.Problems, fmt.Sprintf("%s/%s: %v", skill.Attrs["ref"], rel, err))
 		}
-		c.resolveLinks(file, rel)
+		c.resolveLinks(file, skill.Attrs["id"], rel)
 	} else {
 		file = markup.PlainTree(data)
 	}
@@ -123,22 +124,39 @@ func (c *Corpus) references(body string, syntax *regexp.Regexp) []*markup.Elemen
 		if e, err := c.lib.Resolve(ref.Name); err == nil {
 			target = e.Name
 		}
-		links = append(links, &markup.Element{Type: "link", Attrs: map[string]string{"target": target}, Start: ref.Start, End: ref.End})
+		attrs := map[string]string{"target": target, "path": "SKILL.md"}
+		if ref.Resource != "" {
+			attrs["path"] = ref.Resource
+		}
+		if ref.Anchor != "" {
+			attrs["anchor"] = ref.Anchor
+		}
+		links = append(links, &markup.Element{Type: "link", Attrs: attrs, Start: ref.Start, End: ref.End})
 	}
 	return links
 }
 
-func (c *Corpus) resolveLinks(file *markup.Element, rel string) {
+func (c *Corpus) resolveLinks(file *markup.Element, self, rel string) {
 	file.Walk(func(e *markup.Element) bool {
-		destination, _, _ := strings.Cut(e.Attrs["url"], "#")
-		if e.Type != "link" || destination == "" || strings.Contains(destination, ":") {
+		destination, anchor, _ := strings.Cut(e.Attrs["url"], "#")
+		if e.Type != "link" || e.Attrs["url"] == "" || strings.Contains(destination, ":") {
 			return true
 		}
-		outside, escapes := strings.CutPrefix(path.Clean(path.Join(path.Dir(rel), destination)), "../")
-		if name, _, _ := strings.Cut(outside, "/"); escapes {
-			if entry, err := c.lib.Resolve(name); err == nil {
-				e.Attrs["target"] = entry.Name
+		target, inside := self, rel
+		if destination != "" {
+			inside = path.Clean(path.Join(path.Dir(rel), destination))
+		}
+		if outside, escapes := strings.CutPrefix(inside, "../"); escapes {
+			name, resource, _ := strings.Cut(outside, "/")
+			entry, err := c.lib.Resolve(name)
+			if err != nil {
+				return true
 			}
+			target, inside = entry.Name, cmp.Or(resource, "SKILL.md")
+		}
+		e.Attrs["target"], e.Attrs["path"] = target, inside
+		if anchor != "" {
+			e.Attrs["anchor"] = anchor
 		}
 		return true
 	})

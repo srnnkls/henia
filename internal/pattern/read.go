@@ -10,8 +10,18 @@ import (
 )
 
 type Query struct {
-	Patterns []*Pattern
+	Terms    []Term
 	Captures []string
+}
+
+type Term struct {
+	Pattern *Pattern
+	Join    *Join
+}
+
+type Join struct {
+	Members []*Pattern
+	Absent  []*Pattern
 }
 
 type Pattern struct {
@@ -58,6 +68,8 @@ type Attr struct {
 	Lo, Hi int
 	Range  bool
 	Re     *regexp.Regexp
+	Var    string
+	Negate bool
 }
 
 type Error struct {
@@ -94,7 +106,7 @@ var types = map[string][]string{
 	"quote":       nil,
 	"table":       nil,
 	"code":        {"lang"},
-	"link":        {"target", "url"},
+	"link":        {"target", "path", "anchor", "url"},
 	"directive":   nil,
 	"frontmatter": nil,
 }
@@ -121,6 +133,7 @@ const (
 	tRange
 	tSymbol
 	tRegex
+	tVar
 )
 
 type token struct {
@@ -145,6 +158,13 @@ func lex(src string) ([]token, error) {
 			for i < len(src) && src[i] != '\n' {
 				i++
 			}
+		case c == '?' && i+1 < len(src) && isName(src[i+1], true):
+			j := i + 1
+			for j < len(src) && isName(src[j], j == i+1) {
+				j++
+			}
+			tokens = append(tokens, token{kind: tVar, text: src[i+1 : j], pos: i})
+			i = j
 		case strings.IndexByte("()[]>?*+", c) >= 0:
 			kind := map[byte]tokenKind{'(': tOpen, ')': tClose, '[': tOpenAlt, ']': tCloseAlt, '>': tDirect, '?': tQuant, '*': tQuant, '+': tQuant}[c]
 			tokens = append(tokens, token{kind: kind, text: string(c), pos: i})
@@ -251,21 +271,67 @@ func Read(src string) (*Query, error) {
 	}
 	r := &reader{tokens: tokens}
 	q := &Query{}
+	joins := false
 	for r.peek().kind != tEOF {
+		if head := r.tokens[r.at+1]; r.peek().kind == tOpen && head.kind == tSymbol && head.text == "join" {
+			join, err := r.join()
+			if err != nil {
+				return nil, err
+			}
+			q.Terms = append(q.Terms, Term{Join: join})
+			joins = true
+			continue
+		}
 		p, err := r.pattern(true)
 		if err != nil {
 			return nil, err
 		}
-		q.Patterns = append(q.Patterns, p)
+		q.Terms = append(q.Terms, Term{Pattern: p})
 	}
-	if len(q.Patterns) == 0 {
+	if len(q.Terms) == 0 {
 		return nil, &Error{Offset: 0, Message: "empty query", Hint: `try (skill :id "NAME" (heading) @h)`}
 	}
 	q.Captures = r.captures
 	if len(q.Captures) == 0 {
+		if joins {
+			return nil, &Error{Offset: 0, Message: "a join prints its captures; name one with @", Hint: `e.g. (join (link :target ?s) @l (skill :id ?s))`}
+		}
 		q.Captures = []string{""}
 	}
 	return q, nil
+}
+
+func (r *reader) join() (*Join, error) {
+	open := r.next()
+	r.next()
+	join := &Join{}
+	for r.peek().kind != tClose {
+		switch t := r.peek(); {
+		case t.kind == tEOF:
+			return nil, &Error{Offset: open.pos, Message: "unclosed (join", Hint: "add the matching )"}
+		case t.kind == tOpen && r.tokens[r.at+1].kind == tSymbol && r.tokens[r.at+1].text == "not":
+			r.at += 2
+			p, err := r.pattern(true)
+			if err != nil {
+				return nil, err
+			}
+			if c := r.next(); c.kind != tClose {
+				return nil, r.unexpected(c, ") closing (not")
+			}
+			join.Absent = append(join.Absent, p)
+		default:
+			p, err := r.pattern(true)
+			if err != nil {
+				return nil, err
+			}
+			join.Members = append(join.Members, p)
+		}
+	}
+	r.next()
+	if len(join.Members) == 0 {
+		return nil, &Error{Offset: open.pos, Message: "a join needs a pattern", Hint: `e.g. (join (link :target ?s) @l (skill :id ?s))`}
+	}
+	return join, nil
 }
 
 func (r *reader) peek() token { return r.tokens[r.at] }
@@ -454,6 +520,23 @@ func (r *reader) attr(kind string) (Attr, error) {
 	known := slices.Concat(types[kind], textKeys)
 	if !openKeys(kind) && !slices.Contains(known, key.text) {
 		return attr, &Error{Offset: key.pos, Message: fmt.Sprintf("%s has no key :%s", kind, key.text), Hint: suggest(key.text, known) + "; keys: :" + strings.Join(known, " :")}
+	}
+	if value.kind == tOpen {
+		if not := r.next(); not.kind != tSymbol || not.text != "not" {
+			return attr, r.unexpected(not, "not, as in (not ?x) or (not \"value\")")
+		}
+		attr.Negate = true
+		value = r.next()
+		if c := r.next(); c.kind != tClose {
+			return attr, r.unexpected(c, ") closing (not")
+		}
+	}
+	if value.kind == tVar {
+		if key.text == "contains" || key.text == "matches" {
+			return attr, &Error{Offset: value.pos, Message: fmt.Sprintf(":%s takes a string, not a variable", key.text), Hint: "bind the text with :text ?x"}
+		}
+		attr.Var = value.text
+		return attr, nil
 	}
 	switch value.kind {
 	case tString, tSymbol, tInt:

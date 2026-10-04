@@ -596,6 +596,15 @@ $ henia query '(skill :id "code" (reaches (skill) @t))'
 @t  style-guide  skill
 ```
 
+Variables join patterns: a `(not P)` member of a join drops the rows for which
+P matches, here links whose section does not exist.
+
+```scrut
+$ mk "$L/tropos/skills/linker/SKILL.md" '---\nname: linker\ndescription: Links.\n---\n\n# Linker\n\nSee `henia show style-guide#go` and `henia show style-guide#rust`.\n'
+> henia query '(join (skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a)))))'
+@l  linker#linker  L3  link  `henia show style-guide#rust
+```
+
 A malformed query points at the problem and suggests a fix.
 
 ```scrut

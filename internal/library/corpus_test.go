@@ -12,7 +12,7 @@ func TestCorpus(t *testing.T) {
 	root := t.TempDir()
 	skills := filepath.Join(root, ProjectDir, SkillsDir)
 	write(t, filepath.Join(skills, "a", "SKILL.md"), "---\nname: a\ndescription: A.\n---\n\n# A\n\nUse `$b` and `henia show c#x`.\n")
-	write(t, filepath.Join(skills, "a", "ops", "run.md"), "# Run\n\nSee [b](../../b/SKILL.md) and [self](../SKILL.md).\n")
+	write(t, filepath.Join(skills, "a", "ops", "run.md"), "# Run\n\nSee [b](../../b/SKILL.md), [self](../SKILL.md#run) and [up](#top).\n")
 	write(t, filepath.Join(skills, "a", "run.sh"), "echo one\n\necho two\n")
 	write(t, filepath.Join(skills, "a", "blob.bin"), "\x00\x01")
 	write(t, filepath.Join(skills, "b", "SKILL.md"), "# B\n")
@@ -25,14 +25,14 @@ func TestCorpus(t *testing.T) {
 		case e.Type == "file":
 			files = append(files, e.Attrs["path"]+":"+e.Attrs["main"])
 		case e.Type == "link":
-			targets = append(targets, e.Attrs["target"])
+			targets = append(targets, e.Attrs["target"]+"/"+e.Attrs["path"]+"#"+e.Attrs["anchor"])
 		}
 		return true
 	})
 	if got := strings.Join(files, " "); got != "SKILL.md:true ops/run.md:false run.sh:false" {
 		t.Errorf("files = %s", got)
 	}
-	if got := strings.Join(targets, " "); got != "b c b " {
+	if got := strings.Join(targets, " "); got != "b/SKILL.md# c/SKILL.md#x b/SKILL.md# a/SKILL.md#run a/ops/run.md#top" {
 		t.Errorf("targets = %q", got)
 	}
 	main := a.Children[0]

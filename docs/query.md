@@ -12,6 +12,8 @@ henia query '(section :id "usage" (code :lang "bash") @c)'
 henia query '(skill (link :target "gestalt")) @s'
 henia query '(skill :id "gestalt" (reaches (skill) @t))'
 henia query '(skill (not (inbound (skill)))) @orphan'
+henia query '(join (skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a)))))'
+henia query '(join (skill :id ?x (heading :text ?t) @a) (skill :id (not ?x) (heading :text ?t) @b))'
 henia query '(skill :id "gestalt" > (file :main true (heading :level 1..2) @h))'
 henia query '(section > (heading) @title (code :lang "bash") @c)'
 henia query '(skill :id "gestalt" (link :url /^https:/) @l)'
@@ -28,7 +30,7 @@ henia query '(skill :id "gestalt" (link :url /^https:/) @l)'
 | `paragraph`, `item`, `quote`, `table` | |
 | `list` | `:ordered` |
 | `code` | `:lang` |
-| `link` | `:url`, `:target` (skill named by `` `$name` ``, `` `henia show name` `` or `../name/SKILL.md`) |
+| `link` | `:url`; for links into a skill also `:target` (skill name), `:path` (file in it) and `:anchor` (section id), from `` `$name` ``, `` `henia show name/path#anchor` ``, relative paths and `#anchor` |
 | `directive` | `:name` and its attributes |
 | `frontmatter` | its scalar keys |
 | `_` | any type, any key |
@@ -37,6 +39,9 @@ Every type also takes `:text "exact"`, `:contains "case-insensitive"` and
 `:matches "go regexp"`. `:level` takes a number or a range such as `1..3`.
 Other values compare exactly; quote them with `"`, or leave single words bare.
 A `/regexp/` value matches any key, as in `:url /^https:/` or `:title /^Phase/`.
+A `?variable` value binds the key's value; every other use of the variable must
+be equal, which joins the patterns that share it. `(not value)` negates a
+value, as in `:lang (not "go")` or `:id (not ?x)`.
 
 A section holds its heading and everything up to the next heading of the same
 or a higher level. Files other than Markdown hold blank-line-separated
@@ -45,9 +50,12 @@ paragraphs.
 ## Grammar
 
 ```
-query    := pattern+                        ; rows of every pattern, united
+query    := (pattern | join)+                ; rows of every term, united
+join     := "(" "join" (pattern | "(" "not" pattern ")")+ ")"
 pattern  := "(" type item* ")" quant? capture?
           | "[" pattern+ "]" quant? capture?  ; alternatives
+value    := "string" | word | number | range | /regexp/ | ?variable
+          | "(" "not" value ")"
 item     := :key value | capture | pattern | ">" pattern | "."
           | "(" "not" (pattern | relation) ")" | relation
 relation := "(" ("reaches" | "inbound") pattern ")"
@@ -67,6 +75,11 @@ comment  := ";" to the end of the line
   and `(not (inbound P))` reject a skill with such a related skill.
 - `(reaches P)` inside a `skill` matches the skills its links reach,
   transitively; `(inbound P)` matches the skills whose links reach it.
+- `(join P...)` returns the rows of its patterns that agree on shared
+  variables; a `(not P)` member drops rows for which P matches with the same
+  variables. A join prints its captures only.
+- A variable inside `(not P)` within a pattern refers to the same variable
+  outside it, so `(not P)` rejects only matches that agree.
 - A capture names a result column; a query without captures prints the matched
   node.
 
@@ -80,5 +93,7 @@ reads the enclosing section with `henia show`: `skill/path#section  L12-14`.
 Skills are read as rendered for the caller, as `henia show` prints them:
 templates are resolved, references take the harness's syntax, and lines count
 from the top of the rendered text. `--harness` picks another harness;
-`--canonical` reads skills as authored, with lines in the files on disk.
+`--canonical` reads skills as authored, with lines in the files on disk; there a
+template action that opens a code fence or heading in one branch leaves the
+Markdown after it unstructured.
 Resources are never rendered.
