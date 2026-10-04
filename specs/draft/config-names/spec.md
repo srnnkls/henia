@@ -140,8 +140,8 @@ may not invoke render as `henia show <skill>`.
 
 ### Migration
 
-Old keys load for one release with a deprecation warning naming the new key;
-`henia lint` reports them. Tropos migrates in the same release.
+None: the previous keys are unknown keys, and loading fails with a list of
+them. Tropos migrates in the same release.
 
 ## Non-goals
 

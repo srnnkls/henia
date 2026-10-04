@@ -17,7 +17,7 @@ func TestRoundTripKeepsFalseEmptyAndExtra(t *testing.T) {
 }
 
 func TestCanonicalRejectsIncorrectTypes(t *testing.T) {
-	for key, value := range map[string]any{"name": 42, "enabled": "false", "tools": "read", "tools_policy": true, "user_invocable": "false"} {
+	for key, value := range map[string]any{"name": 42, "enabled": "false", "tools": "read", "tools_policy": true} {
 		input := map[string]any{"name": "example", key: value}
 		if _, err := Parse(input); err == nil {
 			t.Fatalf("accepted %s: %v", key, value)

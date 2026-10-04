@@ -39,15 +39,6 @@ func TestBuildOnlyConfigKeepsProfiles(t *testing.T) {
 	}
 }
 
-func TestRejectDeploymentSettings(t *testing.T) {
-	for _, input := range []string{"[sources.team]\nrepo='owner/repo'\n", "[harness.claude]\npath='.claude'\n"} {
-		_, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte(input))
-		if err == nil || !strings.Contains(err.Error(), "Phora") {
-			t.Fatalf("want actionable migration error: %v", err)
-		}
-	}
-}
-
 func TestFindRejectsTwoProjectConfigs(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := Find(dir); !errors.Is(err, os.ErrNotExist) {

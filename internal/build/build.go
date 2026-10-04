@@ -307,12 +307,8 @@ func Served(all, projected []*artifact.Artifact) map[string]bool {
 }
 
 func Invocable(frontmatter map[string]any) bool {
-	auto, set := frontmatter["auto_invoke"].(bool)
-	if settings, ok := frontmatter["henia"].(map[string]any); ok {
-		if value, ok := settings["auto_invoke"].(bool); ok {
-			auto, set = value, true
-		}
-	}
+	settings, _ := frontmatter["henia"].(map[string]any)
+	auto, set := settings["auto_invoke"].(bool)
 	return !set || auto
 }
 

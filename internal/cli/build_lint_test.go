@@ -34,7 +34,7 @@ func TestBuildMultipleHarnesses(t *testing.T) {
 	root := t.TempDir()
 	fixture(t, filepath.Join(root, "skills/example/SKILL.md"), "---\nname: example\ndescription: Example\npriority: critical\n---\n\n:::instruction{priority={{.priority}}}\nUse `!read`.\n:::\n")
 	fixture(t, filepath.Join(root, "skills/example/reference/guide.md"), "# Guide\n")
-	testConfig(t, "[harness.claude]\nformat = 'xml'\n[harness.claude.tools]\nread = 'Read'\n[harness.codex]\nformat = 'directives'\n")
+	testConfig(t, "[harness.claude]\ndirectives = 'xml'\n[harness.claude.tools]\nread = 'Read'\n[harness.codex]\ndirectives = 'keep'\n")
 	output := filepath.Join(t.TempDir(), "out")
 	cmd := newBuildCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -72,7 +72,7 @@ func TestBuildPreflightAndSelection(t *testing.T) {
 	root := t.TempDir()
 	fixture(t, filepath.Join(root, "skills/a.md"), "# Valid\n")
 	fixture(t, filepath.Join(root, "skills/z.md"), ":::broken\n")
-	testConfig(t, "[harness.claude]\nformat = 'xml'\n")
+	testConfig(t, "[harness.claude]\ndirectives = 'xml'\n")
 	output := filepath.Join(t.TempDir(), "out")
 	cmd := newBuildCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -293,10 +293,10 @@ func sourceConfigFixture(t *testing.T, sourceConfig bool) string {
 	source := t.TempDir()
 	fixture(t, filepath.Join(source, "skills/example/SKILL.md"), "---\nname: example\ndescription: Example\n---\n# Example\n")
 	if sourceConfig {
-		fixture(t, filepath.Join(source, "henia.toml"), "[build]\noutput = 'artifacts'\n[harness.source-only]\nformat = 'markdown'\n")
+		fixture(t, filepath.Join(source, "henia.toml"), "[build]\noutput = 'artifacts'\n[harness.source-only]\ndirectives = 'markdown'\n")
 	}
 	cwd := t.TempDir()
-	fixture(t, filepath.Join(cwd, "henia.toml"), "[harness.cwd-only]\nformat = 'markdown'\n")
+	fixture(t, filepath.Join(cwd, "henia.toml"), "[harness.cwd-only]\ndirectives = 'markdown'\n")
 	t.Chdir(cwd)
 	return source
 }
@@ -337,7 +337,7 @@ func TestBuildReadsSourceConfig(t *testing.T) {
 func TestBuildExplicitConfigOverridesSourceConfig(t *testing.T) {
 	source := sourceConfigFixture(t, true)
 	explicit := filepath.Join(t.TempDir(), "explicit.toml")
-	fixture(t, explicit, "[harness.explicit-only]\nformat = 'markdown'\n")
+	fixture(t, explicit, "[harness.explicit-only]\ndirectives = 'markdown'\n")
 	output := filepath.Join(t.TempDir(), "out")
 	if err := executeBuild(t, "--config", explicit, source, "--output", output); err != nil {
 		t.Fatal(err)

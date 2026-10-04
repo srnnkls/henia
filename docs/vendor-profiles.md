@@ -11,15 +11,15 @@ strict = true
 
 Canonical metadata follows Agent Skills (`name`, `description`, `license`,
 `compatibility`, string-valued `metadata`) and adds `model_tier`, `tools`,
-`tools_policy`, `enabled` and `user_invocable` for transforms. Unknown author fields
+`tools_policy` and `enabled` for transforms. Unknown author fields
 remain available to templates. A profile diagnoses and omits fields it cannot
 represent. `strict = true` turns these warnings into build failures. Canonical
 type errors and malformed target metadata always fail compilation.
 
 `henia.variables` holds template-only data. `henia.auto_invoke` and
 `henia.user_invocable` express portable invocation preferences where supported.
-Profiles without corresponding behavior issue a diagnostic. Top-level
-`auto_invoke`/`user_invocable` are also accepted. A target-specific value wins;
+Profiles without corresponding behavior issue a diagnostic. A target-specific
+value wins;
 setting it to YAML `null` suppresses an inherited preference for that target.
 
 ```yaml

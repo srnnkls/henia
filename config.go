@@ -23,22 +23,21 @@ type Artifacts struct {
 }
 
 type Harness struct {
-	Files                      map[string]File   `toml:"files,omitempty"`
-	Profile                    string            `toml:"profile,omitempty"`
-	Strict                     bool              `toml:"strict,omitempty"`
-	Directives                 string            `toml:"directives,omitempty"`
-	Layout                     string            `toml:"layout,omitempty"`
-	GenerateCommandsFromSkills bool              `toml:"generate_commands_from_skills,omitempty"`
-	Artifacts                  []string          `toml:"artifacts,omitempty"`
-	Frontmatter                Frontmatter       `toml:"frontmatter,omitempty"`
-	Variables                  map[string]string `toml:"variables,omitempty"`
-	Tools                      map[string]string `toml:"tools,omitempty"`
-	References                 map[string]string `toml:"references,omitempty"`
-	Skills                     Artifacts         `toml:"skills,omitempty"`
-	Agents                     Artifacts         `toml:"agents,omitempty"`
-	Commands                   Artifacts         `toml:"commands,omitempty"`
-	ProjectRoot                string            `toml:"-"`
-	UserRoot                   string            `toml:"-"`
+	Files       map[string]File   `toml:"files,omitempty"`
+	Profile     string            `toml:"profile,omitempty"`
+	Strict      bool              `toml:"strict,omitempty"`
+	Directives  string            `toml:"directives,omitempty"`
+	Layout      string            `toml:"layout,omitempty"`
+	Artifacts   []string          `toml:"artifacts,omitempty"`
+	Frontmatter Frontmatter       `toml:"frontmatter,omitempty"`
+	Variables   map[string]string `toml:"variables,omitempty"`
+	Tools       map[string]string `toml:"tools,omitempty"`
+	References  map[string]string `toml:"references,omitempty"`
+	Skills      Artifacts         `toml:"skills,omitempty"`
+	Agents      Artifacts         `toml:"agents,omitempty"`
+	Commands    Artifacts         `toml:"commands,omitempty"`
+	ProjectRoot string            `toml:"-"`
+	UserRoot    string            `toml:"-"`
 }
 
 func (h Harness) Type(dir string) Artifacts {

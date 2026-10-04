@@ -195,11 +195,6 @@ func (c *Compiler) Compile(directory string, input map[string]any, context Conte
 		return nil, err
 	}
 	for _, key := range []string{"auto_invoke", "user_invocable"} {
-		if value, exists := input[key]; exists {
-			if _, set := settings[key]; !set {
-				settings[key] = value
-			}
-		}
 		if value, exists := native[key]; exists {
 			settings[key] = value
 		}
@@ -235,9 +230,6 @@ func (c *Compiler) Compile(directory string, input map[string]any, context Conte
 	}
 	fm := maps.Clone(input)
 	delete(fm, "henia")
-	for _, key := range []string{"auto_invoke", "user_invocable"} {
-		delete(fm, key)
-	}
 	for _, key := range slices.Sorted(maps.Keys(c.profile.Aliases)) {
 		value, exists := fm[key]
 		if !exists {

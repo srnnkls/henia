@@ -34,19 +34,6 @@ custom = "project"
 	}
 }
 
-func TestLegacyConfigDoesNotOptIntoProfile(t *testing.T) {
-	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte("[harness.claude]\nformat='xml'\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Harness["claude"].Profile != "" {
-		t.Fatal("legacy config unexpectedly enabled profile")
-	}
-	if len(cfg.Harness["claude"].Artifacts) != 0 || len(cfg.Artifacts) != 0 {
-		t.Fatal("legacy config inherited the skill-only profile filter")
-	}
-}
-
 func TestRuleConfigRejectsUnknownKeys(t *testing.T) {
 	_, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte(`[[lint.rules]]
 id = "example"

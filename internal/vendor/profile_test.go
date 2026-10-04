@@ -55,9 +55,9 @@ func TestComputedVendorMappings(t *testing.T) {
 description: Example skill
 model_tier: strong
 tools: [read]
-user_invocable: false
 henia:
   auto_invoke: false
+  user_invocable: false
 `)
 	want := map[string]any{"name": "example", "description": "Example skill", "model": "opus", "allowed-tools": "Read", "disable-model-invocation": true, "user-invocable": false}
 	if !reflect.DeepEqual(result.Frontmatter, want) || len(result.Warnings) != 0 {

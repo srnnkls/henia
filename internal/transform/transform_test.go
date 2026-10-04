@@ -117,7 +117,7 @@ func TestTransformArtifact(t *testing.T) {
 		Variables: map[string]string{
 			"model_strong": "opus",
 		},
-		Mappings: map[string]string{
+		Keys: map[string]string{
 			"allowed_tools": "tools",
 		},
 	}

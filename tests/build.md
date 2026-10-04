@@ -113,9 +113,7 @@ guide.md
 ```scrut
 $ cat /tmp/henia-test-build/claude/skills/test-skill/SKILL.md
 ---
-allowed_tools:
-  - bash
-  - read
+allowed-tools: Bash Read
 description: Test skill for integration tests
 model: opus
 name: test-skill
@@ -180,42 +178,42 @@ name: test-agent
 This agent validates test results.
 ```
 
-## Build To OpenCode (Flat Structure)
+## Build To A Custom Flat Harness
 
 ```scrut
-$ rm -rf /tmp/henia-test-build/opencode && henia build "$TESTDIR/fixtures/simple-source" --config "$TESTDIR/fixtures/henia-opencode.toml" --output /tmp/henia-test-build 2>&1
+$ rm -rf /tmp/henia-test-build/flat-agent && henia build "$TESTDIR/fixtures/simple-source" --config "$TESTDIR/fixtures/henia-flat.toml" --output /tmp/henia-test-build 2>&1
 Built 3 artifact(s) in /tmp/henia-test-build
 ```
 
-## Verify OpenCode Directory Structure (Flat)
+## Verify Flat Directory Structure
 
 ```scrut
-$ ls -R /tmp/henia-test-build/opencode | sed "1{/:$/d;}"
+$ ls -R /tmp/henia-test-build/flat-agent | sed "1{/:$/d;}"
 agents
 commands
 skills
 
-/tmp/henia-test-build/opencode/agents:
+/tmp/henia-test-build/flat-agent/agents:
 test-agent.md
 
-/tmp/henia-test-build/opencode/commands:
+/tmp/henia-test-build/flat-agent/commands:
 test-command.md
 
-/tmp/henia-test-build/opencode/skills:
+/tmp/henia-test-build/flat-agent/skills:
 test-skill
 test-skill.md
 
-/tmp/henia-test-build/opencode/skills/test-skill:
+/tmp/henia-test-build/flat-agent/skills/test-skill:
 reference
 
-/tmp/henia-test-build/opencode/skills/test-skill/reference:
+/tmp/henia-test-build/flat-agent/skills/test-skill/reference:
 guide.md
 ```
 
-## Verify OpenCode Key Mapping (allowed_tools -> tools)
+## Verify Frontmatter Rename (allowed_tools -> tools)
 
 ```scrut
-$ cat /tmp/henia-test-build/opencode/skills/test-skill.md
+$ cat /tmp/henia-test-build/flat-agent/skills/test-skill.md
 ---
 description: Test skill for integration tests
 model: anthropic/claude-sonnet-4-5
@@ -240,10 +238,10 @@ Run `bash` to execute tests.
 3. Test with tool reference
 ```
 
-## Verify OpenCode Command
+## Verify Flat Command
 
 ```scrut
-$ cat /tmp/henia-test-build/opencode/commands/test-command.md
+$ cat /tmp/henia-test-build/flat-agent/commands/test-command.md
 ---
 description: Test command using anthropic/claude-haiku-4-5
 name: test-command
@@ -254,10 +252,10 @@ name: test-command
 Execute test command using `bash` tool.
 ```
 
-## Verify OpenCode Agent
+## Verify Flat Agent
 
 ```scrut
-$ cat /tmp/henia-test-build/opencode/agents/test-agent.md
+$ cat /tmp/henia-test-build/flat-agent/agents/test-agent.md
 ---
 description: Test agent for validation
 model: anthropic/claude-haiku-4-5
@@ -272,7 +270,7 @@ This agent validates test results.
 ## Rebuild Succeeds
 
 ```scrut
-$ henia build "$TESTDIR/fixtures/simple-source" --config "$TESTDIR/fixtures/henia-opencode.toml" --output /tmp/henia-test-build 2>&1
+$ henia build "$TESTDIR/fixtures/simple-source" --config "$TESTDIR/fixtures/henia-flat.toml" --output /tmp/henia-test-build 2>&1
 Built 3 artifact(s) in /tmp/henia-test-build
 ```
 

@@ -197,8 +197,8 @@ declaring harnesses selects only those entries. `--harness` narrows that selecti
 
 Henia consumes local directories and writes build artifacts. It has no `add`,
 `sync`, `update` or `deploy` command, source registry, deployment lock or Phora
-library dependency. Migrate old `[sources]` entries and harness installation
-`path` settings into Phora configuration; use `[build].output` for compilation.
+library dependency; installation paths belong in Phora configuration, and
+`[build].output` sets where compilation writes.
 
 Phora can invoke `henia build` from a hook and consume each harness output as a
 local source. See the [Phora integration guide](docs/phora.md) for the phase order
@@ -209,10 +209,11 @@ Config merges bundled defaults, `~/.config/henia/henia.toml`, then project
 `<source>/henia.toml` when present, else `./henia.toml`; `--config` always wins.
 Relative paths in a project config resolve against its directory, and `--output`,
 `--clean` and `--harness` override its settings. `henia lint` reads
-`--config` or `./henia.toml`. Tables merge recursively, scalars override (including `false`), and
-arrays concatenate. Existing explicit harness configurations without `profile`
-retain the legacy key/value mapper. Legacy flat output, command and agent artifacts
-remain available through explicit configuration; the researched profiles target skills.
+`--config` or `./henia.toml`. Tables merge recursively, scalars override
+(including `false`), and arrays concatenate. A declared harness with a bundled
+name inherits that preset, including its profile. Harnesses build skills unless
+their `artifacts` (or the top-level `artifacts`) add `commands` or `agents`.
+Unknown keys are errors.
 
 All transformations and output collisions are checked before writing. Generated
 paths are relative to the harness root; writes cannot follow symlinks outside it.

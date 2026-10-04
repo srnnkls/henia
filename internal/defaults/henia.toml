@@ -5,7 +5,6 @@ artifacts = ["skills"]
 profile = "claude"
 directives = "xml"
 layout = "nested"
-artifacts = ["skills"]
 
 [harness.claude.variables]
 model_strong = "opus"
@@ -28,13 +27,11 @@ skill = "/{{.Name}}"
 profile = "claude-upload"
 directives = "xml"
 layout = "nested"
-artifacts = ["skills"]
 
 [harness.codex]
 profile = "codex"
 directives = "keep"
 layout = "nested"
-artifacts = ["skills"]
 
 [harness.codex.references]
 skill = "${{.Name}}"
@@ -43,7 +40,6 @@ skill = "${{.Name}}"
 profile = "chatgpt"
 directives = "keep"
 layout = "nested"
-artifacts = ["skills"]
 
 [harness.chatgpt.references]
 skill = "@{{.Name}}"
@@ -52,7 +48,6 @@ skill = "@{{.Name}}"
 profile = "opencode"
 directives = "keep"
 layout = "nested"
-artifacts = ["skills"]
 
 [harness.opencode.references]
 skill = 'skill({name: "{{.Name}}"})'
@@ -61,7 +56,6 @@ skill = 'skill({name: "{{.Name}}"})'
 profile = "gemini"
 directives = "keep"
 layout = "nested"
-artifacts = ["skills"]
 
 [harness.gemini.references]
 skill = 'activate_skill({name: "{{.Name}}"})'
@@ -70,13 +64,11 @@ skill = 'activate_skill({name: "{{.Name}}"})'
 profile = "github"
 directives = "keep"
 layout = "nested"
-artifacts = ["skills"]
 
 [harness.cursor]
 profile = "cursor"
 directives = "keep"
 layout = "nested"
-artifacts = ["skills"]
 
 [harness.cursor.references]
 skill = "/{{.Name}}"
@@ -85,4 +77,3 @@ skill = "/{{.Name}}"
 profile = "agentskills"
 directives = "keep"
 layout = "nested"
-artifacts = ["skills"]

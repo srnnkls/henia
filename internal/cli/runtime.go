@@ -197,7 +197,7 @@ exits successfully so a skill preload never aborts.`,
 func declaresPreload(lib *library.Library, entry library.Entry, command string) bool {
 	harnesses := []string{""}
 	if data, err := os.ReadFile(entry.Origin.Config); err == nil {
-		if configured, _, err := config.Harnesses(data); err == nil {
+		if configured, err := config.Harnesses(data); err == nil {
 			harnesses = append(harnesses, slices.Sorted(maps.Keys(configured))...)
 		}
 	}
@@ -450,7 +450,7 @@ func (r *renderer) body(e library.Entry) string {
 	name := ""
 	sourceConfig := r.config(e.Origin.Config)
 	if r.harness != "" && sourceConfig != nil {
-		if harnesses, _, err := config.Harnesses(sourceConfig); err == nil {
+		if harnesses, err := config.Harnesses(sourceConfig); err == nil {
 			if h, ok := harnesses[r.harness]; ok {
 				harness, name = h, r.harness
 				harness.ProjectRoot, harness.UserRoot = e.Origin.ProjectRoot(), library.ConfigDir()

@@ -38,9 +38,6 @@ func newBuildCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			for _, warning := range cfg.Warnings {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s\n", warning)
-			}
 			harnesses := cfg.Harness
 			if len(harnesses) == 0 {
 				return fmt.Errorf("no harnesses configured")

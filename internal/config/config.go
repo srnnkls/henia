@@ -2,10 +2,12 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/srnnkls/henia"
@@ -22,7 +24,6 @@ type Config struct {
 	Harness   map[string]henia.Harness `toml:"harness,omitempty"`
 	Preload   preload.Settings         `toml:"preload,omitempty"`
 	Resources ResourceOptions          `toml:"resources,omitempty"`
-	Warnings  []string                 `toml:"-"`
 }
 
 type ResourceOptions struct {
@@ -92,7 +93,6 @@ func loadLayers(path string, projectData []byte) (*Config, error) {
 
 func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*Config, error) {
 	var base, user, project map[string]any
-	var warnings []string
 	for _, layer := range []struct {
 		data []byte
 		out  *map[string]any
@@ -102,30 +102,12 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		if err := toml.Unmarshal(layer.data, layer.out); err != nil {
 			return nil, err
 		}
-		migrated, err := migrateHarnesses(*layer.out)
-		if err != nil {
-			return nil, err
-		}
-		warnings = append(warnings, migrated...)
-		if _, ok := (*layer.out)["sources"]; ok {
-			return nil, fmt.Errorf("source fetching belongs to Phora; remove [sources] from henia.toml and pass a local directory to henia build")
-		}
-		if harnesses, ok := (*layer.out)["harness"].(map[string]any); ok {
-			for name, value := range harnesses {
-				if harness, ok := value.(map[string]any); ok {
-					if _, exists := harness["path"]; exists {
-						return nil, fmt.Errorf("harness.%s.path is a deployment setting; use [build].output for artifacts and configure final destinations in Phora", name)
-					}
-				}
-			}
-		}
 	}
 	// Explicit configurations select their harnesses. Merge each selected harness
 	// with its preset when harnesses are explicitly selected.
 	userHarnesses, _ := user["harness"].(map[string]any)
 	projectHarnesses, _ := project["harness"].(map[string]any)
 	if len(userHarnesses) > 0 || len(projectHarnesses) > 0 {
-		delete(base, "artifacts")
 		selected := map[string]any{}
 		for _, layer := range []map[string]any{user, project} {
 			if harnesses, ok := layer["harness"].(map[string]any); ok {
@@ -137,24 +119,8 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 			}
 		}
 		base["harness"] = selected
-		// Existing explicit configurations remain on the legacy mapper until they
-		// opt into a profile. New builds without configuration use all vendor profiles.
 		for name, value := range selected {
-			preset := maps.Clone(value.(map[string]any))
-			explicit := false
-			for _, layer := range []map[string]any{user, project} {
-				if harnesses, ok := layer["harness"].(map[string]any); ok {
-					if harness, ok := harnesses[name].(map[string]any); ok {
-						if _, ok := harness["profile"]; ok {
-							explicit = true
-						}
-					}
-				}
-			}
-			if !explicit {
-				preset = map[string]any{}
-			}
-			selected[name] = preset
+			selected[name] = maps.Clone(value.(map[string]any))
 		}
 	}
 	// Resolve filesystem settings in the layer that declares them, so defaults do
@@ -180,6 +146,14 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 	}
 	var cfg Config
 	if err := toml.NewDecoder(bytes.NewReader(data)).DisallowUnknownFields().Decode(&cfg); err != nil {
+		var unknown *toml.StrictMissingError
+		if errors.As(err, &unknown) {
+			var keys []string
+			for _, e := range unknown.Errors {
+				keys = append(keys, strings.Join(e.Key(), "."))
+			}
+			return nil, fmt.Errorf("unknown henia.toml keys: %s", strings.Join(keys, ", "))
+		}
 		return nil, err
 	}
 	if cfg.Build.Output == "" {
@@ -207,7 +181,6 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 			return nil, fmt.Errorf("harness %s: skill profiles require the nested layout", name)
 		}
 	}
-	cfg.Warnings = warnings
 	if err := cfg.Lint.Validate(); err != nil {
 		return nil, err
 	}

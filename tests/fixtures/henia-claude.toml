@@ -1,6 +1,7 @@
 artifacts = ["skills", "commands", "agents"]
 
 [harness.claude]
+artifacts = ["skills", "commands", "agents"]
 layout = "nested"
 
 [harness.claude.variables]

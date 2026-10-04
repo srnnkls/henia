@@ -7,14 +7,13 @@ import (
 )
 
 type Frontmatter struct {
-	Name          string
-	Description   *string
-	ModelTier     *string
-	Tools         []string
-	ToolsPolicy   map[string]any
-	Enabled       *bool
-	UserInvocable *bool
-	Extra         map[string]any
+	Name        string
+	Description *string
+	ModelTier   *string
+	Tools       []string
+	ToolsPolicy map[string]any
+	Enabled     *bool
+	Extra       map[string]any
 }
 
 func Parse(input map[string]any) (*Frontmatter, error) {
@@ -35,7 +34,7 @@ func Parse(input map[string]any) (*Frontmatter, error) {
 			delete(c.Extra, key)
 		}
 	}
-	for key, dest := range map[string]**bool{"enabled": &c.Enabled, "user_invocable": &c.UserInvocable} {
+	for key, dest := range map[string]**bool{"enabled": &c.Enabled} {
 		if value, exists := input[key]; exists {
 			flag, ok := value.(bool)
 			if !ok {
@@ -98,9 +97,6 @@ func (c *Frontmatter) ToMap() map[string]any {
 	}
 	if c.Enabled != nil {
 		result["enabled"] = *c.Enabled
-	}
-	if c.UserInvocable != nil {
-		result["user_invocable"] = *c.UserInvocable
 	}
 	return result
 }

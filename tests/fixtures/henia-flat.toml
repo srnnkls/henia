@@ -1,19 +1,19 @@
 artifacts = ["skills", "commands", "agents"]
 
-[harness.opencode]
+[harness.flat-agent]
 layout = "flat"
 
-[harness.opencode.frontmatter.rename]
+[harness.flat-agent.frontmatter.rename]
 allowed_tools = "tools"
 
-[harness.opencode.variables]
+[harness.flat-agent.variables]
 model_strong = "anthropic/claude-sonnet-4-5"
 model_weak = "anthropic/claude-haiku-4-5"
 
-[harness.opencode.tools]
+[harness.flat-agent.tools]
 bash = "bash"
 read = "read"
 write = "write"
 
-[harness.opencode.references]
+[harness.flat-agent.references]
 skill = "@{{.Name}}"

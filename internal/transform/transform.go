@@ -25,7 +25,6 @@ type Transformer struct {
 	Context      vendor.Context
 	OutputFormat string
 	Variables    map[string]string
-	Mappings     map[string]string
 	Keys         map[string]string
 	Values       map[string]map[string]string
 	References   map[string]ReferenceConfig
@@ -123,11 +122,7 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		result.Frontmatter[k] = transformed
 	}
 
-	keyMappings := t.Mappings
-	if t.Keys != nil {
-		keyMappings = t.Keys
-	}
-	result.Frontmatter = ApplyMappings(result.Frontmatter, keyMappings)
+	result.Frontmatter = ApplyMappings(result.Frontmatter, t.Keys)
 
 	result.Frontmatter = ApplyValueMappings(result.Frontmatter, t.Values)
 	if (art.Type == artifact.TypeSkill || art.Type == artifact.TypeAgent) && t.Profile != "" {
