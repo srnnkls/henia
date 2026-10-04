@@ -9,10 +9,11 @@ that agent.
 | Library | Installed canonical skill sources, as authored |
 | Source | One tree of `skills/` plus the `henia.toml` that renders them |
 | Runtime | Resolves, composes, renders, caches and serves library skills |
-| Projection | The entry skills `henia build` compiles into one harness |
+| Static skill | Compiled by `henia build` into one harness's skill tree |
+| Dynamic skill | Not built for that harness; read with `henia show` |
 
-Whether a harness lists a skill is the consumer's choice, made in its harness
-configuration, never in the skill.
+Whether a skill is static or dynamic is decided per harness in the source's
+`henia.toml`, never in the skill.
 
 ## Library
 
@@ -57,7 +58,7 @@ henia preload --skill <skill> -- <command>
   invoke keep its syntax; others, including projected skills with
   `auto_invoke: false`, render as `henia show <skill>`. Without a caller, rendering is neutral.
   Output over the budget prints the sections instead.
-- `context` prints a skill's dynamic context for a preload: the providers of the
+- `context` prints a skill's runtime context for a preload: the providers of the
   slots it applies and the sections of the library skills it references. It
   never repeats the skill's own text.
 - Renders are cached by content under `$XDG_CACHE_HOME/henia/render`;
@@ -130,20 +131,30 @@ When [FAS](https://github.com/srnnkls/fas) is on PATH, Henia also asks
 `fas eval --harness henia` after its own check, so existing rule sets can
 refuse more; its rule name appears as `blocked by fas/<rule>`.
 
-## Projection
+## Static and dynamic skills
 
-`henia build` compiles a source's skills for each configured harness. A
-harness's `include` list selects its entry skills; references to skills outside
-it render as `henia show` commands.
+A skill is static or dynamic per harness. `henia build` compiles static skills
+into the harness's skill tree, where the harness lists and loads them; dynamic
+skills are not built and are read with `henia show`. The source's `henia.toml`
+decides, per harness, with one of two lists:
 
 ```toml
-[harness.claude]
-include = ["code", "implement", "review"]
+[harness.claude.skills]
+dynamic = ["debate", "loqui"]       # these are dynamic; the rest are built
+# static = ["code", "implement"]    # or: only these are built
+
 ```
 
-Harnesses truncate skill listings early, so project at most about ten entry
-skills, and name the runtime in the always-loaded instructions, for example:
-"Skills beyond those listed are read with `henia ls` and `henia show`."
+Setting both is an error; setting neither builds every skill. References to
+dynamic skills render as `henia show` commands.
+
+When a harness has dynamic skills, the build adds a generated `henia` skill, the
+catalog skill, that names each one with its description and tells the agent to
+read it with `henia show`. Set `catalog = false` in `[harness.<name>.skills]`
+when the source's own instructions already describe the runtime.
+
+Harnesses truncate skill listings early, so keep about ten skills static per
+harness.
 
 ## Guarding
 

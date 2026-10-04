@@ -12,7 +12,7 @@ Usage:
 Available Commands:
   build       Compile local canonical artifacts for multiple harnesses
   completion  Generate the autocompletion script for the specified shell
-  context     Print a skill's dynamic context
+  context     Print a skill's runtime context
   help        Help about any command
   lint        Check skill metadata, references, duplication and freshness
   ls          List the skills in the library

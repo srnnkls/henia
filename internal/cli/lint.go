@@ -38,6 +38,9 @@ func newLintCommand() *cobra.Command {
 				}
 				options = cfg.Lint
 			}
+			for _, warning := range cfg.Warnings {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s\n", warning)
+			}
 			options.Disable = append(options.Disable, disabled...)
 			diagnostics, err := lint.Run(cmd.Context(), args, options)
 			if err != nil {

@@ -6,7 +6,7 @@ ref = "main"
 
 [harness.claude]
 path = "/tmp/henia-test-claude"
-structure = "nested"
+layout = "nested"
 
 [harness.claude.variables]
 model_strong = "opus"
@@ -18,18 +18,16 @@ bash = "Bash"
 read = "Read"
 write = "Write"
 
-[harness.claude.references.skill]
-output = "/{{.Name}}"
-
-[harness.claude.references.command]
-output = "/{{.Name}}"
+[harness.claude.references]
+skill = "/{{.Name}}"
+command = "/{{.Name}}"
 
 [harness.opencode]
 path = "/tmp/henia-test-opencode"
-structure = "flat"
+layout = "flat"
 generate_commands_from_skills = true
 
-[harness.opencode.keys]
+[harness.opencode.frontmatter.rename]
 allowed_tools = "tools"
 
 [harness.opencode.variables]
@@ -41,5 +39,5 @@ bash = "bash"
 read = "read"
 write = "write"
 
-[harness.opencode.references.skill]
-output = "@{{.Name}}"
+[harness.opencode.references]
+skill = "@{{.Name}}"

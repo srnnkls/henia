@@ -65,12 +65,14 @@ model: strong
 	harnesses := map[string]henia.Harness{
 		"claude": {
 			Artifacts: []string{"skills"},
-			Keys: map[string]string{
-				"model": "model_preference",
-			},
-			Values: map[string]map[string]string{
-				"model_preference": {
-					"strong": "opus",
+			Frontmatter: henia.Frontmatter{
+				Rename: map[string]string{
+					"model": "model_preference",
+				},
+				Values: map[string]map[string]string{
+					"model_preference": {
+						"strong": "opus",
+					},
 				},
 			},
 		},

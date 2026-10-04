@@ -10,6 +10,9 @@ import (
 //go:embed henia.toml
 var ConfigTOML string
 
+//go:embed catalog.md
+var CatalogBody string
+
 type Config struct {
 	Artifacts []string                 `toml:"artifacts,omitempty"`
 	Harness   map[string]henia.Harness `toml:"harness,omitempty"`

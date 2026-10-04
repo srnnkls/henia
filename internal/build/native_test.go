@@ -35,7 +35,7 @@ func TestNativeAgentsAndSupportingDocuments(t *testing.T) {
 		}
 		harnesses[name] = henia.Harness{
 			ProjectRoot: root, Profile: name, Strict: true,
-			ArtifactMappings: map[string]henia.ArtifactMapping{"agents": {Profile: profile, Structure: "flat"}},
+			Agents: henia.Artifacts{Profile: profile, Layout: "flat"},
 			Files: map[string]henia.File{
 				"instructions/AGENTS.md": {Source: "instructions/AGENTS.md"},
 				entry:                    {Source: "instructions/AGENTS.md", Replace: map[string]string{"](../": "]("}},
@@ -91,7 +91,7 @@ func TestSupportingDocumentsRenderReferences(t *testing.T) {
 	harnesses := map[string]henia.Harness{}
 	for name, output := range map[string]string{"claude": "/{{.Name}}", "pi": "/skill:{{.Name}}"} {
 		harnesses[name] = henia.Harness{
-			References: map[string]henia.ReferenceConfig{"skill": {Output: output}},
+			References: map[string]string{"skill": output},
 			Files: map[string]henia.File{
 				"AGENTS.md": {Source: "instructions/AGENTS.md"},
 				"notes.txt": {Source: "instructions/notes.txt"},

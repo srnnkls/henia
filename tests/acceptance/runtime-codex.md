@@ -14,6 +14,7 @@ $ command -v codex fas > /dev/null && [ -f "${CODEX_AUTH:-$HOME/.codex/auth.json
 > codex_run() { (cd "$W/project" && env XDG_DATA_HOME="$W/data" XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/codex-config" MISE_DATA_DIR="$HOME/.local/share/mise" MISE_GLOBAL_CONFIG_FILE="$HOME/.config/mise/config.toml" ZDOTDIR="$W/zdotdir" CODEX_HOME="$W/home/codex" codex exec --skip-git-repo-check --sandbox read-only --dangerously-bypass-hook-trust -o "$W/$1.txt" "$2" < /dev/null > "$W/$1.log" 2>&1); }
 > ls "$W/home/codex/skills"
 entry
+henia
 ```
 
 ```scrut

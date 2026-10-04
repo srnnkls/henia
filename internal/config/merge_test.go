@@ -9,14 +9,16 @@ func TestLayeredConfigPreservesFalseAndMergesTables(t *testing.T) {
 	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), []byte(`[harness.claude]
 profile = "claude"
 strict = true
-include = ["one"]
+[harness.claude.skills]
+static = ["one"]
 [harness.claude.variables]
 custom = "user"
 [harness.claude.tools]
 read = "UserRead"
 `), []byte(`[harness.claude]
 strict = false
-include = ["two"]
+[harness.claude.skills]
+static = ["two"]
 [harness.claude.variables]
 custom = "project"
 `))
@@ -24,7 +26,7 @@ custom = "project"
 		t.Fatal(err)
 	}
 	h := cfg.Harness["claude"]
-	if h.Strict || h.Variables["custom"] != "project" || h.Variables["model_strong"] != "opus" || h.Tools["read"] != "UserRead" || len(h.Include) != 2 {
+	if h.Strict || h.Variables["custom"] != "project" || h.Variables["model_strong"] != "opus" || h.Tools["read"] != "UserRead" || len(h.Skills.Static) != 2 {
 		t.Fatalf("%+v", h)
 	}
 	if len(cfg.Harness) != 1 {

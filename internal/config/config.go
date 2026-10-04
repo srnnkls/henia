@@ -21,6 +21,7 @@ type Config struct {
 	Build     BuildOptions             `toml:"build,omitempty"`
 	Harness   map[string]henia.Harness `toml:"harness,omitempty"`
 	Preload   preload.Settings         `toml:"preload,omitempty"`
+	Warnings  []string                 `toml:"-"`
 }
 
 type BuildOptions struct {
@@ -86,6 +87,7 @@ func loadLayers(path string, projectData []byte) (*Config, error) {
 
 func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*Config, error) {
 	var base, user, project map[string]any
+	var warnings []string
 	for _, layer := range []struct {
 		data []byte
 		out  *map[string]any
@@ -95,6 +97,11 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		if err := toml.Unmarshal(layer.data, layer.out); err != nil {
 			return nil, err
 		}
+		migrated, err := migrateHarnesses(*layer.out)
+		if err != nil {
+			return nil, err
+		}
+		warnings = append(warnings, migrated...)
 		if _, ok := (*layer.out)["sources"]; ok {
 			return nil, fmt.Errorf("source fetching belongs to Phora; remove [sources] from henia.toml and pass a local directory to henia build")
 		}
@@ -177,13 +184,8 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		cfg.Harness = make(map[string]henia.Harness)
 	}
 	for name, h := range cfg.Harness {
-		for kind, mapping := range h.ArtifactMappings {
-			if kind != "skills" && kind != "agents" && kind != "commands" {
-				return nil, fmt.Errorf("harness %s: unknown artifact mapping %q", name, kind)
-			}
-			if mapping.Structure != "" && mapping.Structure != "flat" && mapping.Structure != "nested" {
-				return nil, fmt.Errorf("harness %s: unsupported artifact structure %q", name, mapping.Structure)
-			}
+		if err := validateHarness(name, h); err != nil {
+			return nil, err
 		}
 		h.ProjectRoot, h.UserRoot = projectRoot, userRoot
 		cfg.Harness[name] = h
@@ -196,16 +198,11 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 				return nil, fmt.Errorf("harness %s: %w", name, err)
 			}
 		}
-		if h.Profile != "" && h.Structure == "flat" {
-			return nil, fmt.Errorf("harness %s: skill profiles require nested structure", name)
-		}
-		if h.Format != "" && h.Format != "directives" && h.Format != "xml" && h.Format != "markdown" {
-			return nil, fmt.Errorf("harness %s: unsupported format %q", name, h.Format)
-		}
-		if h.Structure != "" && h.Structure != "flat" && h.Structure != "nested" {
-			return nil, fmt.Errorf("harness %s: unsupported structure %q", name, h.Structure)
+		if h.Profile != "" && h.Layout == "flat" {
+			return nil, fmt.Errorf("harness %s: skill profiles require the nested layout", name)
 		}
 	}
+	cfg.Warnings = warnings
 	if err := cfg.Lint.Validate(); err != nil {
 		return nil, err
 	}

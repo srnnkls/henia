@@ -1,7 +1,7 @@
 artifacts = ["skills", "commands", "agents"]
 
 [harness.claude]
-structure = "nested"
+layout = "nested"
 
 [harness.claude.variables]
 model_strong = "opus"
@@ -13,8 +13,6 @@ bash = "Bash"
 read = "Read"
 write = "Write"
 
-[harness.claude.references.skill]
-output = "/{{.Name}}"
-
-[harness.claude.references.command]
-output = "/{{.Name}}"
+[harness.claude.references]
+skill = "/{{.Name}}"
+command = "/{{.Name}}"

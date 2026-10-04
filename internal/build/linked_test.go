@@ -139,9 +139,9 @@ func TestLinkedSourceTreeBuildsLikeRealTree(t *testing.T) {
 	harnesses := func(source string) map[string]henia.Harness {
 		return map[string]henia.Harness{
 			"claude": {
-				ProjectRoot:      source,
-				ArtifactMappings: map[string]henia.ArtifactMapping{"agents": {Profile: "claude-agent", Structure: "flat"}},
-				Files:            map[string]henia.File{"CLAUDE.md": {Source: "instructions/AGENTS.md", Replace: map[string]string{"](../": "]("}}},
+				ProjectRoot: source,
+				Agents:      henia.Artifacts{Profile: "claude-agent", Layout: "flat"},
+				Files:       map[string]henia.File{"CLAUDE.md": {Source: "instructions/AGENTS.md", Replace: map[string]string{"](../": "]("}}},
 			},
 		}
 	}

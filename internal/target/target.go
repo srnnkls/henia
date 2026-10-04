@@ -32,7 +32,7 @@ func New(basePath string) *HarnessTarget {
 }
 
 func NewFromConfig(name, output string, h henia.Harness) Target {
-	return &HarnessTarget{name: name, basePath: output, structure: h.Structure}
+	return &HarnessTarget{name: name, basePath: output, structure: h.Layout}
 }
 
 func (t *HarnessTarget) Name() string { return t.name }

@@ -207,8 +207,8 @@ func newContextCommand() *cobra.Command {
 	var globals []string
 	cmd := &cobra.Command{
 		Use:   "context <skill>",
-		Short: "Print a skill's dynamic context",
-		Long: `Print a skill's dynamic context: the providers of the slots it applies and the
+		Short: "Print a skill's runtime context",
+		Long: `Print a skill's runtime context: the providers of the slots it applies and the
 sections of the library skills it references, each readable with henia show.
 Problems print as text; the command always exits successfully so a skill
 preload never aborts.`,
@@ -329,20 +329,17 @@ func (r *renderer) body(e library.Entry) string {
 	}
 	var harness henia.Harness
 	name := ""
-	config := r.config(e.Origin.Config)
-	if r.harness != "" && config != nil {
-		var parsed struct {
-			Harness map[string]henia.Harness `toml:"harness"`
-		}
-		if toml.Unmarshal(config, &parsed) == nil {
-			if h, ok := parsed.Harness[r.harness]; ok {
+	sourceConfig := r.config(e.Origin.Config)
+	if r.harness != "" && sourceConfig != nil {
+		if harnesses, _, err := config.Harnesses(sourceConfig); err == nil {
+			if h, ok := harnesses[r.harness]; ok {
 				harness, name = h, r.harness
 				harness.ProjectRoot, harness.UserRoot = e.Origin.ProjectRoot(), library.ConfigDir()
 			}
 		}
 	}
 	if name == "" {
-		config = nil
+		sourceConfig = nil
 	}
 	served := r.lib.Names()
 	if name != "" {
@@ -353,7 +350,7 @@ func (r *renderer) body(e library.Entry) string {
 		}
 	}
 	h := sha256.New()
-	for _, part := range [][]byte{[]byte(rootCmd.Version + executableStamp()), []byte(name), config, canonical, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " "))} {
+	for _, part := range [][]byte{[]byte(rootCmd.Version + executableStamp()), []byte(name), sourceConfig, canonical, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " "))} {
 		h.Write(part)
 		h.Write([]byte{0})
 	}

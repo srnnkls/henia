@@ -147,7 +147,7 @@ func TestNewFromConfig(t *testing.T) {
 
 func TestFlatTargetPath(t *testing.T) {
 	target := NewFromConfig("opencode", "/build/opencode", henia.Harness{
-		Structure: "flat",
+		Layout: "flat",
 	})
 
 	tests := []struct {
@@ -188,7 +188,7 @@ func TestFlatWriteWithResources(t *testing.T) {
 
 	targetDir := filepath.Join(tmpDir, "target")
 	target := NewFromConfig("opencode", targetDir, henia.Harness{
-		Structure: "flat",
+		Layout: "flat",
 	})
 
 	art := &artifact.Artifact{

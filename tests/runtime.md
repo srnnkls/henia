@@ -12,11 +12,12 @@ $ T=$(cd "$(mktemp -d)" && pwd -P); L="$T/data/henia/sources"; P="$T/repo"
 > mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nmetadata:\n  slots: "code.style code.check:keyed(list(command))"\n  applies: "code.style code.check"\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n'
 > mk "$L/tropos/skills/style-guide/SKILL.md" '---\nname: style-guide\ndescription: House style by language.\nmetadata:\n  provides: "code.style.go"\n---\n\n# Style guide\n\nShared rules.\n\n## Go\n\nRun gofmt. Canary: CANARY-GO.\n\n### Errors\n\nWrap with %%w.\n\n## Python\n\nUse ruff.\n'
 > mk "$L/tropos/skills/checks/SKILL.md" '---\nname: checks\ndescription: Validation commands.\nmetadata:\n  provides: "code.check.go"\n  code.check.go: "go vet ./..."\n---\n\n# Checks\n\nSee `$style-guide` and `$code`.{{with .flavor}} Flavor: {{.}}.{{end}}\n'
-> printf '[harness.claude]\nartifacts = ["skills"]\ninclude = ["code"]\n\n[harness.claude.references.skill]\noutput = "/{{.Name}}"\n\n[harness.pi]\nartifacts = ["skills"]\n\n[harness.pi.variables]\nflavor = "pi"\n\n[harness.pi.references.skill]\noutput = "/skill:{{.Name}}"\n' > "$L/tropos/henia.toml"
+> printf '[harness.claude]\nartifacts = ["skills"]\n\n[harness.claude.skills]\nstatic = ["code"]\n\n[harness.claude.references]\nskill = "/{{.Name}}"\n\n[harness.pi]\nartifacts = ["skills"]\n\n[harness.pi.variables]\nflavor = "pi"\n\n[harness.pi.references]\nskill = "/skill:{{.Name}}"\n' > "$L/tropos/henia.toml"
 > henia build "$L/tropos" --output "$T/build" > /dev/null
 > mkdir -p "$P" && git -C "$P" init -q && cd "$P"
 > find "$T/build" -name SKILL.md | sed "s|$T/build/||" | sort
 claude/skills/code/SKILL.md
+claude/skills/henia/SKILL.md
 pi/skills/checks/SKILL.md
 pi/skills/code/SKILL.md
 pi/skills/style-guide/SKILL.md
@@ -24,13 +25,37 @@ pi/skills/style-guide/SKILL.md
 
 ## Projection
 
-A harness's `include` selects its entry skills; references to skills it does not
-project render as `henia show` commands.
+A harness's `skills.static` selects its built skills; references to dynamic
+skills render as `henia show` commands, and a generated `henia` catalog skill
+lists the dynamic ones.
 
 ```scrut
 $ tail -n 1 "$T/build/claude/skills/code/SKILL.md"; tail -n 1 "$T/build/pi/skills/code/SKILL.md"
 Follow `henia show style-guide` and `henia show checks`.
 Follow `/skill:style-guide` and `/skill:checks`.
+```
+
+The catalog skill names each dynamic skill with its description and the
+command that reads it; `catalog = false` leaves it out.
+
+```scrut
+$ sed -n '/^# Henia/,$p' "$T/build/claude/skills/henia/SKILL.md"
+# Henia
+
+These skills are not installed in this harness. When a task fits one, read it with `henia show <skill>` and follow it as if it were installed:
+
+- `checks`: Validation commands.
+- `style-guide`: House style by language.
+
+`henia ls` lists every skill in the library, including other sources'. `henia show <skill>#<section>` reads a single section.
+```
+
+```scrut
+$ C="$T/no-catalog"; mkdir -p "$C/skills/a" "$C/skills/b"
+> printf -- '---\nname: a\ndescription: A.\n---\n\n# A\n' > "$C/skills/a/SKILL.md"; printf -- '---\nname: b\ndescription: B.\n---\n\n# B\n' > "$C/skills/b/SKILL.md"
+> printf '[harness.claude]\nartifacts = ["skills"]\n\n[harness.claude.skills]\ndynamic = ["b"]\ncatalog = false\n' > "$C/henia.toml"
+> henia build "$C" --output "$T/no-catalog-build" > /dev/null && ls "$T/no-catalog-build/claude/skills"
+a
 ```
 
 ## Catalog
@@ -125,11 +150,11 @@ $ mk "$L/tropos/.henia/harnesses/mini/transform.toml" 'fields = ["name", "descri
 # Checks
 ```
 
-A harness's `exclude` keeps skills out of its projection, so references to them
-render as `henia show`.
+A harness's `skills.dynamic` keeps skills out of its build, so references to
+them render as `henia show`.
 
 ```scrut
-$ printf '\n[harness.nostyle]\nartifacts = ["skills"]\nexclude = ["style-guide"]\n\n[harness.nostyle.references.skill]\noutput = "/{{.Name}}"\n' >> "$L/tropos/henia.toml"
+$ printf '\n[harness.nostyle]\nartifacts = ["skills"]\n\n[harness.nostyle.skills]\ndynamic = ["style-guide"]\n\n[harness.nostyle.references]\nskill = "/{{.Name}}"\n' >> "$L/tropos/henia.toml"
 > henia show checks --harness nostyle | grep '^See'
 See `henia show style-guide` and `/code`.
 ```

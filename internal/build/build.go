@@ -97,6 +97,12 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 		outputPath := filepath.Join(output, harnessName)
 		filtered := filterArtifacts(allArtifacts, harness)
 		served := Served(allArtifacts, filtered)
+		if index, err := catalog(sources[0], allArtifacts, filtered, harness); err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
+			continue
+		} else if index != nil {
+			filtered = append(filtered, index)
+		}
 
 		references := &transform.Transformer{Tools: harness.Tools, References: convertReferences(harness.References), Served: served}
 		files, err := supportFiles(sources, harness.Files, references)
@@ -331,7 +337,7 @@ func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifa
 		if !typeSet[string(art.Type)] {
 			continue
 		}
-		if !shouldBuild(art.Name, harness) {
+		if !harness.Builds(artifact.TypeDirName(art.Type), art.Name) {
 			continue
 		}
 		filtered = append(filtered, art)
@@ -340,46 +346,45 @@ func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifa
 	return filtered
 }
 
-func Projects(harness henia.Harness, name string) bool { return shouldBuild(name, harness) }
+func Projects(harness henia.Harness, name string) bool { return harness.Builds("skills", name) }
 
-func shouldBuild(name string, harness henia.Harness) bool {
-	if len(harness.Include) > 0 {
-		found := slices.Contains(harness.Include, name)
-		if !found {
-			return false
-		}
-	}
-
-	return !slices.Contains(harness.Exclude, name)
-}
-
-func convertReferences(refs map[string]henia.ReferenceConfig) map[string]transform.ReferenceConfig {
+func convertReferences(refs map[string]string) map[string]transform.ReferenceConfig {
 	if refs == nil {
 		return nil
 	}
 	result := make(map[string]transform.ReferenceConfig)
 	for k, v := range refs {
-		result[k] = transform.ReferenceConfig{Output: v.Output}
+		result[k] = transform.ReferenceConfig{Output: v}
 	}
 	return result
 }
 
+func markupFormat(directives string) string {
+	switch directives {
+	case "keep":
+		return "directives"
+	case "md":
+		return "markdown"
+	}
+	return directives
+}
+
 func transformerFor(name, output string, h henia.Harness, kind artifact.Type) (henia.Harness, *transform.Transformer, error) {
-	mapping := h.ArtifactMappings[artifact.TypeDirName(kind)]
+	mapping := h.Type(artifact.TypeDirName(kind))
 	if kind != artifact.TypeSkill {
 		h.Profile = ""
 	}
 	if mapping.Profile != "" {
 		h.Profile = mapping.Profile
 	}
-	if mapping.Structure != "" {
-		h.Structure = mapping.Structure
+	if mapping.Layout != "" {
+		h.Layout = mapping.Layout
 	}
-	h.Keys = mergeMap(h.Keys, mapping.Keys)
-	h.Values = mergeMap(h.Values, mapping.Values)
+	h.Frontmatter.Rename = mergeMap(h.Frontmatter.Rename, mapping.Frontmatter.Rename)
+	h.Frontmatter.Values = mergeMap(h.Frontmatter.Values, mapping.Frontmatter.Values)
 	tr := &transform.Transformer{
 		Profile: h.Profile, Strict: h.Strict, Variables: h.Variables,
-		OutputFormat: h.Format, Keys: h.Keys, Values: h.Values,
+		OutputFormat: markupFormat(h.Directives), Keys: h.Frontmatter.Rename, Values: h.Frontmatter.Values,
 		Tools: h.Tools, References: convertReferences(h.References),
 	}
 	if h.Profile != "" {
@@ -390,7 +395,7 @@ func transformerFor(name, output string, h henia.Harness, kind artifact.Type) (h
 		if err != nil {
 			return h, nil, fmt.Errorf("harness %s: %w", name, err)
 		}
-		tr.Context = vendor.Context{Name: name, Profile: h.Profile, Path: output, Variables: h.Variables, Tools: h.Tools, Keys: h.Keys}
+		tr.Context = vendor.Context{Name: name, Profile: h.Profile, Path: output, Variables: h.Variables, Tools: h.Tools, Keys: h.Frontmatter.Rename}
 	}
 	return h, tr, nil
 }

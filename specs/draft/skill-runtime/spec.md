@@ -113,7 +113,7 @@ henia slots ...
   `henia show <skill>`, qualified when the bare name is ambiguous.
 - **Budget.** Output over the budget prints the sections instead, each
   addressable with `henia show`.
-- **Context.** `context` prints only dynamic material for a preload: the
+- **Context.** `context` prints only runtime material for a preload: the
   providers of the slots the skill applies and the sections of the library skills
   it references. It never repeats the skill's own text.
 - **Cache.** Renders are cached under `$XDG_CACHE_HOME/henia/render`, keyed by the

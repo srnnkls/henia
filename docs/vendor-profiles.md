@@ -5,7 +5,7 @@ Enable a profile explicitly in a project configuration:
 ```toml
 [harness.claude]
 profile = "claude"
-format = "xml"
+directives = "xml"
 strict = true
 ```
 
@@ -78,7 +78,7 @@ value = '{name: input.name, description: input.description}'
 # henia.toml
 [harness.my-agent]
 profile = "my-agent"
-format = "directives"
+directives = "keep"
 ```
 
 No runtime script or Go change is needed. Profile syntax is TOML; computed values

@@ -68,19 +68,19 @@ See [vendor contracts and sources](docs/vendor-research.md) and
 ```toml
 [harness.claude]
 profile = "claude"
-format = "xml"
+directives = "xml"
 strict = true
 
 [harness.codex]
 profile = "codex"
-format = "directives"
+directives = "keep"
 ```
 
-Rendering is independent of the vendor:
+`directives` sets how `:::` directives render, independent of the vendor:
 
 - `xml`: convert directive nodes to XML tags; keep ordinary Markdown.
-- `directives` (default): keep directives, normalizing spacing and attributes.
-- `markdown`: turn directive labels and attributes into bold Markdown labels.
+- `keep` (default): keep directives, normalizing spacing and attributes.
+- `markdown` (or `md`): turn directive labels and attributes into bold Markdown labels.
 
 XML is Henia's default for Claude, not a vendor requirement. Any profile can use
 any of these formats. Block `:::name{attrs}` and inline `:name[text]{attrs}` support
@@ -187,7 +187,7 @@ output = "dist/skills"
 
 [harness.claude]
 profile = "claude"
-format = "xml"
+directives = "xml"
 ```
 
 A configured relative output path resolves against its configuration file.
@@ -225,18 +225,21 @@ successful rebuild; failures leave the previous output intact. The entire output
 directory is compiler-owned in this mode, including when `--harness` narrows the
 selection. Without `clean`, builds retain the existing overwrite behavior.
 
-Agent metadata and layout can be configured separately from skill profiles:
+Each artifact type has its own table under the harness, taking the harness's
+`profile`, `layout` and `frontmatter` keys, so agent metadata and layout can be
+configured separately from skill profiles:
 
 ```toml
-[harness.claude.artifact_mappings.agents]
+[harness.claude.agents]
 profile = "claude-agent"
-structure = "flat"
+layout = "flat"
 ```
 
 The custom profile lives at `.henia/harnesses/claude-agent/transform.toml` and uses
 the same declarative fields, computed values and native overrides as skill
-profiles. Artifact mappings also support `keys` and `values`. Support documents
-can be included without a post-processing script:
+profiles. `[harness.<name>.frontmatter]` renames keys (`rename`) and maps values
+(`values`), per harness or per artifact type. Support documents can be included
+without a post-processing script:
 
 ```toml
 [harness.claude.files]

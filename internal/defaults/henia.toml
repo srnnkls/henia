@@ -3,8 +3,8 @@ artifacts = ["skills"]
 
 [harness.claude]
 profile = "claude"
-format = "xml"
-structure = "nested"
+directives = "xml"
+layout = "nested"
 artifacts = ["skills"]
 
 [harness.claude.variables]
@@ -21,68 +21,68 @@ glob = "Glob"
 grep = "Grep"
 task = "Task"
 
-[harness.claude.references.skill]
-output = "/{{.Name}}"
+[harness.claude.references]
+skill = "/{{.Name}}"
 
 [harness.claude-upload]
 profile = "claude-upload"
-format = "xml"
-structure = "nested"
+directives = "xml"
+layout = "nested"
 artifacts = ["skills"]
 
 [harness.codex]
 profile = "codex"
-format = "directives"
-structure = "nested"
+directives = "keep"
+layout = "nested"
 artifacts = ["skills"]
 
-[harness.codex.references.skill]
-output = "${{.Name}}"
+[harness.codex.references]
+skill = "${{.Name}}"
 
 [harness.chatgpt]
 profile = "chatgpt"
-format = "directives"
-structure = "nested"
+directives = "keep"
+layout = "nested"
 artifacts = ["skills"]
 
-[harness.chatgpt.references.skill]
-output = "@{{.Name}}"
+[harness.chatgpt.references]
+skill = "@{{.Name}}"
 
 [harness.opencode]
 profile = "opencode"
-format = "directives"
-structure = "nested"
+directives = "keep"
+layout = "nested"
 artifacts = ["skills"]
 
-[harness.opencode.references.skill]
-output = 'skill({name: "{{.Name}}"})'
+[harness.opencode.references]
+skill = 'skill({name: "{{.Name}}"})'
 
 [harness.gemini]
 profile = "gemini"
-format = "directives"
-structure = "nested"
+directives = "keep"
+layout = "nested"
 artifacts = ["skills"]
 
-[harness.gemini.references.skill]
-output = 'activate_skill({name: "{{.Name}}"})'
+[harness.gemini.references]
+skill = 'activate_skill({name: "{{.Name}}"})'
 
 [harness.github]
 profile = "github"
-format = "directives"
-structure = "nested"
+directives = "keep"
+layout = "nested"
 artifacts = ["skills"]
 
 [harness.cursor]
 profile = "cursor"
-format = "directives"
-structure = "nested"
+directives = "keep"
+layout = "nested"
 artifacts = ["skills"]
 
-[harness.cursor.references.skill]
-output = "/{{.Name}}"
+[harness.cursor.references]
+skill = "/{{.Name}}"
 
 [harness.agentskills]
 profile = "agentskills"
-format = "directives"
-structure = "nested"
+directives = "keep"
+layout = "nested"
 artifacts = ["skills"]

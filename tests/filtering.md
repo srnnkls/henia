@@ -9,7 +9,7 @@ $ rm -rf /tmp/henia-filter-test
 ## Create Filter Config Files
 
 ```scrut
-$ printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[harness.claude]' 'structure = "nested"' 'artifacts = ["skills"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-type.toml
+$ printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[harness.claude]' 'layout = "nested"' 'artifacts = ["skills"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-type.toml
 ```
 
 ## Filter By Artifact Type
@@ -36,7 +36,7 @@ test-skill
 ## Create Include List Config
 
 ```scrut
-$ rm -rf /tmp/henia-filter-test && printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[harness.claude]' 'structure = "nested"' 'include = ["test-skill"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-include.toml
+$ rm -rf /tmp/henia-filter-test && printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[harness.claude]' 'layout = "nested"' '[harness.claude.skills]' 'static = ["test-skill"]' '[harness.claude.commands]' 'static = ["test-skill"]' '[harness.claude.agents]' 'static = ["test-skill"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-include.toml
 ```
 
 ## Filter By Include List
@@ -61,7 +61,7 @@ $ find /tmp/henia-filter-test -name "*.md" -type f | grep COMMAND.md | wc -l | t
 ## Create Exclude List Config
 
 ```scrut
-$ rm -rf /tmp/henia-filter-test && printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[harness.claude]' 'structure = "nested"' 'exclude = ["test-command"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-exclude.toml
+$ rm -rf /tmp/henia-filter-test && printf '%s\n' 'artifacts = ["skills", "commands", "agents"]' '[harness.claude]' 'layout = "nested"' '[harness.claude.commands]' 'dynamic = ["test-command"]' '[harness.claude.variables]' 'model_strong = "opus"' > /tmp/henia-filter-exclude.toml
 ```
 
 ## Filter By Exclude List
