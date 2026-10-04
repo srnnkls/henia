@@ -13,13 +13,14 @@ import (
 )
 
 const (
-	DefaultTimeout = 10 * time.Second
-	DefaultOutput  = 8000
-	fasTimeout     = 10 * time.Second
+	DefaultTimeout    = 10 * time.Second
+	DefaultOutput     = 8000
+	DefaultFASTimeout = 10 * time.Second
 )
 
 type Settings struct {
 	Timeout     string `toml:"timeout,omitempty"`
+	FASTimeout  string `toml:"fas_timeout,omitempty"`
 	Output      int    `toml:"output,omitempty"`
 	Unsandboxed string `toml:"unsandboxed,omitempty"`
 	Refuse      []Rule `toml:"refuse,omitempty"`
@@ -35,6 +36,7 @@ type Context struct {
 
 type Runner struct {
 	Timeout        time.Duration
+	FASTimeout     time.Duration
 	Output         int
 	RunUnsandboxed bool
 	Refuse         []Rule
@@ -42,17 +44,23 @@ type Runner struct {
 }
 
 func NewRunner(user, project Settings) (*Runner, error) {
-	r := &Runner{Timeout: DefaultTimeout, Output: DefaultOutput, Sandbox: sandbox}
+	r := &Runner{Timeout: DefaultTimeout, FASTimeout: DefaultFASTimeout, Output: DefaultOutput, Sandbox: sandbox}
 	for _, layer := range []struct {
 		Settings
 		user bool
 	}{{user, true}, {project, false}} {
-		if layer.Timeout != "" {
-			d, err := time.ParseDuration(layer.Timeout)
-			if err != nil || d <= 0 {
-				return nil, fmt.Errorf("preload.timeout %q is not a positive duration", layer.Timeout)
+		for _, setting := range []struct {
+			name, value string
+			target      *time.Duration
+		}{{"timeout", layer.Timeout, &r.Timeout}, {"fas_timeout", layer.FASTimeout, &r.FASTimeout}} {
+			if setting.value == "" {
+				continue
 			}
-			r.Timeout = d
+			d, err := time.ParseDuration(setting.value)
+			if err != nil || d <= 0 {
+				return nil, fmt.Errorf("preload.%s %q is not a positive duration", setting.name, setting.value)
+			}
+			*setting.target = d
 		}
 		if layer.Output < 0 {
 			return nil, fmt.Errorf("preload.output must be positive, got %d", layer.Output)
@@ -229,14 +237,19 @@ func (r *Runner) consultFAS(ctx context.Context, command string, c Context) (str
 	if err != nil {
 		return "", nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, fasTimeout)
+	ctx, cancel := context.WithTimeout(ctx, r.FASTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, fas, "eval", "--harness", "henia")
 	cmd.Dir = c.Dir
 	cmd.Stdin = bytes.NewReader(input)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
+	isolate(cmd)
+	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return "", nil, fmt.Errorf("timed out after %s", r.FASTimeout)
+	}
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 	}

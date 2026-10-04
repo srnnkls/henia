@@ -187,6 +187,7 @@ their writes still hit the sandbox, and a project can refuse them by name.
 ```toml
 [preload]
 timeout = "10s"        # per preload
+fas_timeout = "10s"    # per FAS consultation; a late answer blocks the preload
 output = 8000          # bytes of output kept per preload
 unsandboxed = "skip"   # "run" only in the user henia.toml
 
@@ -201,7 +202,8 @@ reason = "admin endpoints change state"
 ```
 
 Settings come from the user `henia.toml` (`$XDG_CONFIG_HOME/henia/`) and the
-project's `henia.toml`; the project wins for `timeout` and `output`. Refusal
+project's `henia.toml`; the project wins for `timeout`, `fas_timeout` and
+`output`. Refusal
 rules from both add to the built-ins; none removes one. Invalid settings or
 rules stop all preloads with a note.
 

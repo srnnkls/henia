@@ -371,6 +371,15 @@ $ printf '#!/bin/sh\ncat > /dev/null\necho "{\\"decision\\":\\"deny\\",\\"rule\\
 henia: blocked by fas/no-uname: uname stays private
 ````
 
+`preload.fas_timeout` bounds the FAS call; a FAS that does not answer in time
+blocks the preload.
+
+````scrut
+$ printf '#!/bin/sh\nsleep 5; echo late\n' > "$B/fas"; printf '[preload]\nfas_timeout = "1s"\n' > "$T/config/henia/henia.toml"
+> pre "uname -s" | sed -n 3p; : > "$T/config/henia/henia.toml"
+henia: blocked: fas failed: timed out after 1s
+````
+
 ### Projection
 
 `henia build` routes projected preloads through `henia preload`, so they keep

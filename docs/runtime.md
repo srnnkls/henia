@@ -107,7 +107,8 @@ a built-in one:
 
 ```toml
 [preload]
-timeout = "10s"
+timeout = "10s"      # per preload
+fas_timeout = "10s"  # per FAS consultation
 output = 8000
 
 [[preload.refuse]]

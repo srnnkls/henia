@@ -60,6 +60,19 @@ func TestRunFAS(t *testing.T) {
 	}
 }
 
+func TestRunFASTimeout(t *testing.T) {
+	stubFAS(t, "sleep 5; echo late")
+	r := unsandboxed(t)
+	r.FASTimeout = 200 * time.Millisecond
+	start := time.Now()
+	if got := r.Run(context.Background(), "echo ran", Context{Dir: t.TempDir()}); got != "henia: blocked: fas failed: timed out after 200ms" {
+		t.Fatalf("got %q", got)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Fatalf("fas timeout took %s", elapsed)
+	}
+}
+
 func TestRunLimits(t *testing.T) {
 	stubFAS(t, "")
 	c := Context{Dir: t.TempDir()}
@@ -106,13 +119,15 @@ func TestRunSandbox(t *testing.T) {
 }
 
 func TestNewRunner(t *testing.T) {
-	r, err := NewRunner(Settings{Timeout: "3s", Refuse: []Rule{{Command: "a"}}}, Settings{Output: 5, Refuse: []Rule{{Command: "b"}}})
-	if err != nil || r.Timeout != 3*time.Second || r.Output != 5 || len(r.Refuse) != 2 || r.RunUnsandboxed {
+	r, err := NewRunner(Settings{Timeout: "3s", FASTimeout: "2s", Refuse: []Rule{{Command: "a"}}}, Settings{Output: 5, FASTimeout: "4s", Refuse: []Rule{{Command: "b"}}})
+	if err != nil || r.Timeout != 3*time.Second || r.FASTimeout != 4*time.Second || r.Output != 5 || len(r.Refuse) != 2 || r.RunUnsandboxed {
 		t.Fatalf("merge: %+v %v", r, err)
 	}
 	for _, bad := range []struct{ user, project Settings }{
 		{Settings{Timeout: "soon"}, Settings{}},
 		{Settings{}, Settings{Timeout: "-1s"}},
+		{Settings{FASTimeout: "0s"}, Settings{}},
+		{Settings{}, Settings{FASTimeout: "later"}},
 		{Settings{}, Settings{Output: -1}},
 		{Settings{}, Settings{Unsandboxed: "run"}},
 		{Settings{Unsandboxed: "always"}, Settings{}},
