@@ -143,7 +143,8 @@ severity = "warning"
 
 ## Evaluation
 
-1. `select` picks candidates of one kind.
+1. `select` picks candidates of one kind, or the rows of a
+   [query pattern](query.md).
 2. `when` (default `true`) chooses candidates to check.
 3. A false `assert` emits `message` at the selected candidate's location.
 
@@ -169,6 +170,18 @@ plain text and JSON with path, line, column, severity, rule and message.
 | `paragraph` | Paragraph | `text` |
 | `link` | Markdown link | `destination`, `text` |
 | `image` | Markdown image | `destination`, `text` |
+
+A pattern selector checks each row once: `node` is its first matched capture,
+and `captures` maps every matched capture name to a node with the fields above
+(`destination` holds a link's URL). `reaches` never matches in lint.
+
+```toml
+[[lint.rules]]
+id = "introduce-code"
+select = '(_ (paragraph)? @intro . (code) @code)'
+assert = '"intro" in captures'
+message = "Introduce each code block with a paragraph."
+```
 
 All candidates expose `kind`, `dynamic`, `start` and `end` (byte offsets relative
 to the Markdown body; metadata offsets can be negative). Positions in diagnostics

@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/expr-lang/expr/vm"
 	"github.com/srnnkls/henia/internal/expression"
 	"github.com/srnnkls/henia/internal/markup"
+	"github.com/srnnkls/henia/internal/pattern"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,14 +33,16 @@ type ruleDocument struct {
 }
 
 type ruleEnvironment struct {
-	Node        markup.Node    `expr:"node"`
-	Document    ruleDocument   `expr:"document"`
-	Frontmatter map[string]any `expr:"frontmatter"`
+	Node        markup.Node            `expr:"node"`
+	Document    ruleDocument           `expr:"document"`
+	Frontmatter map[string]any         `expr:"frontmatter"`
+	Captures    map[string]markup.Node `expr:"captures"`
 }
 
 type compiledRule struct {
 	Rule
 	when, assert *vm.Program
+	pattern      *pattern.Query
 }
 
 var ruleID = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -51,7 +55,14 @@ func compileRules(definitions []Rule) ([]compiledRule, error) {
 			return nil, fmt.Errorf("invalid, duplicate or reserved lint rule id %q", rule.ID)
 		}
 		seen[rule.ID] = true
-		if !slices.Contains([]string{"document", "frontmatter", "directive", "heading", "paragraph", "link", "image"}, rule.Select) {
+		var query *pattern.Query
+		if strings.HasPrefix(strings.TrimSpace(rule.Select), "(") {
+			q, err := pattern.Read(rule.Select)
+			if err != nil {
+				return nil, fmt.Errorf("rule %s select: %w", rule.ID, err)
+			}
+			query = q
+		} else if !slices.Contains([]string{"document", "frontmatter", "directive", "heading", "paragraph", "link", "image"}, rule.Select) {
 			return nil, fmt.Errorf("rule %s: unknown selector %q", rule.ID, rule.Select)
 		}
 		if rule.Severity == "" {
@@ -75,7 +86,7 @@ func compileRules(definitions []Rule) ([]compiledRule, error) {
 		if err != nil {
 			return nil, fmt.Errorf("rule %s when: %w", rule.ID, err)
 		}
-		result = append(result, compiledRule{rule, condition, check})
+		result = append(result, compiledRule{rule, condition, check, query})
 	}
 	return result, nil
 }
@@ -107,8 +118,10 @@ func (c *checker) checkRules(d document) {
 			nodes = append(nodes, markup.Node{Kind: "frontmatter", Name: key.Value, Value: value, Attrs: map[string]string{}, Text: mapping.Content[i+1].Value, Start: start - d.offset, End: start - d.offset, Dynamic: strings.Contains(fmt.Sprint(value), "{{")})
 		}
 	}
+	var tree *markup.Element
 	masked, err := templateMask(d.body)
 	if err == nil {
+		tree, _ = markup.Tree(masked)
 		parsed, err := markup.Inspect(masked)
 		if err == nil {
 			for _, node := range parsed {
@@ -121,14 +134,14 @@ func (c *checker) checkRules(d document) {
 		if slices.Contains(c.options.Disable, rule.ID) {
 			continue
 		}
-		for _, node := range nodes {
-			if node.Kind != rule.Select || node.Dynamic && !rule.IncludeDynamic {
-				continue
+		evaluate := func(node markup.Node) {
+			if node.Dynamic && !rule.IncludeDynamic {
+				return
 			}
 			env.Node = node
 			matches, err := expression.Test(rule.when, env)
 			if err == nil && !matches {
-				continue
+				return
 			}
 			var passes bool
 			if err == nil {
@@ -140,5 +153,48 @@ func (c *checker) checkRules(d document) {
 				c.add(d, d.offset+node.Start, rule.Severity, rule.ID, rule.Message)
 			}
 		}
+		if rule.pattern == nil {
+			env.Captures = nil
+			for _, node := range nodes {
+				if node.Kind == rule.Select {
+					evaluate(node)
+				}
+			}
+			continue
+		}
+		if tree == nil {
+			continue
+		}
+		rows, err := rule.pattern.Run(tree, nil)
+		if err != nil {
+			c.add(d, d.offset, "error", rule.ID, "rule evaluation failed: "+err.Error())
+			continue
+		}
+		for _, row := range rows {
+			env.Captures = map[string]markup.Node{}
+			var subject *markup.Node
+			for _, cell := range row {
+				if len(cell.Elements) == 0 {
+					continue
+				}
+				node := lintNode(cell.Elements[0], d.body)
+				env.Captures[cell.Name] = node
+				if subject == nil {
+					subject = &node
+				}
+			}
+			if subject != nil {
+				evaluate(*subject)
+			}
+		}
+	}
+}
+
+func lintNode(e *markup.Element, body []byte) markup.Node {
+	level, _ := strconv.Atoi(e.Attrs["level"])
+	return markup.Node{
+		Kind: e.Type, Name: e.Attrs["name"], Attrs: e.Attrs, Text: e.Text, Destination: e.Attrs["url"],
+		Level: level, Inline: e.Attrs["inline"] == "true", Start: e.Start, End: e.End,
+		Dynamic: bytes.Contains(body[max(0, e.Start):min(len(body), e.End)], []byte("{{")),
 	}
 }

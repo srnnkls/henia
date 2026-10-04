@@ -385,17 +385,10 @@ func sourceSkillDirs(sources []library.Source) []string {
 	return dirs
 }
 
-var shown = regexp.MustCompile("`henia show ([a-z0-9][a-z0-9._:-]*)")
-
 func libraryReferences(body string) []string {
 	var refs []string
-	for _, ref := range reference.Parse(body) {
-		if ref.Type == reference.TypeSkill {
-			refs = append(refs, ref.Name)
-		}
-	}
-	for _, match := range shown.FindAllStringSubmatch(body, -1) {
-		refs = append(refs, match[1])
+	for _, ref := range reference.Skills(body) {
+		refs = append(refs, ref.Name)
 	}
 	return refs
 }
@@ -486,6 +479,26 @@ func (r *renderer) body(e library.Entry) string {
 		_ = os.WriteFile(cache, []byte(rendered.Body), 0o644)
 	}
 	return rendered.Body
+}
+
+func (r *renderer) reference(e library.Entry) *regexp.Regexp {
+	if r.harness == "" {
+		return nil
+	}
+	harnesses, err := config.Harnesses(r.config(e.Origin.Config))
+	if err != nil {
+		return nil
+	}
+	template := harnesses[r.harness].References["skill"]
+	prefix, suffix, ok := strings.Cut(template, "{{.Name}}")
+	if !ok || strings.Contains(prefix+suffix, "{{") {
+		return nil
+	}
+	pattern := regexp.QuoteMeta(prefix) + `([a-z0-9][a-z0-9._-]*)` + regexp.QuoteMeta(suffix)
+	if !strings.ContainsAny(template, "*[]") {
+		pattern = "`" + pattern + "`"
+	}
+	return regexp.MustCompile(pattern)
 }
 
 func executableStamp() string {

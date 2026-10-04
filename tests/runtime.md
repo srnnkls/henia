@@ -47,7 +47,7 @@ These skills are not installed in this harness. When a task fits one, read it wi
 - `checks`: Validation commands.
 - `style-guide`: House style by language.
 
-`henia ls` lists every skill in the library, including other sources'. `henia show <skill>#<section>` reads a single section.
+`henia ls` lists every skill in the library, including other sources'. `henia show <skill>#<section>` reads a single section. `henia query '<pattern>'` finds headings, paragraphs, code and links across skills and their resources; `henia query --grammar` prints the language.
 ```
 
 ```scrut
@@ -549,6 +549,66 @@ pi
 ```
 henia: blocked by henia/not-a-preload: flavored declares no such preload
 ````
+
+## Query
+
+`henia query` matches S-expression patterns against every library skill and
+its resources. Each row prints a line per capture, addressed for `henia show`.
+
+```scrut
+$ henia query '(skill :id "style-guide" (heading) @h)'
+@h  style-guide#style-guide  L1  heading  Style guide
+@h  style-guide#go  L5  heading  Go
+@h  style-guide#errors  L9  heading  Errors
+@h  style-guide#python  L13  heading  Python
+```
+
+Anchored siblings bring the neighbours of a match; an optional sibling that is
+missing prints `-`.
+
+```scrut
+$ henia query '(skill :id "style-guide" (paragraph)? @prev . (paragraph :contains "gofmt") @hit . (paragraph)? @next)'
+@prev  -
+@hit  style-guide#go  L7  paragraph  Run gofmt. Canary: CANARY-GO.
+@next  -
+```
+
+Skills are read as rendered for the caller, as `henia show` prints them, so
+lines count from the top of that text and references take the harness's
+syntax; `--canonical` reads them as authored, with lines in the file on disk.
+
+```scrut
+$ henia query '(skill :id "checks" (paragraph) @p (link) @l)' --harness pi; henia query '(skill :id "checks" (paragraph) @p)' --canonical
+@p  checks#checks  L3-4  paragraph  See `/skill:style-guide` and `henia show code`. Flavor: pi.
+@l  checks#checks  L3  link  `/skill:style-guide`
+
+@p  checks#checks  L3-4  paragraph  See `/skill:style-guide` and `henia show code`. Flavor: pi.
+@l  checks#checks  L3  link  `henia show code
+@p  checks#checks  L11-12  paragraph  See `$style-guide` and `$code`.{{with .flavor}} Flavor: {{.}}.{{end}}
+```
+
+`reaches` follows skill references transitively.
+
+```scrut
+$ henia query '(skill :id "code" (reaches (skill) @t))'
+@t  checks  skill
+@t  code  skill
+@t  style-guide  skill
+```
+
+A malformed query points at the problem and suggests a fix.
+
+```scrut
+$ henia query '(skill (headng))'
+henia query: unknown type "headng"
+  (skill (headng))
+          ^
+  did you mean heading?
+examples:
+  henia query '(skill :id "gestalt" (heading) @h)'
+  henia query '(skill :id "gestalt" (paragraph)? @prev . (paragraph :contains "cozo") @hit . (paragraph)? @next)'
+henia query --grammar prints the language
+```
 
 ```scrut
 $ rm -rf "$T"

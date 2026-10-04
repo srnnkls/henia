@@ -93,3 +93,22 @@ func TestRuleRuntimeErrorsAreErrors(t *testing.T) {
 		t.Fatalf("%+v", diagnostics)
 	}
 }
+
+func TestPatternRules(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "SKILL.md")
+	source := "---\nname: example\ndescription: Example\n---\n\n# Title\n\nIntro.\n\n```bash\nx\n```\n\n```\ny\n```\n"
+	if err := os.WriteFile(path, []byte(source), 0644); err != nil {
+		t.Fatal(err)
+	}
+	opts := Options{Rules: []Rule{{ID: "introduce-code", Select: `(_ (paragraph)? @intro . (code) @c)`, Assert: `"intro" in captures`, Message: "Introduce code"}}}
+	diagnostics, err := Run(t.Context(), []string{path}, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Line != 14 || diagnostics[0].Rule != "introduce-code" {
+		t.Fatalf("%+v", diagnostics)
+	}
+	if err := (Options{Rules: []Rule{{ID: "bad-pattern", Select: "(headng)", Assert: "true", Message: "m"}}}).Validate(); err == nil || !strings.Contains(err.Error(), `unknown type "headng"`) {
+		t.Fatalf("invalid pattern accepted: %v", err)
+	}
+}

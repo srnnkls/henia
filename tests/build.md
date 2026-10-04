@@ -17,6 +17,7 @@ Available Commands:
   lint        Check skill metadata, references, duplication and freshness
   ls          List the skills in the library
   preload     Run one skill preload under Henia's sandbox and refusal rules
+  query       Match S-expression patterns against library skills and their resources
   show        Print a library skill or one of its sections, rendered for the caller
   slots       Resolve the installed providers of skill slots
 

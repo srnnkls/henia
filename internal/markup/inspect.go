@@ -27,7 +27,7 @@ type Node struct {
 
 func parse(source []byte, inline bool) (ast.Node, error) {
 	p := &directiveParser{}
-	md := goldmark.New(goldmark.WithParserOptions(parser.WithBlockParsers(util.Prioritized(&blockParser{p}, 850)), parser.WithInlineParsers(util.Prioritized(&inlineParser{p}, 150))))
+	md := goldmark.New(goldmark.WithParserOptions(directiveOptions(p)...))
 	if inline {
 		md = goldmark.New(goldmark.WithParser(parser.NewParser(
 			parser.WithBlockParsers(util.Prioritized(parser.NewParagraphParser(), 1000)),

@@ -99,3 +99,18 @@ func Parse(body string) []Reference {
 
 	return refs
 }
+
+var shown = regexp.MustCompile("`henia show ([a-z0-9][a-z0-9._:-]*)")
+
+func Skills(body string) []Reference {
+	var refs []Reference
+	for _, ref := range Parse(body) {
+		if ref.Type == TypeSkill {
+			refs = append(refs, ref)
+		}
+	}
+	for _, m := range shown.FindAllStringSubmatchIndex(body, -1) {
+		refs = append(refs, Reference{Type: TypeSkill, Name: body[m[2]:m[3]], Raw: body[m[0]+1 : m[1]], Start: m[0], End: m[1]})
+	}
+	return refs
+}

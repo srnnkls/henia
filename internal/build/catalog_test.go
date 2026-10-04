@@ -24,7 +24,7 @@ func TestCatalog(t *testing.T) {
 	if !strings.Contains(index.Body, "- `debate`: Debates across lines.\n- `loqui`: Guides.\n") || strings.Contains(index.Body, "`code`") || strings.Contains(index.Body, "reviewer") {
 		t.Fatalf("body:\n%s", index.Body)
 	}
-	if index.Name != "henia" || index.Frontmatter["allowed-tools"] != "Bash(henia ls *), Bash(henia show *)" {
+	if index.Name != "henia" || index.Frontmatter["allowed-tools"] != "Bash(henia ls *), Bash(henia show *), Bash(henia query *)" {
 		t.Fatalf("frontmatter: %v", index.Frontmatter)
 	}
 	if index, _ := catalog("/src", all, []*artifact.Artifact{code}, henia.Harness{Profile: "codex"}); index.Frontmatter["allowed-tools"] != nil {

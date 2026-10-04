@@ -43,6 +43,7 @@ silently. `<skill>#<section>` addresses a heading anchor.
 ```
 henia ls [--json]
 henia show <skill>[/<resource>][#section] [--harness NAME]
+henia query '<pattern>...' [--text | --json | --count] [--limit N] [--canonical]
 henia context <skill> [--global DIR]...
 henia preload --skill <skill> -- <command>
 ```
@@ -58,6 +59,9 @@ henia preload --skill <skill> -- <command>
   invoke keep its syntax; others, including projected skills with
   `auto_invoke: false`, render as `henia show <skill>`. Without a caller, rendering is neutral.
   Output over the budget prints the sections instead.
+- `query` matches S-expression patterns against every skill and its resources
+  and prints each capture with an address `show` reads; see
+  [henia query](query.md).
 - `context` prints a skill's runtime context for a preload: the providers of the
   slots it applies and the sections of the library skills it references. It
   never repeats the skill's own text.

@@ -167,6 +167,7 @@ it:
 ```bash
 henia ls
 henia show style-guide#go
+henia query '(skill :id "style-guide" (code :lang "go") @c)'
 henia context code --global ~/.claude/skills
 ```
 

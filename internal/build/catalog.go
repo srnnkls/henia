@@ -16,7 +16,7 @@ import (
 const (
 	CatalogName        = "henia"
 	catalogDescription = "Skills served by Henia beyond those installed here: lists them and reads one on demand with henia show. Use when no installed skill fits the task."
-	catalogTools       = "Bash(henia ls *), Bash(henia show *)"
+	catalogTools       = "Bash(henia ls *), Bash(henia show *), Bash(henia query *)"
 )
 
 var catalogTemplate = template.Must(template.New("catalog").Parse(defaults.CatalogBody))
