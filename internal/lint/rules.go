@@ -165,7 +165,7 @@ func (c *checker) checkRules(d document) {
 		if tree == nil {
 			continue
 		}
-		rows, err := rule.pattern.Run(tree, nil)
+		rows, err := rule.pattern.Run(tree, pattern.Environment{})
 		if err != nil {
 			c.add(d, d.offset, "error", rule.ID, "rule evaluation failed: "+err.Error())
 			continue

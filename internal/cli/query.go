@@ -10,9 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 	henia "github.com/srnnkls/henia"
+	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/pattern"
+	"github.com/srnnkls/henia/internal/similarity"
 )
 
 type queryOutput struct {
@@ -24,6 +26,7 @@ func newQueryCommand() *cobra.Command {
 	var flags runtimeFlags
 	var output queryOutput
 	var grammar, canonical bool
+	var model string
 	cmd := &cobra.Command{
 		Use:     "query '<pattern>...'",
 		Aliases: []string{"q"},
@@ -55,7 +58,23 @@ a skill preload never aborts.`,
 			for _, problem := range corpus.Problems {
 				fmt.Fprintf(cmd.ErrOrStderr(), "henia: %s\n", problem)
 			}
-			rows, err := q.Run(corpus.Root, corpus)
+			env := pattern.Environment{Resolve: corpus}
+			if q.Semantic {
+				if model == "" {
+					if cfg, err := config.LoadOptional(configPath); err == nil {
+						model = cfg.Lint.Semantic.ModelPath
+					}
+				}
+				if model != "" {
+					encode, err := similarity.Model(model)
+					if err != nil {
+						fmt.Fprintf(out, "henia query: %v\n", err)
+						return nil
+					}
+					env.Embed = encode
+				}
+			}
+			rows, err := q.Run(corpus.Root, env)
 			if err != nil {
 				fmt.Fprintf(out, "henia query: %v\n", err)
 				return nil
@@ -67,6 +86,7 @@ a skill preload never aborts.`,
 	flags.register(cmd)
 	cmd.Flags().BoolVar(&grammar, "grammar", false, "Print the query language")
 	cmd.Flags().BoolVar(&canonical, "canonical", false, "Read skills as authored instead of rendered for the caller")
+	cmd.Flags().StringVar(&model, "model", "", "Local Model2Vec directory for (similar ...) (default: [lint.semantic] model_path)")
 	cmd.Flags().BoolVar(&output.text, "text", false, "Print whole nodes")
 	cmd.Flags().BoolVar(&output.json, "json", false, "Print rows as JSON objects keyed by capture")
 	cmd.Flags().BoolVar(&output.count, "count", false, "Print the number of rows")

@@ -605,6 +605,15 @@ $ mk "$L/tropos/skills/linker/SKILL.md" '---\nname: linker\ndescription: Links.\
 @l  linker#linker  L3  link  `henia show style-guide#rust
 ```
 
+`near` compares text by shared word shingles, and `after` lists each pair once.
+
+```scrut
+$ mk "$L/tropos/skills/echo/SKILL.md" '---\nname: echo\ndescription: Echo.\n---\n\n# Echo\n\nRun gofmt. Canary: CANARY-GO again.\n'
+> henia query '(join (skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.5)) @b))'
+@a  echo#echo  L3  paragraph  Run gofmt. Canary: CANARY-GO again.
+@b  style-guide#go  L7  paragraph  Run gofmt. Canary: CANARY-GO.
+```
+
 A malformed query points at the problem and suggests a fix.
 
 ```scrut

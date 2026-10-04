@@ -58,7 +58,7 @@ func fixture(t *testing.T) corpus {
 			"SKILL.md":     "# A\n\nIntro.\n\n## Usage\n\nFirst para.\n\nSecond has Term here.\n\nThird para.\n\n```bash\necho top\n```\n\n### Deeper\n\n```bash\necho deep\n```\n\n```go\nfunc x() {}\n```\n\n## Other\n\nTerm leads this section.\n\n- item one\n- item two\n",
 			"refs/more.md": "# More\n\nResource para with term.\n",
 		},
-		"b": {"SKILL.md": "# B\n\nPlain.\n"},
+		"b": {"SKILL.md": "# B\n\nPlain.\n\nSecond has Term here too.\n"},
 		"c": {"SKILL.md": "# C\n\nNo links.\n\n## Usage\n\nC usage.\n"},
 	}, map[string][]string{"a": {"b", "c#usage", "c#nope"}, "b": {"a", "c"}})
 }
@@ -73,7 +73,7 @@ func run(t *testing.T, c corpus, query string) []Row {
 		}
 		t.Fatal(err)
 	}
-	rows, err := q.Run(c.root, c)
+	rows, err := q.Run(c.root, Environment{Resolve: c})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,6 +116,8 @@ func TestRun(t *testing.T) {
 		{"join on shared text across skills", `(join (skill :id ?x (heading :text ?t) @h1) (skill :id (not ?x) (heading :text ?t) @h2))`, []string{"h1=Usage h2=Usage", "h1=Usage h2=Usage"}},
 		{"anti-join finds broken anchors", `(join (skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a)))))`, []string{"l=c#nope"}},
 		{"correlated negation", `(skill :id "a" (code :lang ?l) @c (not (section :id "usage" > (code :lang ?l))))`, []string{"c=func x() {}\n"}},
+		{"word counts with an open range", `(paragraph :words 4..)`, []string{"=Second has Term here.", "=Term leads this section.", "=Resource para with term.", "=Second has Term here too."}},
+		{"near duplicates across skills, each pair once", `(join (skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.6)) @b))`, []string{"a=Second has Term here. b=Second has Term here too."}},
 		{"literal inequality", `(section :level 2 :title (not "Usage") > (heading) @h)`, []string{"h=Other"}},
 		{"orphans", `(skill (not (inbound (skill)))) @s`, []string{}},
 		{"skills reaching nothing", `(skill (not (reaches (skill)))) @s`, []string{"s="}},
@@ -166,6 +168,9 @@ func TestReadErrors(t *testing.T) {
 		{`(section . )`, "anchor . needs a pattern after it", "", 11},
 		{`(link :url /^https)`, "unterminated /regexp/", "", 11},
 		{`(join (heading :text ?t) (skill))`, "a join prints its captures", "", 0},
+		{`(paragraph :text (near ?t 2))`, "(near ?x T) takes a threshold above 0 and at most 1", "e.g. (near ?t 0.7)", 26},
+		{`(paragraph :text (near "x" 0.5))`, "expected a ?variable", "", 23},
+		{`(paragraph :text (twin ?t))`, "expected not, after, near or similar", "", 18},
 		{`(heading :contains ?t)`, ":contains takes a string, not a variable", "bind the text with :text ?x", 19},
 	}
 	for _, tc := range cases {
@@ -188,5 +193,34 @@ func TestExplainPointsAtOffset(t *testing.T) {
 	want := "henia query: unknown type \"headng\"\n  (skill (headng))\n          ^\n  did you mean heading?\n"
 	if got := pe.Explain(query); got != want {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestSimilar(t *testing.T) {
+	c := fixture(t)
+	q, err := Read(`(join (skill :id "a" (paragraph :text ?t) @a) (skill :id "b" (paragraph :text (similar ?t 0.9)) @b))`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.Run(c.root, Environment{Resolve: c}); !errors.Is(err, ErrNoModel) {
+		t.Fatalf("err = %v, want ErrNoModel", err)
+	}
+	embed := func(text string) []float32 {
+		if strings.Contains(strings.ToLower(text), "term") {
+			return []float32{1, 0}
+		}
+		return []float32{0, 0}
+	}
+	rows, err := q.Run(c.root, Environment{Resolve: c, Embed: embed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"a=Second has Term here. b=Second has Term here too.",
+		"a=Term leads this section. b=Second has Term here too.",
+		"a=Resource para with term. b=Second has Term here too.",
+	}
+	if got := texts(rows); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got %q\nwant %q", got, want)
 	}
 }

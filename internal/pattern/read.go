@@ -3,6 +3,7 @@ package pattern
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 type Query struct {
 	Terms    []Term
 	Captures []string
+	Semantic bool
 }
 
 type Term struct {
@@ -63,13 +65,15 @@ type Link struct {
 }
 
 type Attr struct {
-	Key    string
-	Value  string
-	Lo, Hi int
-	Range  bool
-	Re     *regexp.Regexp
-	Var    string
-	Negate bool
+	Key       string
+	Value     string
+	Lo, Hi    int
+	Range     bool
+	Re        *regexp.Regexp
+	Var       string
+	Negate    bool
+	Relate    string
+	Threshold float64
 }
 
 type Error struct {
@@ -111,7 +115,9 @@ var types = map[string][]string{
 	"frontmatter": nil,
 }
 
-var textKeys = []string{"text", "contains", "matches"}
+var textKeys = []string{"text", "contains", "matches", "words", "node"}
+
+var numericKeys = []string{"level", "words"}
 
 func openKeys(kind string) bool { return kind == "_" || kind == "directive" || kind == "frontmatter" }
 
@@ -134,6 +140,7 @@ const (
 	tSymbol
 	tRegex
 	tVar
+	tFloat
 )
 
 type token struct {
@@ -169,6 +176,14 @@ func lex(src string) ([]token, error) {
 			kind := map[byte]tokenKind{'(': tOpen, ')': tClose, '[': tOpenAlt, ']': tCloseAlt, '>': tDirect, '?': tQuant, '*': tQuant, '+': tQuant}[c]
 			tokens = append(tokens, token{kind: kind, text: string(c), pos: i})
 			i++
+		case strings.HasPrefix(src[i:], "..") && i+2 < len(src) && src[i+2] >= '0' && src[i+2] <= '9':
+			j := i + 2
+			for j < len(src) && src[j] >= '0' && src[j] <= '9' {
+				j++
+			}
+			hi, _ := strconv.Atoi(src[i+2 : j])
+			tokens = append(tokens, token{kind: tRange, text: src[i:j], pos: i, hi: hi})
+			i = j
 		case c == '.':
 			tokens = append(tokens, token{kind: tAnchor, text: ".", pos: i})
 			i++
@@ -230,11 +245,20 @@ func lex(src string) ([]token, error) {
 				for k < len(src) && src[k] >= '0' && src[k] <= '9' {
 					k++
 				}
-				if k == j+2 {
-					return nil, &Error{Offset: j, Message: "expected a number after ..", Hint: "ranges look like 1..3"}
+				hi := math.MaxInt
+				if k > j+2 {
+					hi, _ = strconv.Atoi(src[j+2 : k])
 				}
-				hi, _ := strconv.Atoi(src[j+2 : k])
 				tokens = append(tokens, token{kind: tRange, text: src[i:k], pos: i, lo: lo, hi: hi})
+				i = k
+				continue
+			}
+			if j+1 < len(src) && src[j] == '.' && src[j+1] >= '0' && src[j+1] <= '9' {
+				k := j + 1
+				for k < len(src) && src[k] >= '0' && src[k] <= '9' {
+					k++
+				}
+				tokens = append(tokens, token{kind: tFloat, text: src[i:k], pos: i})
 				i = k
 				continue
 			}
@@ -262,6 +286,7 @@ type reader struct {
 	tokens   []token
 	at       int
 	captures []string
+	semantic bool
 }
 
 func Read(src string) (*Query, error) {
@@ -291,7 +316,7 @@ func Read(src string) (*Query, error) {
 	if len(q.Terms) == 0 {
 		return nil, &Error{Offset: 0, Message: "empty query", Hint: `try (skill :id "NAME" (heading) @h)`}
 	}
-	q.Captures = r.captures
+	q.Captures, q.Semantic = r.captures, r.semantic
 	if len(q.Captures) == 0 {
 		if joins {
 			return nil, &Error{Offset: 0, Message: "a join prints its captures; name one with @", Hint: `e.g. (join (link :target ?s) @l (skill :id ?s))`}
@@ -522,13 +547,31 @@ func (r *reader) attr(kind string) (Attr, error) {
 		return attr, &Error{Offset: key.pos, Message: fmt.Sprintf("%s has no key :%s", kind, key.text), Hint: suggest(key.text, known) + "; keys: :" + strings.Join(known, " :")}
 	}
 	if value.kind == tOpen {
-		if not := r.next(); not.kind != tSymbol || not.text != "not" {
-			return attr, r.unexpected(not, "not, as in (not ?x) or (not \"value\")")
+		form := r.next()
+		switch form.text {
+		case "not":
+			attr.Negate = true
+			value = r.next()
+		case "after", "near", "similar":
+			attr.Relate = form.text
+			value = r.next()
+			if value.kind != tVar {
+				return attr, r.unexpected(value, fmt.Sprintf("a ?variable, as in (%s ?x%s)", form.text, map[string]string{"after": "", "near": " 0.7", "similar": " 0.8"}[form.text]))
+			}
+			if form.text != "after" {
+				threshold := r.next()
+				t, err := strconv.ParseFloat(threshold.text, 64)
+				if threshold.kind != tFloat && threshold.kind != tInt || err != nil || t <= 0 || t > 1 {
+					return attr, &Error{Offset: threshold.pos, Message: fmt.Sprintf("(%s ?x T) takes a threshold above 0 and at most 1", form.text), Hint: fmt.Sprintf("e.g. (%s ?t 0.7)", form.text)}
+				}
+				attr.Threshold = t
+				r.semantic = r.semantic || form.text == "similar"
+			}
+		default:
+			return attr, r.unexpected(form, "not, after, near or similar, as in (not ?x) or (near ?t 0.7)")
 		}
-		attr.Negate = true
-		value = r.next()
 		if c := r.next(); c.kind != tClose {
-			return attr, r.unexpected(c, ") closing (not")
+			return attr, r.unexpected(c, fmt.Sprintf(") closing (%s", form.text))
 		}
 	}
 	if value.kind == tVar {
@@ -554,13 +597,13 @@ func (r *reader) attr(kind string) (Attr, error) {
 	default:
 		return attr, r.unexpected(value, fmt.Sprintf("a value for :%s", key.text))
 	}
-	if attr.Range && key.text != "level" {
-		return attr, &Error{Offset: value.pos, Message: "ranges apply to :level only"}
+	if attr.Range && !slices.Contains(numericKeys, key.text) {
+		return attr, &Error{Offset: value.pos, Message: "ranges apply to :level and :words only"}
 	}
-	if key.text == "level" && !attr.Range {
+	if slices.Contains(numericKeys, key.text) && !attr.Range {
 		n, err := strconv.Atoi(attr.Value)
 		if err != nil {
-			return attr, &Error{Offset: value.pos, Message: ":level takes a number or a range", Hint: ":level 2 or :level 1..3"}
+			return attr, &Error{Offset: value.pos, Message: fmt.Sprintf(":%s takes a number or a range", key.text), Hint: fmt.Sprintf(":%s 2, :%s 1..3 or :%s 80..", key.text, key.text, key.text)}
 		}
 		attr.Range, attr.Lo, attr.Hi = true, n, n
 	}

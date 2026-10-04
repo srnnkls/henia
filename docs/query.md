@@ -13,7 +13,9 @@ henia query '(skill (link :target "gestalt")) @s'
 henia query '(skill :id "gestalt" (reaches (skill) @t))'
 henia query '(skill (not (inbound (skill)))) @orphan'
 henia query '(join (skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a)))))'
-henia query '(join (skill :id ?x (heading :text ?t) @a) (skill :id (not ?x) (heading :text ?t) @b))'
+henia query '(join (skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.6)) @b))'
+henia query '(join (paragraph :node ?n :text ?t) @a (paragraph :node (after ?n) :text (similar ?t 0.85)) @b)'
+henia query '(file :path /\.md$/ (paragraph :words 100..) @p)'
 henia query '(skill :id "gestalt" > (file :main true (heading :level 1..2) @h))'
 henia query '(section > (heading) @title (code :lang "bash") @c)'
 henia query '(skill :id "gestalt" (link :url /^https:/) @l)'
@@ -35,13 +37,22 @@ henia query '(skill :id "gestalt" (link :url /^https:/) @l)'
 | `frontmatter` | its scalar keys |
 | `_` | any type, any key |
 
-Every type also takes `:text "exact"`, `:contains "case-insensitive"` and
-`:matches "go regexp"`. `:level` takes a number or a range such as `1..3`.
+Every type also takes `:text "exact"`, `:contains "case-insensitive"`,
+`:matches "go regexp"`, `:words` (its word count) and `:node` (an id in
+document order). `:level` and `:words` take a number or a range such as `1..3`,
+`80..` or `..20`.
 Other values compare exactly; quote them with `"`, or leave single words bare.
 A `/regexp/` value matches any key, as in `:url /^https:/` or `:title /^Phase/`.
 A `?variable` value binds the key's value; every other use of the variable must
 be equal, which joins the patterns that share it. `(not value)` negates a
-value, as in `:lang (not "go")` or `:id (not ?x)`.
+value, as in `:lang (not "go")` or `:id (not ?x)`. Compared with a variable:
+
+- `(after ?x)` sorts after it, so `:id (after ?x)` lists each pair once and
+  `:node (after ?n)` never pairs a node with itself.
+- `(near ?t 0.6)` shares at least that Jaccard share of three-word shingles,
+  the measure `henia lint` uses for similar content.
+- `(similar ?t 0.85)` has at least that cosine similarity under a local
+  Model2Vec model: `--model DIR`, else `[lint.semantic] model_path`.
 
 A section holds its heading and everything up to the next heading of the same
 or a higher level. Files other than Markdown hold blank-line-separated
@@ -55,7 +66,8 @@ join     := "(" "join" (pattern | "(" "not" pattern ")")+ ")"
 pattern  := "(" type item* ")" quant? capture?
           | "[" pattern+ "]" quant? capture?  ; alternatives
 value    := "string" | word | number | range | /regexp/ | ?variable
-          | "(" "not" value ")"
+          | "(" "not" value ")" | "(" "after" ?variable ")"
+          | "(" ("near" | "similar") ?variable threshold ")"
 item     := :key value | capture | pattern | ">" pattern | "."
           | "(" "not" (pattern | relation) ")" | relation
 relation := "(" ("reaches" | "inbound") pattern ")"

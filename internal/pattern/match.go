@@ -2,17 +2,24 @@ package pattern
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/srnnkls/henia/internal/markup"
+	"github.com/srnnkls/henia/internal/similarity"
 )
 
-const maxBindings = 100000
+const (
+	maxBindings  = 100000
+	shingleWords = 3
+)
 
 var ErrTooMany = errors.New("the query produces too many combinations; anchor it to a skill or section")
+
+var ErrNoModel = errors.New("similar needs a local Model2Vec model; pass --model or set [lint.semantic] model_path")
 
 type Resolver interface {
 	Skill(ref string) *markup.Element
@@ -31,10 +38,22 @@ type binding struct {
 	unequal  []constraint
 }
 
-type constraint struct{ name, value string }
+type constraint struct {
+	name, value, relate string
+	threshold           float64
+}
+
+type Environment struct {
+	Resolve Resolver
+	Embed   func(string) []float32
+}
 
 type matcher struct {
 	resolve  Resolver
+	embed    func(string) []float32
+	shingles map[string]map[string]bool
+	vectors  map[string][]float64
+	failure  error
 	memo     map[memoKey][]binding
 	reached  map[relationKey][]*markup.Element
 	linkers  map[*markup.Element][]*markup.Element
@@ -52,8 +71,11 @@ type memoKey struct {
 	e *markup.Element
 }
 
-func (q *Query) Run(root *markup.Element, resolve Resolver) ([]Row, error) {
-	m := &matcher{resolve: resolve, memo: map[memoKey][]binding{}, reached: map[relationKey][]*markup.Element{}, root: root}
+func (q *Query) Run(root *markup.Element, env Environment) ([]Row, error) {
+	if q.Semantic && env.Embed == nil {
+		return nil, ErrNoModel
+	}
+	m := &matcher{resolve: env.Resolve, embed: env.Embed, memo: map[memoKey][]binding{}, reached: map[relationKey][]*markup.Element{}, root: root, shingles: map[string]map[string]bool{}, vectors: map[string][]float64{}}
 	order := 0
 	root.Walk(func(e *markup.Element) bool {
 		e.Order = order
@@ -69,6 +91,9 @@ func (q *Query) Run(root *markup.Element, resolve Resolver) ([]Row, error) {
 			bindings, err = m.join(term.Join)
 		} else {
 			bindings, err = m.everywhere(term.Pattern, q.Captures[0] == "")
+		}
+		if err == nil {
+			err = m.failure
 		}
 		if err != nil {
 			return nil, err
@@ -112,15 +137,21 @@ func (m *matcher) join(j *Join) ([]binding, error) {
 			return nil, err
 		}
 		index := indexBy(bindings, shared(rows, bindings))
+		candidates := index.candidates
+		if near, ok := m.nearIndex(rows, bindings); ok && len(index.keys) == 0 {
+			candidates = near
+		}
 		var next []binding
 		for _, row := range rows {
-			for _, b := range index.candidates(row) {
+			for _, b := range candidates(row) {
+				joined, ok := m.unify(row, b)
+				if !ok {
+					continue
+				}
 				if m.produced++; m.produced > maxBindings {
 					return nil, ErrTooMany
 				}
-				if joined, ok := row.join(b); ok {
-					next = append(next, joined)
-				}
+				next = append(next, joined)
 			}
 		}
 		rows = next
@@ -133,7 +164,7 @@ func (m *matcher) join(j *Join) ([]binding, error) {
 		index := indexBy(bindings, shared(rows, bindings))
 		rows = slices.DeleteFunc(rows, func(row binding) bool {
 			for _, b := range index.candidates(row) {
-				if _, ok := row.join(b); ok {
+				if _, ok := m.unify(row, b); ok {
 					return true
 				}
 			}
@@ -141,6 +172,46 @@ func (m *matcher) join(j *Join) ([]binding, error) {
 		})
 	}
 	return rows, nil
+}
+
+func (m *matcher) nearIndex(rows, bindings []binding) (func(binding) []binding, bool) {
+	if len(rows) == 0 || len(bindings) == 0 {
+		return nil, false
+	}
+	name := ""
+	for _, c := range bindings[0].unequal {
+		if _, bound := rows[0].vars[c.name]; bound && c.relate == "near" {
+			name = c.name
+		}
+	}
+	if name == "" {
+		return nil, false
+	}
+	postings := map[string][]int{}
+	var loose []binding
+	for i, b := range bindings {
+		at := slices.IndexFunc(b.unequal, func(c constraint) bool { return c.name == name && c.relate == "near" })
+		if at < 0 {
+			loose = append(loose, b)
+			continue
+		}
+		for shingle := range m.shingle(b.unequal[at].value) {
+			postings[shingle] = append(postings[shingle], i)
+		}
+	}
+	return func(row binding) []binding {
+		seen := map[int]bool{}
+		out := slices.Clone(loose)
+		for shingle := range m.shingle(row.vars[name]) {
+			for _, i := range postings[shingle] {
+				if !seen[i] {
+					seen[i] = true
+					out = append(out, bindings[i])
+				}
+			}
+		}
+		return out
+	}, true
 }
 
 type bindingIndex struct {
@@ -259,10 +330,13 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 			return nil, nil
 		}
 		bound := binding{vars: map[string]string{a.Var: value}}
-		if a.Negate {
-			bound = binding{unequal: []constraint{{a.Var, value}}}
+		switch {
+		case a.Negate:
+			bound = binding{unequal: []constraint{{name: a.Var, value: value, relate: "not"}}}
+		case a.Relate != "":
+			bound = binding{unequal: []constraint{{name: a.Var, value: value, relate: a.Relate, threshold: a.Threshold}}}
 		}
-		if seed, ok = seed.join(bound); !ok {
+		if seed, ok = m.unify(seed, bound); !ok {
 			return nil, nil
 		}
 	}
@@ -285,7 +359,7 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 				if m.produced++; m.produced > maxBindings {
 					return nil, ErrTooMany
 				}
-				if joined, ok := r.b.join(c.b); ok {
+				if joined, ok := m.unify(r.b, c.b); ok {
 					next = append(next, partial{joined, max(r.last, c.last)})
 				}
 			}
@@ -310,7 +384,7 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 				if m.produced++; m.produced > maxBindings {
 					return nil, ErrTooMany
 				}
-				if joined, ok := r.b.join(t); ok {
+				if joined, ok := m.unify(r.b, t); ok {
 					next = append(next, partial{joined, r.last})
 				}
 			}
@@ -332,7 +406,7 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 		}
 		results = slices.DeleteFunc(results, func(r partial) bool {
 			for _, b := range found {
-				if _, ok := r.b.join(b); ok {
+				if _, ok := m.unify(r.b, b); ok {
 					return true
 				}
 			}
@@ -414,7 +488,7 @@ func (m *matcher) chain(c Chain, e *markup.Element) ([]chainMatch, error) {
 						if m.produced++; m.produced > maxBindings {
 							return nil, ErrTooMany
 						}
-						joined, ok := cm.b.join(b)
+						joined, ok := m.unify(cm.b, b)
 						if !ok {
 							continue
 						}
@@ -543,7 +617,26 @@ func (b binding) capture(name string, e *markup.Element) binding {
 	return binding{captures: captures, vars: b.vars, unequal: b.unequal}
 }
 
-func (b binding) join(other binding) (binding, bool) {
+func (m *matcher) unify(b, other binding) (binding, bool) {
+	lookup := func(name string) (string, bool) {
+		if value, ok := b.vars[name]; ok {
+			return value, true
+		}
+		value, ok := other.vars[name]
+		return value, ok
+	}
+	for name, value := range other.vars {
+		if existing, ok := b.vars[name]; ok && existing != value {
+			return binding{}, false
+		}
+	}
+	for _, constraints := range [][]constraint{b.unequal, other.unequal} {
+		for _, c := range constraints {
+			if value, bound := lookup(c.name); bound && !m.satisfies(c, value) {
+				return binding{}, false
+			}
+		}
+	}
 	out := binding{vars: maps.Clone(b.vars), unequal: slices.Concat(b.unequal, other.unequal), captures: maps.Clone(b.captures)}
 	for name, value := range other.vars {
 		if existing, ok := out.vars[name]; ok && existing != value {
@@ -555,7 +648,7 @@ func (b binding) join(other binding) (binding, bool) {
 		out.vars[name] = value
 	}
 	for _, c := range out.unequal {
-		if value, bound := out.vars[c.name]; bound && value == c.value {
+		if value, bound := out.vars[c.name]; bound && !m.satisfies(c, value) {
 			return binding{}, false
 		}
 	}
@@ -569,8 +662,13 @@ func (b binding) join(other binding) (binding, bool) {
 }
 
 func (a Attr) value(e *markup.Element) (string, bool) {
-	if a.Key == "text" {
+	switch a.Key {
+	case "text":
 		return strings.TrimSpace(e.Text), true
+	case "words":
+		return strconv.Itoa(len(similarity.Words(e.Text))), true
+	case "node":
+		return fmt.Sprintf("%09d", e.Order), true
 	}
 	value, ok := e.Attrs[a.Key]
 	return value, ok
@@ -595,4 +693,38 @@ func (a Attr) test(e *markup.Element) bool {
 		return err == nil && a.Lo <= n && n <= a.Hi
 	}
 	return value == a.Value
+}
+
+func (m *matcher) satisfies(c constraint, bound string) bool {
+	switch c.relate {
+	case "after":
+		return c.value > bound
+	case "near":
+		return similarity.Jaccard(m.shingle(c.value), m.shingle(bound)) >= c.threshold
+	case "similar":
+		a, b := m.vector(c.value), m.vector(bound)
+		return a != nil && b != nil && similarity.Cosine(a, b) >= c.threshold
+	}
+	return c.value != bound
+}
+
+func (m *matcher) shingle(text string) map[string]bool {
+	if cached, ok := m.shingles[text]; ok {
+		return cached
+	}
+	shingles := similarity.Shingles(text, shingleWords)
+	m.shingles[text] = shingles
+	return shingles
+}
+
+func (m *matcher) vector(text string) []float64 {
+	if cached, ok := m.vectors[text]; ok {
+		return cached
+	}
+	vector, err := similarity.Unit(m.embed(text))
+	if err != nil && m.failure == nil {
+		m.failure = err
+	}
+	m.vectors[text] = vector
+	return vector
 }
