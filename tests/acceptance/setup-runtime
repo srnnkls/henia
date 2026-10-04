@@ -9,11 +9,11 @@ here=$(cd "$(dirname "$0")" && pwd -P)
 henia=$(command -v henia)
 fas=$(command -v fas)
 w=$(cd "$(mktemp -d)" && pwd -P)
-mkdir -p "$w/data/henia/sources" "$w/home/claude" "$w/home/codex" "$w/project/.fas/rules" "$w/zdotdir" "$w/fas/rules" "$w/fas/empty" "$w/codex-config/henia"
+mkdir -p "$w/data/henia/sources" "$w/home/claude" "$w/home/codex" "$w/project/.fas/rules" "$w/zdotdir" "$w/fas/rules" "$w/fas/empty" "$w/home/codex/rules"
 cp -R "$here/runtime/source" "$w/data/henia/sources/fixture"
 cp "$here/runtime/henia_library.cue" "$w/fas/rules/"
 cp "$here/runtime/preload_rules.cue" "$w/project/.fas/rules/"
-printf '[preload]\nunsandboxed = "run"\n' > "$w/codex-config/henia/henia.toml"
+printf '%s\n' 'prefix_rule(pattern=["henia", "show"], decision="allow")' 'prefix_rule(pattern=["henia", "preload"], decision="allow")' > "$w/home/codex/rules/henia.rules"
 "$henia" build "$w/data/henia/sources/fixture" --output "$w/build" > /dev/null
 cp -R "$w/build/claude/skills" "$w/home/claude/skills"
 cp -R "$w/build/codex/skills" "$w/home/codex/skills"

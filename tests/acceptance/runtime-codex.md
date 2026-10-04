@@ -3,15 +3,15 @@
 Codex lists only the projected entry skill; the library skill it references is
 read through `henia show`, and a FAS hook blocks reading the library directly,
 steering the agent back to `henia show`. A library skill's preload runs inside
-`henia show` and a FAS-denied one shows the rule. Codex's read-only sandbox
-already denies writes and Henia's own sandbox cannot nest inside it, so the
-isolated user configuration opts into `unsandboxed = "run"`.
+`henia show` and a FAS-denied one shows the rule. Henia's sandbox cannot nest
+inside Codex's, so Codex rules let `henia show` and `henia preload` run outside
+it; Henia then sandboxes each preload itself.
 Skipped without `codex`, `fas` or Codex credentials.
 
 ```scrut
 $ command -v codex fas > /dev/null && [ -f "${CODEX_AUTH:-$HOME/.codex/auth.json}" ] || exit 80
 > W=$("$TESTDIR/setup-runtime") && ln -s "${CODEX_AUTH:-$HOME/.codex/auth.json}" "$W/home/codex/auth.json"
-> codex_run() { (cd "$W/project" && env XDG_DATA_HOME="$W/data" XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/codex-config" MISE_DATA_DIR="$HOME/.local/share/mise" MISE_GLOBAL_CONFIG_FILE="$HOME/.config/mise/config.toml" ZDOTDIR="$W/zdotdir" CODEX_HOME="$W/home/codex" codex exec --skip-git-repo-check --sandbox read-only --dangerously-bypass-hook-trust -o "$W/$1.txt" "$2" < /dev/null > "$W/$1.log" 2>&1); }
+> codex_run() { (cd "$W/project" && env XDG_DATA_HOME="$W/data" XDG_CACHE_HOME="$W/cache" MISE_DATA_DIR="$HOME/.local/share/mise" ZDOTDIR="$W/zdotdir" CODEX_HOME="$W/home/codex" codex exec --skip-git-repo-check --sandbox read-only --dangerously-bypass-hook-trust -o "$W/$1.txt" "$2" < /dev/null > "$W/$1.log" 2>&1); }
 > ls "$W/home/codex/skills"
 entry
 henia
