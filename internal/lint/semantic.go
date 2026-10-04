@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"slices"
 	"strings"
 
-	"github.com/townsendmerino/aikit/embed"
+	"github.com/srnnkls/henia/internal/similarity"
 )
 
 // SemanticOptions enables local Model2Vec inference. ModelPath is a directory
@@ -43,14 +42,11 @@ func (c *checker) checkSemantic(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	model, err := embed.LoadFromFS(os.DirFS(c.options.Semantic.ModelPath), ".")
+	encode, err := similarity.Model(c.options.Semantic.ModelPath)
 	if err != nil {
-		return fmt.Errorf("load semantic model %q: %w", c.options.Semantic.ModelPath, err)
+		return err
 	}
-	if model.Dim() == 0 {
-		return fmt.Errorf("semantic model has no embedding dimensions")
-	}
-	return c.compareSemantic(ctx, model.Encode)
+	return c.compareSemantic(ctx, encode)
 }
 
 func (c *checker) compareSemantic(ctx context.Context, encode func(string) []float32) error {
@@ -67,7 +63,7 @@ func (c *checker) compareSemantic(ctx context.Context, encode func(string) []flo
 		if dimension == 0 || len(raw) != dimension {
 			return fmt.Errorf("semantic model returned inconsistent or empty embedding dimensions")
 		}
-		vector, err := unitVector(raw)
+		vector, err := similarity.Unit(raw)
 		if err != nil {
 			return fmt.Errorf("embed %s:%d: %w", current.location.Path, current.location.Line, err)
 		}
@@ -89,7 +85,7 @@ func (c *checker) compareSemantic(ctx context.Context, encode func(string) []flo
 				if previous == nil {
 					continue
 				}
-				score := cosine(vector, previous)
+				score := similarity.Cosine(vector, previous)
 				if score >= c.options.Semantic.Threshold && score > bestScore {
 					bestIndex, bestScore = j, score
 				}
@@ -107,32 +103,4 @@ func (c *checker) compareSemantic(ctx context.Context, encode func(string) []flo
 		vectors = append(vectors, vector)
 	}
 	return ctx.Err()
-}
-
-// A zero embedding is uninformative, rather than a match with another zero.
-func unitVector(raw []float32) ([]float64, error) {
-	norm := 0.0
-	for _, value := range raw {
-		x := float64(value)
-		if math.IsNaN(x) || math.IsInf(x, 0) {
-			return nil, fmt.Errorf("semantic model returned a non-finite embedding")
-		}
-		norm = math.Hypot(norm, x)
-	}
-	if norm == 0 {
-		return nil, nil
-	}
-	vector := make([]float64, len(raw))
-	for i, value := range raw {
-		vector[i] = float64(value) / norm
-	}
-	return vector, nil
-}
-
-func cosine(a, b []float64) float64 {
-	score := 0.0
-	for i, value := range a {
-		score += value * b[i]
-	}
-	return min(1, max(-1, score))
 }

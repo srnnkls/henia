@@ -3,6 +3,7 @@ package lint
 import (
 	"context"
 	"errors"
+	"github.com/srnnkls/henia/internal/similarity"
 	"math"
 	"os"
 	"path/filepath"
@@ -91,20 +92,20 @@ func TestSemanticZeroVectorAndCancellation(t *testing.T) {
 
 func TestSemanticVectorValidationAndCosine(t *testing.T) {
 	for _, v := range [][]float32{{float32(math.NaN())}, {float32(math.Inf(1))}} {
-		if _, err := unitVector(v); err == nil {
+		if _, err := similarity.Unit(v); err == nil {
 			t.Fatal("accepted non-finite vector")
 		}
 	}
-	a, err := unitVector([]float32{3, 4})
+	a, err := similarity.Unit([]float32{3, 4})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := unitVector([]float32{0, 2})
+	b, err := similarity.Unit([]float32{0, 2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if math.Abs(cosine(a, b)-0.8) > 1e-12 {
-		t.Fatal(cosine(a, b))
+	if math.Abs(similarity.Cosine(a, b)-0.8) > 1e-12 {
+		t.Fatal(similarity.Cosine(a, b))
 	}
 	c := checker{similarParagraphs: []paragraph{{text: "one"}, {text: "two"}}}
 	calls := 0
@@ -147,12 +148,12 @@ func TestSemanticPretrainedModel(t *testing.T) {
 	}
 	vectors := make([][]float64, len(texts))
 	for i, text := range texts {
-		vectors[i], err = unitVector(model.Encode(text))
+		vectors[i], err = similarity.Unit(model.Encode(text))
 		if err != nil || vectors[i] == nil {
 			t.Fatalf("embed: %v", err)
 		}
 	}
-	paraphrase, unrelated, negation := cosine(vectors[0], vectors[1]), cosine(vectors[0], vectors[2]), cosine(vectors[0], vectors[3])
+	paraphrase, unrelated, negation := similarity.Cosine(vectors[0], vectors[1]), similarity.Cosine(vectors[0], vectors[2]), similarity.Cosine(vectors[0], vectors[3])
 	t.Logf("model=%s dimensions=%d paraphrase=%.4f unrelated=%.4f negation=%.4f", path, model.Dim(), paraphrase, unrelated, negation)
 	if paraphrase <= unrelated+0.1 {
 		t.Fatalf("paraphrase %.4f does not separate from unrelated %.4f", paraphrase, unrelated)

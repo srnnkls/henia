@@ -3,7 +3,8 @@ package lint
 import (
 	"slices"
 	"strings"
-	"unicode"
+
+	"github.com/srnnkls/henia/internal/similarity"
 )
 
 type paragraph struct {
@@ -14,14 +15,7 @@ type paragraph struct {
 }
 
 func newParagraph(source string, location Location, size int) paragraph {
-	words := strings.FieldsFunc(strings.ToLower(source), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.IsMark(r)
-	})
-	p := paragraph{text: strings.Join(strings.Fields(source), " "), shingles: map[string]bool{}, location: location}
-	for i := 0; i+size <= len(words); i++ {
-		p.shingles[strings.Join(words[i:i+size], " ")] = true
-	}
-	return p
+	return paragraph{text: strings.Join(strings.Fields(source), " "), shingles: similarity.Shingles(source, size), location: location}
 }
 
 type paragraphMatch struct {
