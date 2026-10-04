@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.11](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.10...v0.1.0-alpha.11) (2026-10-04)
+
+
+### Features
+
+* **config:** name static and dynamic skills and clarify harness keys ([ca04276](https://github.com/srnnkls/henia/commit/ca042763dc373f3240ef22b139abf87df194fafc))
+* **runtime:** configure the FAS consultation timeout ([13bddac](https://github.com/srnnkls/henia/commit/13bddac9ea0d4f91225d041ff5a7903d12572181))
+
 ## [0.1.0-alpha.10](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.9...v0.1.0-alpha.10) (2026-10-03)
 
 
