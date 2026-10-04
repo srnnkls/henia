@@ -79,7 +79,9 @@ gh pr list --limit 5
 ````
 
 `henia show` runs each preload in the project directory and prints the command
-above its output. Code spans and blocks that only show the syntax never run.
+above its output. Code spans and blocks that only show the syntax never run, and
+an inline preload's `!` must start a line or follow whitespace, as in Claude
+Code.
 
 Preloads have no side effects, and Henia enforces that itself:
 

@@ -150,16 +150,24 @@ func newPreloadCommand() *cobra.Command {
 		Use:   "preload --skill <skill> -- <command>",
 		Short: "Run one skill preload under Henia's sandbox and refusal rules",
 		Long: `Run one skill preload under Henia's sandbox and refusal rules and print the
-command above its output. Projected skills call this for each preload. Problems
-print as text; the command always exits successfully so a skill preload never
-aborts.`,
+command above its output. The command must be one of the named library skill's
+own preloads, as rendered for any harness its source configures; projected
+skills call this for each preload. Problems print as text; the command always
+exits successfully so a skill preload never aborts.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			lib := flags.open(cmd)
-			c := preload.Context{Dir: flags.project, Skill: skill, Source: "projection", Tier: library.Global, Caller: detectHarness(flags.harness)}
-			if entry, err := lib.Resolve(skill); err == nil {
-				c.Skill, c.Source, c.Tier = entry.Name, entry.Source, entry.Tier
+			out := cmd.OutOrStdout()
+			entry, err := lib.Resolve(skill)
+			if err != nil {
+				fmt.Fprint(out, preload.Show(args[0], fmt.Sprintf("henia: blocked by henia/not-a-preload: %v", err)))
+				return nil
 			}
+			if !declaresPreload(lib, entry, args[0]) {
+				fmt.Fprint(out, preload.Show(args[0], fmt.Sprintf("henia: blocked by henia/not-a-preload: %s declares no such preload", lib.Reference(entry))))
+				return nil
+			}
+			c := preload.Context{Dir: flags.project, Skill: entry.Name, Source: entry.Source, Tier: entry.Tier, Caller: detectHarness(flags.harness)}
 			runner, err := preloadRunner(flags.project)
 			if err != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "henia: preload not run: %v\n", err)
@@ -173,6 +181,23 @@ aborts.`,
 	cmd.Flags().StringVar(&skill, "skill", "", "Skill the preload belongs to")
 	_ = cmd.MarkFlagRequired("skill")
 	return cmd
+}
+
+func declaresPreload(lib *library.Library, entry library.Entry, command string) bool {
+	harnesses := []string{""}
+	if data, err := os.ReadFile(entry.Origin.Config); err == nil {
+		if configured, _, err := config.Harnesses(data); err == nil {
+			harnesses = append(harnesses, slices.Sorted(maps.Keys(configured))...)
+		}
+	}
+	for _, harness := range harnesses {
+		for _, p := range preload.Find([]byte(newRenderer(harness, lib).body(entry))) {
+			if preload.Declares(p.Command, command) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func preloadRunner(project string) (*preload.Runner, error) {

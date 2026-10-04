@@ -45,6 +45,9 @@ func inline(source []byte, span *ast.CodeSpan) (Preload, bool) {
 	if !ok || prev.Segment.Stop == 0 || source[prev.Segment.Stop-1] != '!' {
 		return Preload{}, false
 	}
+	if bang := prev.Segment.Stop - 1; bang > 0 && !strings.ContainsRune(" \t\n", rune(source[bang-1])) {
+		return Preload{}, false
+	}
 	first, ok := span.FirstChild().(*ast.Text)
 	if !ok {
 		return Preload{}, false

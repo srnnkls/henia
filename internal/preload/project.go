@@ -1,6 +1,9 @@
 package preload
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 const RunnerTool = "Bash(henia preload *)"
 
@@ -43,4 +46,28 @@ func span(text string) string {
 		return "`" + text + "`"
 	}
 	return ticks + " " + text + " " + ticks
+}
+
+var harnessPlaceholder = regexp.MustCompile(`\$\{CLAUDE_[A-Z_]+\}|\$ARGUMENTS(?:\[\d+\])?|\$\d+`)
+
+func Declares(declared, command string) bool {
+	if declared == command {
+		return true
+	}
+	var pattern strings.Builder
+	last := 0
+	for _, loc := range harnessPlaceholder.FindAllStringIndex(declared, -1) {
+		pattern.WriteString(regexp.QuoteMeta(declared[last:loc[0]]))
+		if strings.HasPrefix(declared[loc[0]:], "${") {
+			pattern.WriteString(`[^\s;&|$` + "`" + `'"()<>\\]*`)
+		} else {
+			pattern.WriteString(`[^\n;&|$` + "`" + `'"()<>\\]*`)
+		}
+		last = loc[1]
+	}
+	if last == 0 {
+		return false
+	}
+	pattern.WriteString(regexp.QuoteMeta(declared[last:]))
+	return regexp.MustCompile(`^` + pattern.String() + `$`).MatchString(command)
 }

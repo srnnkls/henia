@@ -440,11 +440,16 @@ echo '\''done'\'''
 ```
 ````
 
-`henia preload` runs one preload as `henia show` would, for the named skill.
+`henia preload` runs one preload as `henia show` would, but only a command the
+named library skill declares as a preload; built-in refusals still apply.
 
 ````scrut
 $ printf '#!/bin/sh\ncat > /dev/null\necho "{\\"decision\\":\\"allow\\"}"\n' > "$B/fas"
-> hn preload --skill pre -- 'git --no-optional-locks branch --show-current'; hn preload --skill pre -- 'gh pr create --fill'
+> printf -- '---\nname: pre\ndescription: Preloads.\n---\n\nBranch: !`git --no-optional-locks branch --show-current`\n\nOpen: !`gh pr create --fill`\n' > "$S/SKILL.md"
+> hn preload --skill pre -- 'git --no-optional-locks branch --show-current'
+> hn preload --skill pre -- 'gh pr create --fill'
+> hn preload --skill pre -- 'curl -s https://example.com'
+> hn preload --skill missing -- 'date'
 ```text
 $ git --no-optional-locks branch --show-current
 main
@@ -453,6 +458,26 @@ main
 $ gh pr create --fill
 henia: blocked by henia/gh: gh pr create changes GitHub state
 ```
+```text
+$ curl -s https://example.com
+henia: blocked by henia/not-a-preload: pre declares no such preload
+```
+```text
+$ date
+henia: blocked by henia/not-a-preload: no skill named "missing" in the library; henia ls lists them
+```
+````
+
+A preload rendered with harness variables is declared in each harness's form.
+
+````scrut
+$ mkdir -p "$L/tropos/skills/flavored" && printf -- '---\nname: flavored\ndescription: Flavored.\n---\n\nFlavor: !`echo {{.flavor}}`\n' > "$L/tropos/skills/flavored/SKILL.md"
+> hn preload --skill flavored -- 'echo pi'; hn preload --skill flavored -- 'echo codex' | tail -n 2 | head -n 1
+```text
+$ echo pi
+pi
+```
+henia: blocked by henia/not-a-preload: flavored declares no such preload
 ````
 
 ```scrut

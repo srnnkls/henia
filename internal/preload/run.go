@@ -117,8 +117,10 @@ func (r *Runner) Expand(ctx context.Context, body string, c Context) string {
 }
 
 func (r *Runner) Block(ctx context.Context, command string, c Context) string {
-	return fence("", command, r.Run(ctx, command, c))
+	return Show(command, r.Run(ctx, command, c))
 }
+
+func Show(command, output string) string { return fence("", command, output) }
 
 func fence(indent, command, output string) string {
 	ticks := 3

@@ -223,15 +223,22 @@ the item. Notes follow the output: `henia: timed out after 10s`,
 budget applies to the skill before preloads run.
 
 Code spans and code blocks that merely show the syntax never run: a preload is
-only a code span directly after `!` in text, or a fence whose info string is
-exactly `!`.
+only a code span directly after a `!` that starts a line or follows whitespace
+(as Claude Code requires), or a fence whose info string is exactly `!`.
 
 ### Projection
 
 A projected skill is loaded by its harness, not by `henia show`, so `henia build`
 rewrites each preload into `henia preload --skill <name> -- '<command>'`, which
 applies the same check, FAS consultation, sandbox and timeout and prints the
-same block. Profiles that run preloads natively (`preloads = true`; Claude) keep
+same block. `henia preload` runs only a command the named library skill
+declares as a preload, in its neutral render or the render for any harness its
+source configures; a harness's placeholders (`${CLAUDE_SKILL_DIR}`,
+`$ARGUMENTS`, `$1`), which Claude Code substitutes before running the command,
+match text without whitespace or shell syntax for `${…}` and without shell
+syntax for arguments. A command that is not declared is refused, so allowing
+`henia preload` outside a harness sandbox does not let an agent run arbitrary
+commands through it. Profiles that run preloads natively (`preloads = true`; Claude) keep
 the `!` syntax around that invocation and gain `Bash(henia preload *)` in a
 declared `allowed-tools`. Other profiles get a run-first instruction: inline
 `` run first: `henia preload …` ``, or a `Run first:` paragraph over a `bash`
