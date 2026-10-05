@@ -30,6 +30,9 @@ type mention struct {
 }
 
 func (q *Query) check() error {
+	if !slices.ContainsFunc(q.Members, func(p *Pattern) bool { return !optionalPattern(p) }) {
+		return &Error{Offset: q.Members[0].Pos, Message: "a query needs a pattern that is not optional", Hint: "drop the ? from one pattern, or add a required pattern that the optional ones join"}
+	}
 	root := &scope{}
 	var mentions []mention
 	var problem error
@@ -127,11 +130,18 @@ func (q *Query) check() error {
 		}
 	}
 	for i, p := range q.Absent {
-		shared := slices.ContainsFunc(mentions, func(m mention) bool {
-			return m.scope.within(scopes[i]) && slices.ContainsFunc(mentions, func(o mention) bool { return o.name == m.name && o.binds && o.scope == root })
-		})
-		if !shared {
+		shares := func(required bool) bool {
+			return slices.ContainsFunc(mentions, func(m mention) bool {
+				return m.scope.within(scopes[i]) && slices.ContainsFunc(mentions, func(o mention) bool {
+					return o.name == m.name && o.binds && o.scope == root && (!required || !o.optional)
+				})
+			})
+		}
+		if !shares(false) {
 			return &Error{Offset: p.Pos, Message: "(not ...) shares no variable with the patterns of the query, so it drops every row or none", Hint: "use a ?variable bound by another pattern"}
+		}
+		if !shares(true) {
+			return &Error{Offset: p.Pos, Message: "(not ...) shares only variables bound by optional patterns, so it cannot decide", Hint: "use a ?variable bound by a pattern that is not optional"}
 		}
 	}
 	component := make([]int, len(q.Members))
@@ -167,6 +177,9 @@ func before(p *Pattern, chains, relations int) map[string]bool {
 	for _, a := range p.Attrs {
 		if a.Var != "" && !a.Negate && a.Relate == "" {
 			vars[a.Var] = true
+		}
+		if a.Score != "" && !a.Negate {
+			vars[a.Score] = true
 		}
 	}
 	for _, chain := range p.Chains[:chains] {

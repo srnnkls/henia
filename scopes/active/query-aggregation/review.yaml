@@ -47,4 +47,35 @@ batches:
         claim: trigger 2 not covered by check_test.go
         reason: covered by restored TestReadErrors case at offset 24
     reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b2-*
+  - batch: 3
+    tasks:
+      - QAG-003
+    reviewers:
+      - claude-opus
+      - peer-gpt6.1-sol
+      - peer-gpt6-astra
+    gates:
+      correctness: pass after fix
+      security: pass
+      performance: pass
+      architecture: pass after fix
+      style: pass
+    admitted:
+      - id: B3-H1
+        found_by:
+          - claude-opus (architecture)
+        mechanism: Query.Impossible treated optional top-level members as required
+        status: fixed
+      - id: B3-H2
+        found_by:
+          - peer-gpt6.1-sol
+        mechanism: before() omitted score bindings from mention.prior
+        status: fixed
+    residual:
+      - id: B3-R1
+        found_by:
+          - claude-opus (rereview)
+        claim: bound() ignores score variables in the alternatives-equality check
+        reason: pre-existing, outside QAG-003, no trigger shown
+    reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b3-*
 deferred: []

@@ -155,30 +155,16 @@ func (m *matcher) everywhere(p *Pattern, implicit bool) ([]binding, error) {
 
 func (m *matcher) join(members, absent []*Pattern) ([]binding, error) {
 	rows := []binding{{}}
-	for _, member := range members {
-		bindings, err := m.everywhere(member, false)
-		if err != nil {
-			return nil, err
-		}
-		index := indexBy(bindings, shared(rows, bindings))
-		candidates := index.candidates
-		if near, ok := m.nearIndex(rows, bindings); ok && len(index.keys) == 0 {
-			candidates = near
-		}
-		var next []binding
-		for _, row := range rows {
-			for _, b := range candidates(row) {
-				joined, ok := m.unify(row, b)
-				if !ok {
-					continue
-				}
-				if m.produced++; m.produced > maxBindings {
-					return nil, ErrTooMany
-				}
-				next = append(next, joined)
+	var err error
+	for _, optional := range []bool{false, true} {
+		for _, member := range members {
+			if optionalPattern(member) != optional {
+				continue
+			}
+			if rows, err = m.joinMember(rows, member, optional); err != nil {
+				return nil, err
 			}
 		}
-		rows = next
 	}
 	for _, absent := range absent {
 		bindings, err := m.everywhere(absent, false)
@@ -196,6 +182,37 @@ func (m *matcher) join(members, absent []*Pattern) ([]binding, error) {
 		})
 	}
 	return rows, nil
+}
+
+func (m *matcher) joinMember(rows []binding, member *Pattern, optional bool) ([]binding, error) {
+	bindings, err := m.everywhere(member, false)
+	if err != nil {
+		return nil, err
+	}
+	index := indexBy(bindings, shared(rows, bindings))
+	candidates := index.candidates
+	if near, ok := m.nearIndex(rows, bindings); ok && len(index.keys) == 0 {
+		candidates = near
+	}
+	var next []binding
+	for _, row := range rows {
+		matched := false
+		for _, b := range candidates(row) {
+			joined, ok := m.unify(row, b)
+			if !ok {
+				continue
+			}
+			if m.produced++; m.produced > maxBindings {
+				return nil, ErrTooMany
+			}
+			matched = true
+			next = append(next, joined)
+		}
+		if optional && !matched {
+			next = append(next, row)
+		}
+	}
+	return next, nil
 }
 
 func (m *matcher) nearIndex(rows, bindings []binding) (func(binding) []binding, bool) {
@@ -930,7 +947,7 @@ func (q *Query) Impossible(env Environment) bool {
 		return len(p.Alts) > 0
 	}
 	for _, p := range q.Members {
-		if walk(p) {
+		if !optionalPattern(p) && walk(p) {
 			return true
 		}
 	}
