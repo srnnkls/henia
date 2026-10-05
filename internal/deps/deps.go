@@ -228,7 +228,13 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 			break
 		}
 	}
-	if len(overrides) == 0 {
+	effective := maps.Clone(declared)
+	maps.Copy(effective, overrides)
+	if len(effective) == 0 {
+		if err := os.Remove(scope.Lock); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return report, err
+		}
+	} else if len(overrides) == 0 {
 		if err := copyFile(state("phora.lock"), scope.Lock); err != nil {
 			return report, err
 		}
@@ -238,8 +244,6 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 	if err := copyFile(state("phora.local.lock"), Local(scope.Lock)); err != nil {
 		return report, err
 	}
-	effective := maps.Clone(declared)
-	maps.Copy(effective, overrides)
 	report.Packages = slices.Sorted(maps.Keys(effective))
 	return report, nil
 }
