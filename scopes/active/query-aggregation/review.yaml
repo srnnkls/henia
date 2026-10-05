@@ -188,6 +188,28 @@ batches:
         claim: no regression test for B6-H1
         reason: TestQuerySortKeepsRowsDifferingInSortVariable exists (cli_test.go:250) and passes; re-review diff omitted that file
     reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b6-*
+  - batch: 7
+    tasks:
+      - QAG-007
+    reviewers:
+      - claude-opus
+      - peer-gpt6.1-sol
+      - peer-gpt6-astra
+    gates:
+      correctness: pass after fix
+      security: pass
+      performance: pass
+      architecture: pass
+      style: pass
+    admitted:
+      - id: B7-M1
+        found_by:
+          - claude-opus (general)
+          - peer-gpt6-astra
+        mechanism: unquoted --sort -?n example globbed by zsh
+        status: fixed
+    residual: []
+    reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-*
 deferred:
   - id: B4-D1
     found_by:

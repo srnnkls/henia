@@ -2,12 +2,12 @@ checkpoint:
   scope_name: query-aggregation
   scope_path: scopes/active/query-aggregation
   branch: feat/query-aggregation
-  last_commit: f3293de
-  updated_at: "2026-10-05T22:27:22Z"
+  last_commit: 5704ecd
+  updated_at: "2026-10-05T22:37:27Z"
   batch:
-    number: 6
+    number: 7
     tasks:
-      - QAG-006
+      - QAG-007
     phase: review
     status: in_progress
   routing_snapshot:
@@ -21,14 +21,14 @@ checkpoint:
         - {agent: peer-gpt6-astra, effort: high, class: peer}
   reports:
     tester:
-      QAG-006: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b6-tester-QAG-006
+      QAG-007: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-tester-QAG-007
     implementer:
-      QAG-006: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b6-implementer-QAG-006
+      QAG-007: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-implementer-QAG-007
     review:
-      general: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b6-review-general
-      architecture: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b6-review-architecture
-      compliance: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b6-review-compliance
+      general: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-review-general
+      architecture: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-review-architecture
+      compliance: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-review-compliance
     fix:
-      QAG-006: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b6-fix-QAG-006
-    rereview: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b6-rereview
+      QAG-007: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-fix-QAG-007
+    rereview: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-rereview
   in_flight_mutations: []
