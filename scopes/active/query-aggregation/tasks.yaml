@@ -99,14 +99,22 @@ tasks:
       fix_round: B6-H1 sort vars in dedupe key; B6-M1 top-level */+ hint; re-review fixed
   - id: QAG-007
     content: "Lint rules ending in (group …) with $param filters; unreferenced-skill test; docs/query.md and docs/lint-rules.md (FR-8, TR-2, TR-3)"
-    status: pending
+    status: completed
     active_form: "Wiring grouping into lint and documenting it"
     depends_on: [QAG-006]
     files: [internal/pattern/module.go, internal/lint/module.go, internal/lint/group_test.go, docs/query.md, docs/lint-rules.md]
+    evidence:
+      tests:
+        - TestGroupedModuleRuleReportsUnreferencedSkill
+        - TestGroupedRuleLocatesCollectedCaptureWithConfiguredThreshold
+      red: 'none: lint already satisfied after QAG-005 (tests kept as FR-8 acceptance)'
+      docs: docs/query.md, docs/lint-rules.md; every example parses on tropos; henia query --grammar shows group productions
+      green: go test ./... -count=1 ok; henia lint test 29 passed
+      fix_round: B7-M1 quoted --sort '-?n'; re-review fixed
 meta:
   created: 2026-10-05
   last_updated: "2026-10-05"
-  progress: 6/7
+  progress: 7/7
 phases:
   - id: zero-groups
     tasks: [QAG-001, QAG-002, QAG-003]

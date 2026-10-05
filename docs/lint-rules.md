@@ -146,6 +146,22 @@ a Passes example must not.
 | `:method name` | fills `method` |
 | `:shared @a @b` | fills `shared_phrases` and `{shared}` with up to five shared phrases |
 
+### Grouped rules
+
+A rule may end with [`(group ...)`](query.md), whose filters take `$params`:
+
+```hq
+(rule unreferenced-skill
+  :message "{@t.id} has {?n} inbound links; under {$min-inbound}"
+  :at @t
+  (skill :id ?s) @t
+  (skill :id (not ?s) (link :target ?s) @l)?
+  (group @t (count @l ?n (< $min-inbound))))
+```
+
+Grouped rows feed `:at`, `:related` and `{?var}` unchanged, and a collected
+capture such as `@l` locates at its first node.
+
 ### Facts lint adds
 
 Beyond the document tree that queries see, lint rules match these:

@@ -118,7 +118,7 @@ An aggregate takes one trailing comparison, `(>, >=, <, <=)` with a number or `$
 - [ ] Given a fixture skill whose only link names another skill, when running `henia q '(skill :id ?s (link :target ?s)? @l) @t'`, then that skill prints once with `@l` empty.
 - [ ] Given `(skill (code :lang ?l)) @s (group ?l (count @s ?n))` over a fixture skill holding `go` and `bash` blocks, then both languages print with `?n=1`.
 - [ ] Given `(code :lang "cobol") @c (group (count @c ?n))`, then one row prints with `?n=0`.
-- [ ] Given tropos, when running `henia q '(skill :id "limen" (from (link)? @l))'`, then it prints one row per `limen` skill element (2 today), each with `@l` empty.
+- [ ] Given tropos, when running `henia q '(skill :id "limen" (from (link)? @l))'`, then it prints a row with `@l` empty (rows dedupe on their captures, so both `limen` elements print as one row).
 - [ ] Given tropos, when running `henia q '(skill :words 0) @s' --count`, then it prints 0.
 - [ ] Given tropos, when running `henia q '(skill (section)? @x) @s (group @s (count @x ?n))' --sort -?n --json`, then each object holds `"s"` and a numeric `"?n"`, in descending order.
 - [ ] Given a lint module rule ending in `(group @t (count @l ?n (< $min-inbound))))` with `min-inbound: 1`, when linting a library with one unreferenced skill, then exactly that skill is reported with `{?n}` rendered as 0.
