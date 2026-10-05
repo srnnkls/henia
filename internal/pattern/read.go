@@ -300,6 +300,8 @@ type reader struct {
 	captures []string
 	semantic bool
 	params   []string
+	defines  map[string]Define
+	expanded int
 }
 
 func Read(src string) (*Query, error) {
@@ -308,8 +310,17 @@ func Read(src string) (*Query, error) {
 		return nil, err
 	}
 	r := &reader{tokens: tokens}
+	return r.query(tEOF)
+}
+
+func (r *reader) query(end tokenKind) (*Query, error) {
+	r.captures, r.semantic, r.params = nil, false, nil
+	start := r.peek().pos
 	q := &Query{}
-	for r.peek().kind != tEOF {
+	for r.peek().kind != end {
+		if r.peek().kind == tEOF {
+			return nil, &Error{Offset: start, Message: "unclosed (rule", Hint: "add the matching )"}
+		}
 		head := r.tokens[r.at+1]
 		if r.peek().kind == tOpen && head.kind == tSymbol && head.text == "not" {
 			r.at += 2
@@ -330,12 +341,12 @@ func Read(src string) (*Query, error) {
 		q.Members = append(q.Members, p)
 	}
 	if len(q.Members) == 0 {
-		return nil, &Error{Offset: 0, Message: "a query needs a pattern outside (not ...)", Hint: `try (skill :id "NAME" (heading) @h)`}
+		return nil, &Error{Offset: start, Message: "a query needs a pattern outside (not ...)", Hint: `try (skill :id "NAME" (heading) @h)`}
 	}
 	q.Captures, q.Semantic, q.params = r.captures, r.semantic, r.params
 	if len(q.Captures) == 0 {
 		if len(q.Members) > 1 || len(q.Absent) > 0 {
-			return nil, &Error{Offset: 0, Message: "a query of several patterns prints its captures; name one with @", Hint: `e.g. (link :target ?s) @l (skill :id ?s)`}
+			return nil, &Error{Offset: start, Message: "a query of several patterns prints its captures; name one with @", Hint: `e.g. (link :target ?s) @l (skill :id ?s)`}
 		}
 		q.Captures = []string{""}
 	}
@@ -377,6 +388,12 @@ func (r *reader) pattern(top bool) (*Pattern, error) {
 		head := r.next()
 		if head.kind != tSymbol {
 			return nil, &Error{Offset: head.pos, Message: "expected a type after (", Hint: "types: " + strings.Join(typeNames(), " ")}
+		}
+		if define, ok := r.defines[head.text]; ok {
+			if err := r.expand(define, open); err != nil {
+				return nil, err
+			}
+			return r.pattern(top)
 		}
 		if isForm(head) {
 			return nil, &Error{Offset: head.pos, Message: fmt.Sprintf("(%s ...) belongs inside a pattern", head.text), Hint: `e.g. (skill :id "X" (` + head.text + ` (skill) @t))`}
