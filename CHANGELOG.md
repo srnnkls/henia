@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.0-alpha.14](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.13...v0.1.0-alpha.14) (2026-10-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **slots:** compose skills over the library
+
+### Features
+
+* **slots:** compose skills over the library ([b704da7](https://github.com/srnnkls/henia/commit/b704da75e135ebb1e3e6d4cabcf66d26834a161b))
+
+
+### Bug Fixes
+
+* **slots:** skip templated directives; read symlinked global packages ([39fc93f](https://github.com/srnnkls/henia/commit/39fc93f0dc03af2e3b0687a76472611b0364bfd5))
+
 ## [0.1.0-alpha.13](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.12...v0.1.0-alpha.13) (2026-10-05)
 
 
