@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.0-alpha.15](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.14...v0.1.0-alpha.15) (2026-10-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **build:** static, dynamic and hybrid skill modes
+* **lint:** lint package contents, not every Markdown file
+
+### Features
+
+* **build:** static, dynamic and hybrid skill modes ([39daba2](https://github.com/srnnkls/henia/commit/39daba2dc7fbdb457d6076a0520255b4c1043e56))
+* **deps:** henia.local.toml overrides and live-linked path dependencies ([dc89dea](https://github.com/srnnkls/henia/commit/dc89deabe11bfe164b4cad11e880f666bdbfb479))
+* **install:** install henia's own skill in every harness ([6b09210](https://github.com/srnnkls/henia/commit/6b09210726895cc6178d9b0b8fb7a5e697cbf934))
+* **install:** write global skill packages into harness directories ([79fff44](https://github.com/srnnkls/henia/commit/79fff44537f4b1d8e5736ae1efe39e6b14e72ca4))
+* **lint:** lint package contents, not every Markdown file ([ea1f357](https://github.com/srnnkls/henia/commit/ea1f35763dfb62c66927cbbc1ce75039a40b63f6))
+
+
+### Bug Fixes
+
+* **deps:** no lock without declared packages ([8b84846](https://github.com/srnnkls/henia/commit/8b84846dfddb002f313852f474ed5f9084457a1c))
+* **slots:** lookups report only problems of the requested slots ([3e6f6fb](https://github.com/srnnkls/henia/commit/3e6f6fbebd14c186bdb9db559dbb0299c8b2876e))
+
 ## [0.1.0-alpha.14](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.13...v0.1.0-alpha.14) (2026-10-05)
 
 
