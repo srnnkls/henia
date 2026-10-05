@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -180,6 +181,9 @@ func (r *Runner) execute(ctx context.Context, argv []string, dir string) string 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
+	if self, err := os.Executable(); err == nil {
+		cmd.Env = append(cmd.Env, "PATH="+filepath.Dir(self)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
 	out := &limited{max: r.Output}
 	cmd.Stdout, cmd.Stderr = out, out
 	isolate(cmd)

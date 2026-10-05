@@ -15,7 +15,7 @@ standard library's patterns and compose new rules from them.
 
 | Module | Rules | Params and data |
 |---|---|---|
-| `std/structure` | `large-skill`, `duplicate-heading` | `max-lines` (500) |
+| `std/structure` | `large-skill`, `large-static`, `duplicate-heading` | `max-lines` (500), `max-static-lines` (150) |
 | `std/metadata` | `metadata`, `stale-review`, `invalid-template`, `invalid-markup` | `max-age-days` (180) |
 | `std/references` | `broken-link`, `missing-reference`, `outdated-reference` | `outdated` map |
 | `std/duplicates` | `duplicate-skill`, `duplicate-content` | `min-words` (12) |

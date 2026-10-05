@@ -205,16 +205,12 @@ tropos:checks	global	Validation commands.
 
 ## Context
 
-A skill's context lists the providers of the slots it applies, library providers
-as the `henia show` command that reads them, and the sections of the library
-skills it references; it never repeats the skill's own text.
+A skill's context lists the sections of the library skills it references; it
+never repeats the skill's own text.
 
 ```scrut
 $ rm -rf "$L/extra" "$P/.henia"
 > henia context code | sed "s|$T/||g"
-Slot providers:
-code.check.go	global	henia show tropos:checks	go vet ./...
-code.style.go	global	henia show tropos:style-guide
 
 Skill style-guide: House style by language.
 style-guide#style-guide  Style guide
@@ -642,6 +638,65 @@ examples:
   henia query '(skill :id "gestalt" (heading) @h)'
   henia query '(skill :id "gestalt" (paragraph)? @prev . (paragraph :contains "cozo") @hit . (paragraph)? @next)'
 henia query --grammar prints the language
+```
+
+## Hybrid skills
+
+A hybrid skill's head carries its `:::static` blocks. A harness with native
+preloads gets one preload that renders the head from the library; others get
+the blocks and "run first" lines.
+
+```scrut
+$ H="$T/hybrid"; mk "$H/skills/route/SKILL.md" '---\nname: route\ndescription: Routed work.\n---\n\n# Route\n\n:::static\n## Routes\n\nUse `$checks` first.\n:::\n\n## Detail\n\nReference.\n'
+> printf '[harness.claude]\nprofile = "claude"\nartifacts = ["skills"]\n\n[harness.claude.skills]\ndefault = "dynamic"\nhybrid = ["route"]\n\n[harness.codex]\nprofile = "codex"\nartifacts = ["skills"]\n\n[harness.codex.skills]\ndefault = "dynamic"\nhybrid = ["route"]\n' > "$H/henia.toml"
+> henia build "$H" --output "$T/hybrid-build" > /dev/null
+> digest=$(shasum -a 256 "$H/skills/route/SKILL.md" | cut -c1-12)
+> sed -e '1,/^---$/d' -e '1,/^---$/d' -e "s/$digest/DIGEST/" "$T/hybrid-build/claude/skills/route/SKILL.md"
+> grep allowed-tools "$T/hybrid-build/claude/skills/route/SKILL.md"
+> sed -e '1,/^---$/d' -e '1,/^---$/d' -e "s/$digest/DIGEST/" "$T/hybrid-build/codex/skills/route/SKILL.md"
+
+!`henia preload --skill route -- 'henia show route --head --digest DIGEST'`
+allowed-tools: Bash(henia preload *)
+
+## Routes
+
+Use `$checks` first.
+
+
+run first: `henia preload --skill route -- 'henia show route --toc --digest DIGEST'`
+
+run first: `henia preload --skill route -- 'henia context route'`
+```
+
+`henia show --head` renders the blocks, the skill's contents and the contents
+of the skills it references; a head built from another revision says so.
+
+```scrut
+$ cp -R "$H" "$L/hybrid" && henia show route --head --digest 000000000000
+henia: this harness copy of route was built from revision 000000000000, but the library holds * (glob)
+
+## Routes
+
+Use `henia show checks` first.
+
+Read the sections of route as the task needs them:
+
+route#route  Route
+  route#routes  Routes
+  route#detail  Detail
+
+Skill checks: Validation commands.
+checks#checks  Checks
+```
+
+Read in full, a hybrid skill keeps its blocks' content without the markers, and
+its head commands run as its preloads.
+
+```scrut
+$ henia show route | grep -c ':::'; henia preload --skill route -- 'henia show route --toc' | sed -n 2,3p
+0
+$ henia show route --toc
+Read the sections of route as the task needs them:
 ```
 
 ```scrut

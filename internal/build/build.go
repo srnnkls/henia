@@ -145,12 +145,20 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 				continue
 			}
 			tr.Served = served
+			hybrid := art.Type == artifact.TypeSkill && art.Name != CatalogName && harness.Mode("skills", art.Name) == henia.Hybrid
+			tr.Head = hybrid
 			tgt := target.NewFromConfig(harnessName, outputPath, effective)
 			transformed := art
 			if art.Type != artifact.TypeUnknown {
 				transformed, err = tr.Transform(art)
 				if err != nil {
 					result.Errors = append(result.Errors, fmt.Errorf("%s: transform %s for %s: %w", art.SourcePath, art.Name, harnessName, err))
+					continue
+				}
+			}
+			if hybrid {
+				if err := hybridHead(transformed, art, nativePreloads(effective)); err != nil {
+					result.Errors = append(result.Errors, fmt.Errorf("%s: head of %s for %s: %w", art.SourcePath, art.Name, harnessName, err))
 					continue
 				}
 			}
@@ -286,12 +294,16 @@ func resolvedPath(path string) (string, error) {
 	}
 }
 
-func projectPreloads(art *artifact.Artifact, h henia.Harness) {
-	native := false
-	if h.Profile != "" {
-		profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot)
-		native = err == nil && profile.Preloads
+func nativePreloads(h henia.Harness) bool {
+	if h.Profile == "" {
+		return false
 	}
+	profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot)
+	return err == nil && profile.Preloads
+}
+
+func projectPreloads(art *artifact.Artifact, h henia.Harness) {
+	native := nativePreloads(h)
 	body := preload.Project(art.Body, art.Name, native)
 	if body == art.Body {
 		return
@@ -301,6 +313,10 @@ func projectPreloads(art *artifact.Artifact, h henia.Harness) {
 		return
 	}
 	switch tools := art.Frontmatter["allowed-tools"].(type) {
+	case nil:
+		if profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
+			art.Frontmatter["allowed-tools"] = preload.RunnerTool
+		}
 	case string:
 		if tools != "" && !strings.Contains(tools, preload.RunnerTool) {
 			art.Frontmatter["allowed-tools"] = tools + ", " + preload.RunnerTool
@@ -312,12 +328,12 @@ func projectPreloads(art *artifact.Artifact, h henia.Harness) {
 	}
 }
 
-func Render(art *artifact.Artifact, name string, h henia.Harness, served map[string]bool) (*artifact.Artifact, error) {
+func Render(art *artifact.Artifact, name string, h henia.Harness, served map[string]bool, head bool) (*artifact.Artifact, error) {
 	_, tr, err := transformerFor(name, "", h, art.Type)
 	if err != nil {
 		return nil, err
 	}
-	tr.Served = served
+	tr.Served, tr.Head = served, head
 	return tr.Transform(art)
 }
 

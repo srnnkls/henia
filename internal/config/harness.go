@@ -18,8 +18,25 @@ func validateHarness(name string, h henia.Harness) error {
 		layout, label := h.Layout, "layout"
 		if kind != "" {
 			a := h.Type(kind)
-			if len(a.Static) > 0 && len(a.Dynamic) > 0 {
-				return fmt.Errorf("harness %s: %s.static and %s.dynamic are both set; keep one", name, kind, kind)
+			switch a.Default {
+			case "", henia.Static, henia.Dynamic, henia.Hybrid:
+			default:
+				return fmt.Errorf("harness %s: %s.default must be static, dynamic or hybrid, got %q", name, kind, a.Default)
+			}
+			seen := map[string]string{}
+			for _, mode := range []struct {
+				name  string
+				items []string
+			}{{henia.Static, a.Static}, {henia.Dynamic, a.Dynamic}, {henia.Hybrid, a.Hybrid}} {
+				for _, item := range mode.items {
+					if other, ok := seen[item]; ok && other != mode.name {
+						return fmt.Errorf("harness %s: %s %q is listed as both %s and %s", name, kind, item, other, mode.name)
+					}
+					seen[item] = mode.name
+				}
+			}
+			if len(a.Hybrid) > 0 && kind != "skills" {
+				return fmt.Errorf("harness %s: hybrid applies to skills only", name)
 			}
 			if a.Catalog != nil && kind != "skills" {
 				return fmt.Errorf("harness %s: catalog applies to skills only", name)

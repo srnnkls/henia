@@ -17,10 +17,18 @@ type Artifacts struct {
 	Profile     string      `toml:"profile,omitempty"`
 	Layout      string      `toml:"layout,omitempty"`
 	Frontmatter Frontmatter `toml:"frontmatter,omitempty"`
+	Default     string      `toml:"default,omitempty"`
 	Static      []string    `toml:"static,omitempty"`
 	Dynamic     []string    `toml:"dynamic,omitempty"`
+	Hybrid      []string    `toml:"hybrid,omitempty"`
 	Catalog     *bool       `toml:"catalog,omitempty"`
 }
+
+const (
+	Static  = "static"
+	Dynamic = "dynamic"
+	Hybrid  = "hybrid"
+)
 
 type Harness struct {
 	Files       map[string]File   `toml:"files,omitempty"`
@@ -52,13 +60,24 @@ func (h Harness) Type(dir string) Artifacts {
 	return Artifacts{}
 }
 
-func (h Harness) Builds(dir, name string) bool {
+func (h Harness) Mode(dir, name string) string {
 	a := h.Type(dir)
-	if len(a.Static) > 0 {
-		return slices.Contains(a.Static, name)
+	switch {
+	case slices.Contains(a.Static, name):
+		return Static
+	case slices.Contains(a.Hybrid, name):
+		return Hybrid
+	case slices.Contains(a.Dynamic, name):
+		return Dynamic
+	case a.Default != "":
+		return a.Default
+	case len(a.Static) > 0 || len(a.Hybrid) > 0:
+		return Dynamic
 	}
-	return !slices.Contains(a.Dynamic, name)
+	return Static
 }
+
+func (h Harness) Builds(dir, name string) bool { return h.Mode(dir, name) != Dynamic }
 
 func (h Harness) Catalog() bool {
 	return h.Skills.Catalog == nil || *h.Skills.Catalog

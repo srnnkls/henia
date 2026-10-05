@@ -2,6 +2,7 @@
 description: Size and heading structure of skills, commands and agents.
 params:
   max-lines: 500
+  max-static-lines: 150
 ---
 
 # Structure
@@ -36,6 +37,43 @@ name: example
 description: An example skill.
 ---
 # Short
+```
+
+## large-static
+
+A hybrid skill carries its `:::static` blocks upfront in every invocation; keep
+them to routes, hard rules and context, and leave reference material dynamic.
+
+```hq
+(rule large-static
+  :message "{@block.lines} lines of :::static exceeds {$max-static-lines}; leave reference material outside it"
+  (directive :name "static" :lines (> $max-static-lines)) @block)
+```
+
+### Matches
+
+```md max-static-lines=2
+---
+name: example
+description: An example skill.
+---
+:::static
+one
+two
+three
+:::
+```
+
+### Passes
+
+```md
+---
+name: example
+description: An example skill.
+---
+:::static
+Routes.
+:::
 ```
 
 ## duplicate-heading

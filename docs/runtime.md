@@ -205,30 +205,76 @@ When [FAS](https://github.com/srnnkls/fas) is on PATH, Henia also asks
 `fas eval --harness henia` after its own check, so existing rule sets can
 refuse more; its rule name appears as `blocked by fas/<rule>`.
 
-## Static and dynamic skills
+## Skill modes
 
-A skill is static or dynamic per harness. `henia build` compiles static skills
-into the harness's skill tree, where the harness lists and loads them; dynamic
-skills are not built and are read with `henia show`. The package's `henia.toml`
-decides, per harness, with one of two lists:
+Each skill has a mode per harness:
+
+| Mode | In the harness | In the library |
+|---|---|---|
+| `static` | the whole compiled skill | the whole skill |
+| `dynamic` | nothing; the catalog skill lists it | the whole skill |
+| `hybrid` | a head: frontmatter and its `:::static` blocks | the whole skill |
+
+The package's `henia.toml` sets them per harness:
 
 ```toml
 [harness.claude.skills]
-dynamic = ["debate", "loqui"]       # these are dynamic; the rest are built
-# static = ["code", "implement"]    # or: only these are built
-
+default = "dynamic"                 # static, dynamic or hybrid
+hybrid = ["code", "implement"]
+static = ["peer"]
+dynamic = []
 ```
 
-Setting both is an error; setting neither builds every skill. References to
-dynamic skills render as `henia show` commands.
+A skill is listed in at most one mode. Without `default`, listing `static` or
+`hybrid` skills makes the rest dynamic, and listing none builds every skill
+static. References to dynamic skills render as `henia show` commands.
+
+### Hybrid skills
+
+`:::static` blocks in a skill's body mark what a hybrid head carries upfront:
+routes, hard rules, the context it preloads. Everything else stays in the
+library. A skill read in full keeps the blocks' content without the markers.
+
+```md
+# Code
+
+:::static
+## Routes
+
+| Argument | Action |
+|---|---|
+| `review <target>` | Invoke `$review` |
+:::
+
+## Review roles
+
+Reference material read on demand.
+```
+
+The head renders in the library when the skill is used, so it never drifts
+from it:
+
+- In a harness that runs commands when a skill loads, such as Claude Code, the
+  head is a single preload of `henia show <skill> --head --digest <revision>`.
+- Elsewhere the head holds the rendered `:::static` blocks followed by
+  "run first" lines for `henia show <skill> --toc` and `henia context <skill>`.
+
+`henia show <skill> --head` prints the `:::static` blocks, the skill's contents
+as `henia show <skill>#<section>` addresses, its resources and the contents of
+the skills it references. `--toc` prints only the contents. `--digest` names
+the revision the head was built from, and `show` reports when the library holds
+another one. A hybrid skill without `:::static` blocks is a launcher: contents
+and related contents only.
+
+### Catalog
 
 When a harness has dynamic skills, the build adds a generated `henia` skill, the
 catalog skill, that names each one with its description and tells the agent to
 read it with `henia show`. Set `catalog = false` in `[harness.<name>.skills]`
 when the package's own instructions already describe the runtime.
 
-Harnesses truncate skill listings early, so keep about ten skills static per
-harness.
+Harnesses truncate skill listings early, so keep about ten skills static or
+hybrid per harness.
 
 ## Guarding
 

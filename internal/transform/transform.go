@@ -15,6 +15,8 @@ import (
 	"github.com/srnnkls/henia/internal/vendor"
 )
 
+const StaticBlock = "static"
+
 type ReferenceConfig struct {
 	Output string
 }
@@ -31,6 +33,7 @@ type Transformer struct {
 	References   map[string]ReferenceConfig
 	Tools        map[string]string
 	Served       map[string]bool
+	Head         bool
 }
 
 func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
@@ -149,6 +152,12 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		return nil, fmt.Errorf("transform body: %w", err)
 	}
 	body = slots.Expand(body, slots.Preload)
+	full, head := markup.Unwrap(body, StaticBlock)
+	if t.Head {
+		body = strings.Join(head, "\n")
+	} else {
+		body = full
+	}
 
 	body, err = markup.Render(body, t.OutputFormat)
 	if err != nil {

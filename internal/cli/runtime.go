@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -24,7 +25,6 @@ import (
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/reference"
-	"github.com/srnnkls/henia/internal/slots"
 )
 
 const outputBudget = 28000
@@ -72,8 +72,14 @@ func newLsCommand() *cobra.Command {
 	return cmd
 }
 
+type showMode struct {
+	head, toc bool
+	digest    string
+}
+
 func newShowCommand() *cobra.Command {
 	var flags runtimeFlags
+	var mode showMode
 	cmd := &cobra.Command{
 		Use:   "show <skill>[/<resource>][#section]",
 		Short: "Print a library skill or one of its sections, rendered for the caller",
@@ -82,8 +88,11 @@ func newShowCommand() *cobra.Command {
 A skill is <name> or <package>:<name>. Output longer than the budget prints the
 sections instead, each addressable as <skill>#<section>. A full skill ends with
 the list of its resources; <skill>/<path> reads one and <skill>/<dir>/ lists a
-directory. Problems print as
-text; the command always exits successfully so a skill preload never aborts.`,
+directory. --head prints what a hybrid skill carries upfront: its :::static
+blocks, its contents and the contents of the skills it references; --toc
+prints only its contents. --digest names the revision a harness head was
+built from and reports a library that holds another. Problems print as text;
+the command always exits successfully so a skill preload never aborts.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			lib := flags.open(cmd)
@@ -96,15 +105,18 @@ text; the command always exits successfully so a skill preload never aborts.`,
 				return settings.runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, Skill: e.Name, Package: e.Package, Tier: e.Tier, Caller: harness})
 			}
 			disclose := func(e library.Entry) bool { return discloses(settings.disclosure, e) }
-			show(cmd.OutOrStdout(), lib, newRenderer(harness, lib), args[0], expand, disclose)
+			show(cmd.OutOrStdout(), lib, newRenderer(harness, lib), args[0], mode, expand, disclose)
 			return nil
 		},
 	}
 	flags.register(cmd)
+	cmd.Flags().BoolVar(&mode.head, "head", false, "Print the skill's :::static blocks, contents and related contents")
+	cmd.Flags().BoolVar(&mode.toc, "toc", false, "Print the skill's contents")
+	cmd.Flags().StringVar(&mode.digest, "digest", "", "Revision a harness head was built from")
 	return cmd
 }
 
-func show(out io.Writer, lib *library.Library, r *renderer, target string, expand func(library.Entry, string) string, disclose func(library.Entry) bool) {
+func show(out io.Writer, lib *library.Library, r *renderer, target string, mode showMode, expand func(library.Entry, string) string, disclose func(library.Entry) bool) {
 	ref, anchor, sectioned := strings.Cut(target, "#")
 	ref, resource, isResource := strings.Cut(ref, "/")
 	entry, err := lib.Resolve(ref)
@@ -117,7 +129,28 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string, expan
 		showResource(out, name, filepath.Dir(entry.Path), resource, anchor, sectioned)
 		return
 	}
+	if mode.digest != "" {
+		if canonical, err := os.ReadFile(entry.Path); err == nil && build.Digest(canonical) != mode.digest {
+			fmt.Fprintf(out, "henia: this harness copy of %s was built from revision %s, but the library holds %s; run henia install to update it\n\n", name, mode.digest, build.Digest(canonical))
+		}
+	}
 	body := r.body(entry)
+	if mode.head || mode.toc {
+		if mode.head {
+			if static := strings.TrimSpace(r.render(entry, true)); static != "" {
+				fmt.Fprint(out, expand(entry, static+"\n\n"))
+			}
+		}
+		fmt.Fprintf(out, "Read the sections of %s as the task needs them:\n\n", name)
+		contents(out, name, body)
+		if disclose(entry) {
+			resourceList(out, name, filepath.Dir(entry.Path), "")
+		}
+		if mode.head {
+			related(out, lib, r, entry)
+		}
+		return
+	}
 	if sectioned {
 		if _, text, ok := library.Section(body, anchor); ok {
 			if len(text) <= outputBudget {
@@ -195,6 +228,9 @@ exits successfully so a skill preload never aborts.`,
 }
 
 func declaresPreload(lib *library.Library, entry library.Entry, command string) bool {
+	if build.HeadCommand(entry.Name, command) {
+		return true
+	}
 	harnesses := []string{""}
 	if data, err := os.ReadFile(entry.Origin.Config); err == nil {
 		if configured, err := config.Harnesses(data); err == nil {
@@ -326,8 +362,8 @@ func newContextCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context <skill>",
 		Short: "Print a skill's runtime context",
-		Long: `Print a skill's runtime context: the providers of the slots it applies and the
-sections of the library skills it references, each readable with henia show.
+		Long: `Print a skill's runtime context: the sections of the library skills it
+references, each readable with henia show.
 Problems print as text; the command always exits successfully so a skill
 preload never aborts.`,
 		Args: cobra.ExactArgs(1),
@@ -340,33 +376,7 @@ preload never aborts.`,
 				return nil
 			}
 			var b strings.Builder
-			var applied []string
-			for _, application := range slots.Applications(entry.Artifact.Body) {
-				applied = append(applied, application.Slots...)
-			}
-			if len(applied) > 0 {
-				b.WriteString("Slot providers:\n")
-				resolution, err := resolveSlots(flags.project, lib)
-				if err != nil {
-					fmt.Fprintf(&b, "henia: %v\n", err)
-				} else {
-					for _, row := range resolution.Rows(applied, false) {
-						b.WriteString(row.Line() + "\n")
-					}
-				}
-			}
-			r := newRenderer(detectHarness(flags.harness), lib)
-			var seen []string
-			for _, ref := range libraryReferences(entry.Artifact.Body) {
-				referenced, err := lib.Resolve(ref)
-				if err != nil || referenced.ID == entry.ID || slices.Contains(seen, referenced.ID) {
-					continue
-				}
-				seen = append(seen, referenced.ID)
-				name := lib.Reference(referenced)
-				fmt.Fprintf(&b, "\nSkill %s: %s\n", name, referenced.Description)
-				contents(&b, name, r.body(referenced))
-			}
+			related(&b, lib, newRenderer(detectHarness(flags.harness), lib), entry)
 			text := b.String()
 			if len(text) > outputBudget {
 				text = text[:strings.LastIndexByte(text[:outputBudget], '\n')+1] + "henia: context truncated at the budget\n"
@@ -377,6 +387,20 @@ preload never aborts.`,
 	}
 	flags.register(cmd)
 	return cmd
+}
+
+func related(out io.Writer, lib *library.Library, r *renderer, entry library.Entry) {
+	var seen []string
+	for _, ref := range libraryReferences(entry.Artifact.Body) {
+		referenced, err := lib.Resolve(ref)
+		if err != nil || referenced.ID == entry.ID || slices.Contains(seen, referenced.ID) {
+			continue
+		}
+		seen = append(seen, referenced.ID)
+		name := lib.Reference(referenced)
+		fmt.Fprintf(out, "\nSkill %s: %s\n", name, referenced.Description)
+		contents(out, name, r.body(referenced))
+	}
 }
 
 func libraryReferences(body string) []string {
@@ -413,7 +437,9 @@ func (r *renderer) config(path string) []byte {
 	return data
 }
 
-func (r *renderer) body(e library.Entry) string {
+func (r *renderer) body(e library.Entry) string { return r.render(e, false) }
+
+func (r *renderer) render(e library.Entry, head bool) string {
 	canonical, err := os.ReadFile(e.Path)
 	if err != nil {
 		return e.Artifact.Body
@@ -441,7 +467,7 @@ func (r *renderer) body(e library.Entry) string {
 		}
 	}
 	h := sha256.New()
-	for _, part := range [][]byte{[]byte(rootCmd.Version + executableStamp()), []byte(name), packageConfig, canonical, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " "))} {
+	for _, part := range [][]byte{[]byte(rootCmd.Version + executableStamp()), []byte(name), []byte(strconv.FormatBool(head)), packageConfig, canonical, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " "))} {
 		h.Write(part)
 		h.Write([]byte{0})
 	}
@@ -450,7 +476,7 @@ func (r *renderer) body(e library.Entry) string {
 	if cached, err := os.ReadFile(cache); err == nil {
 		return string(cached)
 	}
-	rendered, err := build.Render(e.Artifact, name, harness, served)
+	rendered, err := build.Render(e.Artifact, name, harness, served, head)
 	if err != nil {
 		return fmt.Sprintf("henia: rendering %s for %q failed (%v); canonical text follows\n\n%s", e.ID, name, err, e.Artifact.Body)
 	}
