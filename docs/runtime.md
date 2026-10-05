@@ -102,6 +102,15 @@ path = "~/.claude"
 path = "~/.codex"
 ```
 
+Every harness also gets Henia's own `henia` skill: how to read the library
+through `henia show`, `ls` and `query`, followed by the dynamic skills of all
+installed packages. It takes the place of the packages' catalog skills. To leave
+it out and keep each package's catalog instead:
+
+```toml
+install_henia_skill = false
+```
+
 `henia sync --global`, `update --global`, `add --global` and `rm --global`
 install afterwards, so a harness copy and the library it reads from come from
 the same `henia.lock`. Henia records what it wrote under
@@ -294,9 +303,10 @@ and related contents only.
 
 ### Catalog
 
-When a harness has dynamic skills, the build adds a generated `henia` skill, the
-catalog skill, that names each one with its description and tells the agent to
-read it with `henia show`. Set `catalog = false` in `[harness.<name>.skills]`
+When a harness has dynamic skills, the build adds the `henia` skill, the
+catalog skill: Henia's own skill, from
+[internal/defaults/henia/SKILL.md](../internal/defaults/henia/SKILL.md), followed
+by each dynamic skill with its description. Set `catalog = false` in `[harness.<name>.skills]`
 when the package's own instructions already describe the runtime.
 
 Harnesses truncate skill listings early, so keep about ten skills static or

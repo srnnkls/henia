@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -43,5 +45,21 @@ func TestHarnessesRejectsUnknownKeys(t *testing.T) {
 	harnesses, err := Harnesses([]byte("[build]\noutput = \"x\"\n[harness.pi.skills]\nstatic = [\"a\"]\n"))
 	if err != nil || len(harnesses["pi"].Skills.Static) != 1 {
 		t.Fatalf("%v %v", harnesses, err)
+	}
+}
+func TestInstallHeniaSkill(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "henia.toml")
+	for _, c := range []struct {
+		toml string
+		want bool
+	}{{"[install.claude]\npath = \"~/.claude\"\n", true}, {"install_henia_skill = false\n", false}} {
+		if err := os.WriteFile(path, []byte(c.toml), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil || cfg.HeniaSkill() != c.want {
+			t.Fatalf("%q: %v, %v", c.toml, cfg.HeniaSkill(), err)
+		}
 	}
 }

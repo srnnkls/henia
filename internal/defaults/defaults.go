@@ -10,8 +10,8 @@ import (
 //go:embed henia.toml
 var ConfigTOML string
 
-//go:embed catalog.md
-var CatalogBody string
+//go:embed henia/SKILL.md
+var HeniaSkill string
 
 type Config struct {
 	Artifacts []string                 `toml:"artifacts,omitempty"`

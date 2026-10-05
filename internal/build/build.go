@@ -28,6 +28,7 @@ type Result struct {
 	Built    int
 	Errors   []error
 	Warnings []string
+	Dynamic  map[string][]Entry
 }
 
 // Run compiles local source directories. Each harness writes beneath output/name.
@@ -37,7 +38,11 @@ type Dependency struct {
 }
 
 func Run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, dependencies ...Dependency) (*Result, error) {
-	return run(ctx, sources, output, harnesses, false, dependencies)
+	return run(ctx, sources, output, harnesses, false, dependencies, nil)
+}
+
+func RunArtifact(ctx context.Context, art *artifact.Artifact, source, output string, harnesses map[string]henia.Harness) (*Result, error) {
+	return run(ctx, []string{source}, output, harnesses, false, nil, []*artifact.Artifact{art})
 }
 
 // RunClean publishes a complete output tree only after every artifact was written successfully.
@@ -45,7 +50,7 @@ func RunClean(ctx context.Context, sources []string, output string, harnesses ma
 	if err := validateCleanOutput(sources, output); err != nil {
 		return nil, err
 	}
-	return run(ctx, sources, output, harnesses, true, dependencies)
+	return run(ctx, sources, output, harnesses, true, dependencies, nil)
 }
 
 func layered(harness henia.Harness, name, path string, dependencies []Dependency) henia.Harness {
@@ -68,7 +73,7 @@ func layered(harness henia.Harness, name, path string, dependencies []Dependency
 	return harness
 }
 
-func run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, clean bool, dependencies []Dependency) (*Result, error) {
+func run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, clean bool, dependencies []Dependency, extra []*artifact.Artifact) (*Result, error) {
 	if output == "" {
 		return nil, fmt.Errorf("build output directory is required")
 	}
@@ -80,7 +85,7 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 			return nil, fmt.Errorf("invalid harness name %q", name)
 		}
 	}
-	result := &Result{}
+	result := &Result{Dynamic: map[string][]Entry{}}
 
 	var allArtifacts []*artifact.Artifact
 	for _, src := range sources {
@@ -94,6 +99,7 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 		}
 		allArtifacts = append(allArtifacts, arts...)
 	}
+	allArtifacts = append(allArtifacts, extra...)
 
 	protected := slices.Clone(allArtifacts)
 	for _, harness := range harnesses {
@@ -122,6 +128,9 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 		outputPath := filepath.Join(output, harnessName)
 		filtered := filterArtifacts(allArtifacts, harness)
 		served := Served(allArtifacts, filtered)
+		if entries, err := dynamicEntries(allArtifacts, filtered); err == nil {
+			result.Dynamic[harnessName] = entries
+		}
 		if index, err := catalog(sources[0], allArtifacts, filtered, harness); err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
 			continue

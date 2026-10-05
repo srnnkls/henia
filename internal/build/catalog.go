@@ -14,18 +14,33 @@ import (
 )
 
 const (
-	CatalogName        = "henia"
-	catalogDescription = "Skills served by Henia beyond those installed here: lists them and reads one on demand with henia show. Use when no installed skill fits the task."
-	catalogTools       = "Bash(henia ls *), Bash(henia show *), Bash(henia query *)"
+	CatalogName  = "henia"
+	catalogTools = "Bash(henia ls *), Bash(henia show *), Bash(henia query *)"
 )
 
-var catalogTemplate = template.Must(template.New("catalog").Parse(defaults.CatalogBody))
+var heniaSkill, catalogTemplate = func() (*artifact.Artifact, *template.Template) {
+	art, err := artifact.Parse([]byte(defaults.HeniaSkill))
+	if err != nil {
+		panic(err)
+	}
+	return art, template.Must(template.New("henia").Parse(art.Body))
+}()
+
+type Entry struct{ Name, Description string }
 
 func catalog(source string, all, built []*artifact.Artifact, h henia.Harness) (*artifact.Artifact, error) {
 	if !h.Catalog() || !slices.Contains(h.Artifacts, "skills") && len(h.Artifacts) > 0 {
 		return nil, nil
 	}
-	var dynamic []*artifact.Artifact
+	entries, err := dynamicEntries(all, built)
+	if err != nil || len(entries) == 0 {
+		return nil, err
+	}
+	return HeniaArtifact(source, entries, h)
+}
+
+func dynamicEntries(all, built []*artifact.Artifact) ([]Entry, error) {
+	var entries []Entry
 	for _, art := range all {
 		if art.Type != artifact.TypeSkill {
 			continue
@@ -34,24 +49,20 @@ func catalog(source string, all, built []*artifact.Artifact, h henia.Harness) (*
 			return nil, fmt.Errorf("skill %q collides with the generated catalog skill; rename it or set catalog = false in [harness.<name>.skills]", CatalogName)
 		}
 		if !slices.Contains(built, art) {
-			dynamic = append(dynamic, art)
+			description, _ := art.Frontmatter["description"].(string)
+			entries = append(entries, Entry{art.Name, strings.Join(strings.Fields(description), " ")})
 		}
 	}
-	if len(dynamic) == 0 {
-		return nil, nil
-	}
-	slices.SortFunc(dynamic, func(a, b *artifact.Artifact) int { return strings.Compare(a.Name, b.Name) })
-	type entry struct{ Name, Description string }
-	var entries []entry
-	for _, art := range dynamic {
-		description, _ := art.Frontmatter["description"].(string)
-		entries = append(entries, entry{art.Name, strings.Join(strings.Fields(description), " ")})
-	}
+	slices.SortFunc(entries, func(a, b Entry) int { return strings.Compare(a.Name, b.Name) })
+	return entries, nil
+}
+
+func HeniaArtifact(source string, entries []Entry, h henia.Harness) (*artifact.Artifact, error) {
 	var body strings.Builder
 	if err := catalogTemplate.Execute(&body, entries); err != nil {
 		return nil, err
 	}
-	frontmatter := map[string]any{"name": CatalogName, "description": catalogDescription}
+	frontmatter := map[string]any{"name": heniaSkill.Frontmatter["name"], "description": heniaSkill.Frontmatter["description"]}
 	if h.Profile != "" {
 		if profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
 			frontmatter["allowed-tools"] = catalogTools
@@ -63,6 +74,6 @@ func catalog(source string, all, built []*artifact.Artifact, h henia.Harness) (*
 		SourcePath:  filepath.Join(source, "skills", CatalogName),
 		IsDirectory: true,
 		Frontmatter: frontmatter,
-		Body:        body.String(),
+		Body:        strings.TrimRight(body.String(), "\n") + "\n",
 	}, nil
 }

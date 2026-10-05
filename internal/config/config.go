@@ -20,20 +20,23 @@ import (
 )
 
 type Config struct {
-	Lint      lint.Options               `toml:"lint,omitempty"`
-	Artifacts []string                   `toml:"artifacts,omitempty"`
-	Build     BuildOptions               `toml:"build,omitempty"`
-	Harness   map[string]henia.Harness   `toml:"harness,omitempty"`
-	Preload   preload.Settings           `toml:"preload,omitempty"`
-	Resources ResourceOptions            `toml:"resources,omitempty"`
-	Depends   map[string]deps.Dependency `toml:"dependencies,omitempty"`
-	Slots     map[string]SlotOptions     `toml:"slots,omitempty"`
-	Install   map[string]InstallTarget   `toml:"install,omitempty"`
+	Lint              lint.Options               `toml:"lint,omitempty"`
+	Artifacts         []string                   `toml:"artifacts,omitempty"`
+	Build             BuildOptions               `toml:"build,omitempty"`
+	Harness           map[string]henia.Harness   `toml:"harness,omitempty"`
+	Preload           preload.Settings           `toml:"preload,omitempty"`
+	Resources         ResourceOptions            `toml:"resources,omitempty"`
+	Depends           map[string]deps.Dependency `toml:"dependencies,omitempty"`
+	Slots             map[string]SlotOptions     `toml:"slots,omitempty"`
+	Install           map[string]InstallTarget   `toml:"install,omitempty"`
+	InstallHeniaSkill *bool                      `toml:"install_henia_skill,omitempty"`
 }
 
 type InstallTarget struct {
 	Path string `toml:"path"`
 }
+
+func (c *Config) HeniaSkill() bool { return c.InstallHeniaSkill == nil || *c.InstallHeniaSkill }
 
 type SlotOptions struct {
 	Disable []string `toml:"disable,omitempty"`

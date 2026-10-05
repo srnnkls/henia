@@ -15,7 +15,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/srnnkls/henia"
+	"github.com/srnnkls/henia/internal/build"
 	"github.com/srnnkls/henia/internal/config"
+	"github.com/srnnkls/henia/internal/defaults"
 	"github.com/srnnkls/henia/internal/library"
 )
 
@@ -63,7 +66,7 @@ func install(cmd *cobra.Command, selected []string, force, explicit bool) error 
 		if len(selected) > 0 && !slices.Contains(selected, harness) {
 			continue
 		}
-		if err := installHarness(cmd, harness, expandHome(cfg.Install[harness].Path), globals, force); err != nil {
+		if err := installHarness(cmd, cfg, harness, expandHome(cfg.Install[harness].Path), globals, force); err != nil {
 			return fmt.Errorf("install %s: %w", harness, err)
 		}
 	}
@@ -79,7 +82,7 @@ func expandHome(path string) string {
 	return path
 }
 
-func installHarness(cmd *cobra.Command, harness, target string, globals []library.Package, force bool) error {
+func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target string, globals []library.Package, force bool) error {
 	staging, err := os.MkdirTemp("", "henia-install-")
 	if err != nil {
 		return err
@@ -94,15 +97,31 @@ func installHarness(cmd *cobra.Command, harness, target string, globals []librar
 		if err != nil {
 			return fmt.Errorf("package %s: %w", pkg.Name, err)
 		}
-		if _, ok := pkgCfg.Harness[harness]; ok {
+		if h, ok := pkgCfg.Harness[harness]; ok {
+			if cfg.HeniaSkill() {
+				disabled := false
+				h.Skills.Catalog = &disabled
+				pkgCfg.Harness[harness] = h
+			}
 			owners[pkg.Name] = pkgCfg
 		}
 	}
-	if len(owners) == 0 {
-		return fmt.Errorf("no global package configures harness %s", harness)
-	}
 	files := map[string]string{}
 	from := map[string]string{}
+	var dynamic []build.Entry
+	collect := func(owner, root string) error {
+		return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return err
+			}
+			rel, _ := filepath.Rel(root, path)
+			if previous, ok := files[rel]; ok && !sameFile(previous, path) {
+				return fmt.Errorf("%s is written by both %s and %s", rel, from[rel], owner)
+			}
+			files[rel], from[rel] = path, owner
+			return nil
+		})
+	}
 	for _, pkg := range globals {
 		pkgCfg, ok := owners[pkg.Name]
 		if !ok {
@@ -115,22 +134,28 @@ func installHarness(cmd *cobra.Command, harness, target string, globals []librar
 			}
 		}
 		out := filepath.Join(staging, pkg.Name)
-		if _, err := compilePackage(cmd, pkg.Root, pkgCfg, []string{harness}, out, false, dependencies); err != nil {
+		result, err := compilePackage(cmd, pkg.Root, pkgCfg, []string{harness}, out, false, dependencies)
+		if err != nil {
 			return fmt.Errorf("package %s: %w", pkg.Name, err)
 		}
-		root := filepath.Join(out, harness)
-		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil || entry.IsDir() {
-				return err
+		for _, e := range result.Dynamic[harness] {
+			if !slices.ContainsFunc(dynamic, func(d build.Entry) bool { return d.Name == e.Name }) {
+				dynamic = append(dynamic, e)
 			}
-			rel, _ := filepath.Rel(root, path)
-			if previous, ok := files[rel]; ok && !sameFile(previous, path) {
-				return fmt.Errorf("%s is written by both %s and %s", rel, from[rel], pkg.Name)
+		}
+		if err := collect(pkg.Name, filepath.Join(out, harness)); err != nil {
+			return err
+		}
+	}
+	if cfg.HeniaSkill() {
+		if len(owners) == 0 {
+			for _, e := range library.Open("", nil).Entries {
+				if e.Tier == library.Global {
+					dynamic = append(dynamic, build.Entry{Name: e.Name, Description: strings.Join(strings.Fields(e.Description), " ")})
+				}
 			}
-			files[rel], from[rel] = path, pkg.Name
-			return nil
-		})
-		if err != nil {
+		}
+		if err := heniaSkill(cmd, cfg, harness, staging, dynamic, collect); err != nil {
 			return err
 		}
 	}
@@ -144,6 +169,40 @@ func installHarness(cmd *cobra.Command, harness, target string, globals []librar
 	}
 	fmt.Fprintln(cmd.OutOrStdout())
 	return nil
+}
+
+func heniaSkill(cmd *cobra.Command, cfg *config.Config, harness, staging string, dynamic []build.Entry, collect func(owner, root string) error) error {
+	h, ok := cfg.Harness[harness]
+	if !ok {
+		defaults, err := defaults.DefaultConfig()
+		if err != nil {
+			return err
+		}
+		if h, ok = defaults.Harness[harness]; !ok {
+			return fmt.Errorf("harness %s has no profile for the henia skill; configure [harness.%s] in the user henia.toml or set install_henia_skill = false", harness, harness)
+		}
+	}
+	h.ProjectRoot, h.UserRoot = library.ConfigDir(), library.ConfigDir()
+	disabled := false
+	h.Files, h.Artifacts, h.Skills = nil, []string{"skills"}, henia.Artifacts{Catalog: &disabled}
+	slices.SortFunc(dynamic, func(a, b build.Entry) int { return strings.Compare(a.Name, b.Name) })
+	source := filepath.Join(staging, "henia-source")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		return err
+	}
+	art, err := build.HeniaArtifact(source, dynamic, h)
+	if err != nil {
+		return err
+	}
+	out := filepath.Join(staging, "henia")
+	result, err := build.RunArtifact(cmd.Context(), art, source, out, map[string]henia.Harness{harness: h})
+	if err != nil {
+		return err
+	}
+	if err := errors.Join(result.Errors...); err != nil {
+		return err
+	}
+	return collect("henia", filepath.Join(out, harness))
 }
 
 func sameFile(a, b string) bool {
