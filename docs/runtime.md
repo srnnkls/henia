@@ -324,6 +324,13 @@ harness copy that `henia install` wrote from an older revision of the skill,
 which `henia install` records per harness. A hybrid skill without `:::static` blocks is a launcher: contents
 and related contents only.
 
+Relative links to a skill's resources and to other skills render as the
+`henia show` commands that read them wherever the files are not beside the
+text: in heads, in `henia show` output, and in static skills that link into a
+skill this harness serves dynamically. `[review](reference/review.md)` in
+`scope` becomes ``review (`henia show scope/reference/review.md`)``, and
+`../git/SKILL.md#slots` becomes `henia show git#slots`.
+
 ### Catalog
 
 When a harness has dynamic skills, the build adds the `henia` skill, the

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"path"
 	"strings"
 	"text/template"
 
@@ -34,6 +35,7 @@ type Transformer struct {
 	Tools        map[string]string
 	Served       map[string]bool
 	Head         bool
+	LibraryLinks bool
 }
 
 func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
@@ -158,6 +160,9 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	} else {
 		body = full
 	}
+	if art.Type == artifact.TypeSkill {
+		body = t.renderLinks(body, art.Name)
+	}
 
 	body, err = markup.Render(body, t.OutputFormat)
 	if err != nil {
@@ -265,4 +270,51 @@ func (t *Transformer) executeReferenceTemplate(tmpl string, ref reference.Refere
 	}
 
 	return buf.String(), nil
+}
+
+func (t *Transformer) renderLinks(body, skill string) string {
+	links := markup.Links([]byte(body))
+	for i := len(links) - 1; i >= 0; i-- {
+		link := links[i]
+		target, ok := t.libraryTarget(skill, link.Dest)
+		if !ok {
+			continue
+		}
+		command := "`henia show " + target + "`"
+		text := strings.Trim(link.Text, "`*_~")
+		replacement := link.Text + " (" + command + ")"
+		if text == link.Dest || text == strings.SplitN(link.Dest, "#", 2)[0] || text == target || text == strings.SplitN(target, "#", 2)[0] {
+			replacement = command
+		}
+		body = body[:link.Start] + replacement + body[link.End:]
+	}
+	return body
+}
+
+func (t *Transformer) libraryTarget(skill, dest string) (string, bool) {
+	if dest == "" || strings.Contains(dest, "://") || strings.HasPrefix(dest, "/") || strings.HasPrefix(dest, "mailto:") {
+		return "", false
+	}
+	file, anchor, anchored := strings.Cut(dest, "#")
+	suffix := ""
+	if anchored && anchor != "" {
+		suffix = "#" + anchor
+	}
+	if file == "" {
+		return skill + suffix, t.Head
+	}
+	clean := path.Clean(file)
+	owner, rest := skill, clean
+	if other, ok := strings.CutPrefix(clean, "../"); ok {
+		owner, rest, _ = strings.Cut(other, "/")
+		if owner == "" || owner == ".." || !t.LibraryLinks && !t.Served[owner] {
+			return "", false
+		}
+	} else if !t.LibraryLinks || strings.HasPrefix(clean, "..") {
+		return "", false
+	}
+	if rest == "" || rest == "SKILL.md" {
+		return owner + suffix, true
+	}
+	return owner + "/" + rest + suffix, true
 }

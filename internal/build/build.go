@@ -155,7 +155,7 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 			}
 			tr.Served = served
 			hybrid := art.Type == artifact.TypeSkill && art.Name != CatalogName && harness.Mode("skills", art.Name) == henia.Hybrid
-			tr.Head = hybrid
+			tr.Head, tr.LibraryLinks = hybrid, hybrid
 			tgt := target.NewFromConfig(harnessName, outputPath, effective)
 			transformed := art
 			if art.Type != artifact.TypeUnknown {
@@ -339,7 +339,7 @@ func Render(art *artifact.Artifact, name string, h henia.Harness, served map[str
 	if err != nil {
 		return nil, err
 	}
-	tr.Served, tr.Head = served, head
+	tr.Served, tr.Head, tr.LibraryLinks = served, head, true
 	return tr.Transform(art)
 }
 
