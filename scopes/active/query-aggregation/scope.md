@@ -71,7 +71,7 @@ An aggregate takes one trailing comparison, `(>, >=, <, <=)` with a number or `$
 - The empty row of an optional sibling or relation target is decided per enclosing row: a row keeps itself once, with the optional captures empty, when no candidate unifies with it. Today `chain` emits its fallback only when no candidate exists at all, so `(skill :id ?s (link :target ?s)? @l) @t` drops a skill whose links all name other skills.
 - A query needs at least one required top-level pattern, and a top-level `(not …)` must share a variable bound by a required one; the reader rejects both otherwise.
 - A top-level pattern may take `?` and acts as a left join: required members join first; each row then joins every match of the optional member, or stays once with its captures empty. `*` and `+` stay rejected at the top level.
-- The optional-binding error applies only when no required pattern binds the variable in the same or an enclosing scope; otherwise the optional mention compares.
+- The optional-binding error applies unless a required binder of the variable is evaluated before the optional (FR-2); then the optional mention compares. Ancestor attributes do not count: a nested pattern is matched without its ancestors' bindings.
 
 #### AD-5: Ordering lives in `--sort`, outside `(group …)`
 
@@ -95,7 +95,7 @@ An aggregate takes one trailing comparison, `(>, >=, <, <=)` with a number or `$
 ### Functional Requirements
 
 - FR-1: `?`/`*` on a `reaches`, `inbound`, `to` or `from` target yields one empty row when nothing related unifies with the enclosing row; optional siblings follow the same per-row rule.
-- FR-2: A variable bound in an optional pattern may recur when a required pattern in the same or an enclosing scope binds it.
+- FR-2: A variable bound in an optional pattern may recur when a required binder is evaluated before the optional: an attribute of the pattern that holds the optional, a required chain of that pattern written before it (with its required descendants), or, for an optional relation target, any required chain or earlier required relation of that pattern. For a top-level optional, any required member. Every other recurrence stays a reader error.
 - FR-3: A top-level `P?` keeps every row of the required members, joined with each match of `P` or once with `P`'s captures empty.
 - FR-4: `:words`, `:chars` and `:lines` on a `file` count the text the query reads for it: the rendered body by default, the authored body with `--canonical` and in lint, frontmatter excluded; a resource counts its whole text. On a `skill`, each is the sum over its files.
 - FR-5: `(group key* aggregate*)` with the aggregates and filters of AD-2 and AD-3; key and output variables satisfy the single-use check.

@@ -26,6 +26,7 @@ type mention struct {
 	output          bool
 	member          int
 	negated, absent bool
+	prior           map[string]bool
 }
 
 func (q *Query) check() error {
@@ -37,18 +38,24 @@ func (q *Query) check() error {
 			problem = err
 		}
 	}
-	var walk func(p *Pattern, s *scope, member int, negated, optional bool)
-	walk = func(p *Pattern, s *scope, member int, negated, optional bool) {
-		optional = optional || p.Quant == '?' || p.Quant == '*'
+	var walk func(p *Pattern, s *scope, member int, negated, optional bool, prior map[string]bool)
+	walk = func(p *Pattern, s *scope, member int, negated, optional bool, prior map[string]bool) {
+		optional = optional || optionalPattern(p)
+		enter := func(child *Pattern, avail func() map[string]bool) map[string]bool {
+			if optionalPattern(child) {
+				return avail()
+			}
+			return prior
+		}
 		if negated && p.Capture != "" {
 			fail(&Error{Offset: p.Pos, Message: fmt.Sprintf("@%s is inside (not ...), so it never prints", p.Capture), Hint: "capture a node outside the negation"})
 		}
 		for _, a := range p.Attrs {
 			if a.Var != "" {
-				mentions = append(mentions, mention{name: a.Var, pos: a.Pos, scope: s, binds: !a.Negate && a.Relate == "", optional: optional, member: member, negated: negated, absent: member < 0})
+				mentions = append(mentions, mention{name: a.Var, pos: a.Pos, scope: s, binds: !a.Negate && a.Relate == "", optional: optional, member: member, negated: negated, absent: member < 0, prior: prior})
 			}
 			if a.Score != "" {
-				mentions = append(mentions, mention{name: a.Score, pos: a.Pos, scope: s, binds: true, output: true, optional: optional, member: member, negated: negated, absent: member < 0})
+				mentions = append(mentions, mention{name: a.Score, pos: a.Pos, scope: s, binds: true, output: true, optional: optional, member: member, negated: negated, absent: member < 0, prior: prior})
 			}
 		}
 		if len(p.Alts) > 1 {
@@ -60,31 +67,39 @@ func (q *Query) check() error {
 			}
 		}
 		for _, alt := range p.Alts {
-			walk(alt, s, member, negated, optional)
+			walk(alt, s, member, negated, optional, prior)
 		}
-		for _, chain := range p.Chains {
+		for i, chain := range p.Chains {
 			for _, link := range chain.Links {
-				walk(link.Pattern, s, member, negated, optional)
+				walk(link.Pattern, s, member, negated, optional, enter(link.Pattern, func() map[string]bool { return before(p, i, 0) }))
 			}
 		}
-		for _, relation := range p.Relations {
-			walk(relation.Target, s, member, negated, optional)
+		for i, relation := range p.Relations {
+			walk(relation.Target, s, member, negated, optional, enter(relation.Target, func() map[string]bool { return before(p, len(p.Chains), i) }))
 		}
 		for _, not := range p.Nots {
 			target := not.Pattern
 			if not.Relation != nil {
 				target = not.Relation.Target
 			}
-			walk(target, &scope{parent: s}, member, true, optional)
+			walk(target, &scope{parent: s}, member, true, optional, enter(target, func() map[string]bool { return map[string]bool{} }))
 		}
 	}
 	for i, p := range q.Members {
-		walk(p, root, i, false, false)
+		prior := map[string]bool{}
+		if optionalPattern(p) {
+			for j, other := range q.Members {
+				if j != i && !optionalPattern(other) {
+					maps.Copy(prior, required(other))
+				}
+			}
+		}
+		walk(p, root, i, false, false, prior)
 	}
 	scopes := make([]*scope, len(q.Absent))
 	for i, p := range q.Absent {
 		scopes[i] = &scope{parent: root}
-		walk(p, scopes[i], -1, true, false)
+		walk(p, scopes[i], -1, true, false, map[string]bool{})
 	}
 	if problem != nil {
 		return problem
@@ -99,8 +114,8 @@ func (q *Query) check() error {
 		}
 	}
 	for _, m := range mentions {
-		if m.binds && m.optional && count[m.name] > 1 {
-			return &Error{Offset: m.pos, Message: fmt.Sprintf("?%s is bound in an optional pattern, so it may be unbound where it is used again", m.name), Hint: "bind it in a pattern that always matches, or use it only once"}
+		if m.binds && m.optional && count[m.name] > 1 && !m.prior[m.name] {
+			return &Error{Offset: m.pos, Message: fmt.Sprintf("?%s is bound in an optional pattern, so it may be unbound where it is used again", m.name), Hint: fmt.Sprintf("bind ?%s first on the pattern that holds the optional one, or in a required pattern written before it", m.name)}
 		}
 	}
 	for _, m := range mentions {
@@ -143,6 +158,37 @@ func (q *Query) check() error {
 		}
 	}
 	return nil
+}
+
+func optionalPattern(p *Pattern) bool { return p.Quant == '?' || p.Quant == '*' }
+
+func before(p *Pattern, chains, relations int) map[string]bool {
+	vars := map[string]bool{}
+	for _, a := range p.Attrs {
+		if a.Var != "" && !a.Negate && a.Relate == "" {
+			vars[a.Var] = true
+		}
+	}
+	for _, chain := range p.Chains[:chains] {
+		for _, link := range chain.Links {
+			maps.Copy(vars, required(link.Pattern))
+		}
+	}
+	for _, relation := range p.Relations[:relations] {
+		maps.Copy(vars, required(relation.Target))
+	}
+	return vars
+}
+
+func required(p *Pattern) map[string]bool {
+	if optionalPattern(p) {
+		return map[string]bool{}
+	}
+	vars := before(p, len(p.Chains), len(p.Relations))
+	for _, alt := range p.Alts {
+		maps.Copy(vars, required(alt))
+	}
+	return vars
 }
 
 func bound(p *Pattern) map[string]bool {
