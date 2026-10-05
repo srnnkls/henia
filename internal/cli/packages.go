@@ -16,9 +16,11 @@ import (
 func packageScope(cmd *cobra.Command, global bool) (deps.Scope, error) {
 	if global {
 		manifest := filepath.Join(library.ConfigDir(), library.ConfigFile)
-		return deps.Scope{Manifest: manifest, Lock: filepath.Join(library.ConfigDir(), library.LockFile), State: library.StateDir("global"), Store: library.PackagesDir("global")}, nil
+		return deps.Scope{Manifest: manifest, Lock: filepath.Join(library.ConfigDir(), library.LockFile), State: library.StateDir("global"), Store: library.PackagesDir("global"), Tools: filepath.Join(library.CacheDir(), "tools"), Log: cmd.ErrOrStderr()}, nil
 	}
-	return projectScope(projectRoot(cmd))
+	scope, err := projectScope(projectRoot(cmd))
+	scope.Log = cmd.ErrOrStderr()
+	return scope, err
 }
 
 func projectScope(project string) (deps.Scope, error) {
@@ -30,7 +32,7 @@ func projectScope(project string) (deps.Scope, error) {
 		return deps.Scope{}, err
 	}
 	key := library.ProjectKey(project)
-	return deps.Scope{Manifest: manifest, Lock: filepath.Join(filepath.Dir(manifest), library.LockFile), State: library.StateDir(key), Store: library.PackagesDir(key)}, nil
+	return deps.Scope{Manifest: manifest, Lock: filepath.Join(filepath.Dir(manifest), library.LockFile), State: library.StateDir(key), Store: library.PackagesDir(key), Tools: filepath.Join(library.CacheDir(), "tools")}, nil
 }
 
 func ensurePackages(cmd *cobra.Command, project string) error {
@@ -38,6 +40,7 @@ func ensurePackages(cmd *cobra.Command, project string) error {
 	if err != nil {
 		return err
 	}
+	scope.Log = cmd.ErrOrStderr()
 	declared, err := deps.Read(scope.Manifest)
 	if err != nil {
 		return err

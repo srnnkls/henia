@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"os/exec"
@@ -35,6 +36,8 @@ type Scope struct {
 	Lock     string
 	State    string
 	Store    string
+	Tools    string
+	Log      io.Writer
 }
 
 type Report struct {
@@ -43,7 +46,7 @@ type Report struct {
 	Removed  int
 }
 
-var ErrNoPhora = errors.New("henia needs phora on PATH to fetch dependencies; install it from https://github.com/srnnkls/phora")
+var ErrNoPhora = errors.New("henia needs phora to fetch dependencies, and no release fits this platform; install it from https://github.com/srnnkls/phora or set HENIA_PHORA")
 
 var name = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
@@ -136,9 +139,9 @@ func phoraManifest(dependencies map[string]Dependency, scope Scope) ([]byte, err
 }
 
 func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
-	phora, err := exec.LookPath("phora")
+	phora, err := Phora(ctx, scope.Tools, scope.Log)
 	if err != nil {
-		return Report{}, ErrNoPhora
+		return Report{}, err
 	}
 	declared, err := Read(scope.Manifest)
 	if err != nil {

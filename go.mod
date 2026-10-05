@@ -9,6 +9,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/spf13/cobra v1.10.2
 	github.com/townsendmerino/aikit v1.16.0
+	github.com/ulikunitz/xz v0.5.17
 	github.com/yuin/goldmark v1.7.16
 	gopkg.in/yaml.v3 v3.0.1
 	mvdan.cc/sh/v3 v3.13.1

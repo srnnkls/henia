@@ -23,3 +23,12 @@ run = "PATH=$PWD:$PATH scrut test tests/*.md"
 description = "Run live harness acceptance tests (claude -p, codex exec); TROPOS=<checkout> links a local Tropos"
 depends = ["build"]
 run = "PATH=$PWD:$PATH scrut test --timeout-seconds 900 tests/acceptance/*.md"
+
+[tasks."phora:pin"]
+description = "Pin the phora release henia fetches when phora is missing: mise run phora:pin 0.4.3"
+usage = 'arg "<version>"'
+run = [
+  "curl -fsSL https://github.com/srnnkls/phora/releases/download/v${usage_version}/sha256.sum -o internal/deps/phora.sum",
+  "echo ${usage_version} > internal/deps/phora.version",
+  "go test ./internal/deps -run TestPinnedRelease",
+]

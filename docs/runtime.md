@@ -67,9 +67,12 @@ skills = ["gestalt"]   # optional; every skill when omitted
 
 `sync` fetches the declared packages at their locked commits, and the packages
 they declare in turn; `update` moves them to the latest commits. Henia hands the
-fetching to [Phora](https://github.com/srnnkls/phora), which must be on PATH,
-through a phora.toml it generates under
-`$XDG_STATE_HOME/henia/packages/<project>/`. Phora's lock is kept as
+fetching to [Phora](https://github.com/srnnkls/phora) through a phora.toml it
+generates under `$XDG_STATE_HOME/henia/packages/<project>/`. It runs
+`HENIA_PHORA` when set, else a `phora` on PATH of at least 0.4.1, else the
+Phora release it pins, downloaded once into `$XDG_CACHE_HOME/henia/tools/` and
+checked against the SHA-256 built into Henia. Releases exist for macOS and
+Linux; elsewhere, install Phora or set `HENIA_PHORA`. Phora's lock is kept as
 `henia.lock` next to `henia.toml`; commit it. `build` and `lint` sync first when
 a declared package is missing.
 
