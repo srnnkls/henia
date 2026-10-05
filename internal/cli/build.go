@@ -71,7 +71,7 @@ func newBuildCommand() *cobra.Command {
 			}
 			sources := []string{source}
 			var dependencies []build.Dependency
-			for _, dependency := range library.Open(source, nil).Sources {
+			for _, dependency := range library.Open(source, nil).Packages {
 				if dependency.Tier != library.Dependency {
 					continue
 				}
@@ -79,7 +79,7 @@ func newBuildCommand() *cobra.Command {
 				own := map[string]henia.Harness{}
 				if data, err := os.ReadFile(dependency.Config); err == nil {
 					if own, err = config.Harnesses(data); err != nil {
-						return fmt.Errorf("source %s: %w", dependency.Name, err)
+						return fmt.Errorf("package %s: %w", dependency.Name, err)
 					}
 				}
 				dependencies = append(dependencies, build.Dependency{Root: dependency.Root, Harnesses: own})

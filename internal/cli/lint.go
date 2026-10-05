@@ -77,7 +77,7 @@ func newLintTestCommand() *cobra.Command {
 		Use:   "test",
 		Short: "Run the Matches and Passes examples of every lint module",
 		Long: `Run the Matches and Passes examples of every lint module: the standard
-library, installed sources' lint/ directories, the user's and the project's.
+library, skill packages' .henia/lint/ directories, the user's and the project's.
 A Matches example must make its rule report; a Passes example must not.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -121,9 +121,9 @@ func lintOptions(cmd *cobra.Command) (lint.Options, error) {
 		return lint.Options{}, err
 	}
 	lib := library.Open(project, nil)
-	for _, source := range lib.Sources {
-		if source.Tier == library.Dependency {
-			options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(source.Root, library.ProjectDir, "lint"), Prefix: source.Name})
+	for _, pkg := range lib.Packages {
+		if pkg.Tier == library.Dependency {
+			options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(pkg.Root, library.ProjectDir, "lint"), Prefix: pkg.Name})
 		}
 	}
 	for _, entry := range lib.Entries {

@@ -46,7 +46,7 @@ func (l *Library) Corpus(rendering *Rendering) *Corpus {
 	c := newCorpus()
 	c.lib, c.rendering = l, rendering
 	for _, e := range l.Entries {
-		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": e.Name, "name": e.Name, "source": e.Source, "ref": l.Reference(e), "dir": filepath.Dir(e.Path)}}
+		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": e.Name, "name": e.Name, "package": e.Package, "ref": l.Reference(e), "dir": filepath.Dir(e.Path)}}
 		c.adopt(c.Root, skill)
 		c.skills[e.ID] = skill
 	}

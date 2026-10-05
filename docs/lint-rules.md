@@ -17,7 +17,7 @@ standard library's patterns and compose new rules from them.
 | `std/similarity` | `similar-content`, `semantic-content` | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
 
 `henia lint test` runs every module's examples, the standard library's
-included. The modules are readable with the rest of Henia's sources under
+included. The modules are readable with the rest of Henia's source code under
 `internal/lint/std/`.
 
 ## Configuration
@@ -51,8 +51,8 @@ message = "Resolve the TODO before release."
 References resolve against everything lint can know, never a hand-kept list:
 
 - the scanned files;
-- the skills of the project's dependency sources under `.henia/sources/`,
-  transitively. Those are read for their names and anchors but never linted.
+- the skills of the project's skill packages, transitively. Those are read for
+  their names and anchors but never linted.
 - the commands and agents built into each harness in `henia.toml`, which come
   from its profile's `commands` and `agents`.
 
@@ -65,7 +65,7 @@ the diagnostics, including `related` locations and, for similarity findings,
 Lint loads modules from these layers, in order:
 
 1. the standard library;
-2. `.henia/lint/` in each dependency source, named `<source>/<module>`;
+2. `.henia/lint/` in each skill package, named `<package>/<module>`;
 3. `$XDG_CONFIG_HOME/henia/lint/`;
 4. the project's `.henia/lint/`;
 5. inline rules.

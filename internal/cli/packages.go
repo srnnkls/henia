@@ -16,7 +16,7 @@ import (
 func packageScope(cmd *cobra.Command, global bool) (deps.Scope, error) {
 	if global {
 		manifest := filepath.Join(library.ConfigDir(), library.ConfigFile)
-		return deps.Scope{Manifest: manifest, Lock: filepath.Join(library.ConfigDir(), library.LockFile), State: library.StateDir("global"), Sources: library.PackagesDir("global")}, nil
+		return deps.Scope{Manifest: manifest, Lock: filepath.Join(library.ConfigDir(), library.LockFile), State: library.StateDir("global"), Store: library.PackagesDir("global")}, nil
 	}
 	return projectScope(projectRoot(cmd))
 }
@@ -30,7 +30,7 @@ func projectScope(project string) (deps.Scope, error) {
 		return deps.Scope{}, err
 	}
 	key := library.ProjectKey(project)
-	return deps.Scope{Manifest: manifest, Lock: filepath.Join(filepath.Dir(manifest), library.LockFile), State: library.StateDir(key), Sources: library.PackagesDir(key)}, nil
+	return deps.Scope{Manifest: manifest, Lock: filepath.Join(filepath.Dir(manifest), library.LockFile), State: library.StateDir(key), Store: library.PackagesDir(key)}, nil
 }
 
 func ensurePackages(cmd *cobra.Command, project string) error {
@@ -43,12 +43,12 @@ func ensurePackages(cmd *cobra.Command, project string) error {
 		return err
 	}
 	for name := range declared {
-		if _, err := os.Stat(filepath.Join(scope.Sources, name)); err != nil {
+		if _, err := os.Stat(filepath.Join(scope.Store, name)); err != nil {
 			report, err := deps.Sync(cmd.Context(), scope, false)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "Synced %d package(s): %s\n", len(report.Sources), strings.Join(report.Sources, ", "))
+			fmt.Fprintf(cmd.ErrOrStderr(), "Synced %d package(s): %s\n", len(report.Packages), strings.Join(report.Packages, ", "))
 			return nil
 		}
 	}
@@ -64,11 +64,11 @@ func syncPackages(cmd *cobra.Command, scope deps.Scope, update bool) error {
 	if update {
 		verb = "Updated"
 	}
-	if len(report.Sources) == 0 {
+	if len(report.Packages) == 0 {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s: no packages declared in %s\n", verb, scope.Manifest)
 		return nil
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "%s %d package(s) into %s: %s\n", verb, len(report.Sources), scope.Sources, strings.Join(report.Sources, ", "))
+	fmt.Fprintf(cmd.OutOrStdout(), "%s %d package(s) into %s: %s\n", verb, len(report.Packages), scope.Store, strings.Join(report.Packages, ", "))
 	return nil
 }
 

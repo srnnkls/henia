@@ -34,11 +34,11 @@ type Scope struct {
 	Manifest string
 	Lock     string
 	State    string
-	Sources  string
+	Store    string
 }
 
 type Report struct {
-	Sources  []string
+	Packages []string
 	Deployed int
 	Removed  int
 }
@@ -99,7 +99,7 @@ func Read(manifest string) (map[string]Dependency, error) {
 }
 
 func phoraManifest(dependencies map[string]Dependency, scope Scope) ([]byte, error) {
-	relative, err := filepath.Rel(scope.State, scope.Sources)
+	relative, err := filepath.Rel(scope.State, scope.Store)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 		report.Removed += summary.Removed
 		added := false
 		for _, key := range slices.Sorted(maps.Keys(declared)) {
-			for _, candidate := range []string{filepath.Join(scope.Sources, key, "henia.toml"), filepath.Join(scope.Sources, key, ".henia", "henia.toml")} {
+			for _, candidate := range []string{filepath.Join(scope.Store, key, "henia.toml"), filepath.Join(scope.Store, key, ".henia", "henia.toml")} {
 				transitive, err := Read(candidate)
 				if err != nil {
 					return report, err
@@ -198,7 +198,7 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 	if err := copyFile(filepath.Join(scope.State, "phora.lock"), scope.Lock); err != nil {
 		return report, err
 	}
-	report.Sources = slices.Sorted(maps.Keys(declared))
+	report.Packages = slices.Sorted(maps.Keys(declared))
 	return report, nil
 }
 

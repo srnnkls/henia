@@ -38,7 +38,7 @@ func unsandboxed(t *testing.T) *Runner {
 }
 
 func TestRunFAS(t *testing.T) {
-	c := Context{Dir: t.TempDir(), Skill: "s", Source: "tropos", Tier: "global", Caller: "claude"}
+	c := Context{Dir: t.TempDir(), Skill: "s", Package: "tropos", Tier: "global", Caller: "claude"}
 	for _, tc := range []struct{ name, fas, command, want string }{
 		{"no fas runs", "", "echo ran", "ran\n"},
 		{"allow", `echo '{"decision":"allow"}'`, "echo ran", "ran\n"},
@@ -59,7 +59,7 @@ func TestRunFAS(t *testing.T) {
 	bin := stubFAS(t, `cat > "$(dirname "$0")/input"; echo '{"decision":"allow"}'`)
 	unsandboxed(t).Run(context.Background(), "echo hi", c)
 	fas, _ := os.ReadFile(filepath.Join(bin, "input"))
-	want := `{"caller":"claude","command":"echo hi","cwd":"` + c.Dir + `","skill":"s","source":"tropos","tier":"global"}`
+	want := `{"caller":"claude","command":"echo hi","cwd":"` + c.Dir + `","package":"tropos","skill":"s","tier":"global"}`
 	if string(fas) != want {
 		t.Fatalf("fas input %s, want %s", fas, want)
 	}

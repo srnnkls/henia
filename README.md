@@ -94,7 +94,7 @@ library checks metadata, templates and directives, local links and references,
 outdated names, line budgets, review dates, duplicate headings, content and
 skills, and slots, with optional word-shingle and Model2Vec similarity.
 Projects add modules under `.henia/lint/`, users under `~/.config/henia/lint/`,
-and dependency sources bring theirs from their own `.henia/lint/`; modules
+and skill packages bring theirs from their own `.henia/lint/`; modules
 import the standard library's patterns and compose them. `henia.toml` tunes
 rules and holds one-off rules:
 
@@ -153,7 +153,7 @@ for a generated catalog of real seams.
 
 ## Skill runtime
 
-Henia serves skills from a library of installed sources, rendered for the
+Henia serves skills from a library of installed skill packages, rendered for the
 calling agent, while each harness lists only the entry skills projected into
 it:
 

@@ -38,10 +38,10 @@ type Skill struct {
 
 func (s Skill) Name() string { return filepath.Base(filepath.Dir(s.Path)) }
 
-func Discover(root string, globals []string, sources []library.Source) []Skill {
+func Discover(root string, globals []string, packages []library.Package) []Skill {
 	var skills []Skill
 	seen := make(map[string]bool)
-	scan := func(dir string, tier Tier, source string) {
+	scan := func(dir string, tier Tier, pkg string) {
 		for _, f := range library.Scan(dir) {
 			if seen[f.Physical] {
 				continue
@@ -52,18 +52,18 @@ func Discover(root string, globals []string, sources []library.Source) []Skill {
 			}
 			seen[f.Physical] = true
 			skill := Skill{Path: f.Path, Tier: tier, Metadata: metadata}
-			if source != "" {
-				skill.Ref = source + ":" + skill.Name()
+			if pkg != "" {
+				skill.Ref = pkg + ":" + skill.Name()
 			}
 			skills = append(skills, skill)
 		}
 	}
-	for _, source := range sources {
+	for _, pkg := range packages {
 		tier := Global
-		if source.Tier == library.Project {
+		if pkg.Tier == library.Project {
 			tier = Project
 		}
-		scan(source.Skills(), tier, source.Name)
+		scan(pkg.Skills(), tier, pkg.Name)
 	}
 	if root != "" {
 		for _, dir := range ProjectDirs {

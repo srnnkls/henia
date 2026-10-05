@@ -6,18 +6,18 @@ that agent.
 
 | Concept | Meaning |
 |---|---|
-| Library | Installed canonical skill sources, as authored |
-| Source | One tree of `skills/` plus the `henia.toml` that renders them |
+| Library | Installed canonical skill packages, as authored |
+| Skill package | One tree of `skills/` plus the `henia.toml` that renders them |
 | Runtime | Resolves, composes, renders, caches and serves library skills |
 | Static skill | Compiled by `henia build` into one harness's skill tree |
 | Dynamic skill | Not built for that harness; read with `henia show` |
 
-Whether a skill is static or dynamic is decided per harness in the source's
+Whether a skill is static or dynamic is decided per harness in the package's
 `henia.toml`, never in the skill.
 
 ## Library
 
-A project keeps its source in `.henia/`:
+A project keeps its own package in `.henia/`:
 
 ```
 .henia/
@@ -26,24 +26,15 @@ A project keeps its source in `.henia/`:
   skills/
   harnesses/
   lint/
-  sources/       # dependencies; ignored
   build/  cache/  state/    # ignored
 ```
 
-A source is a project used as a dependency: a folder holding `skills/`, with its
-own `henia.toml` and, optionally, lint modules in `.henia/lint/`. A project's dependencies are the sources in
-its `.henia/sources/<source>/`, and theirs in turn, so a project sees every
-skill it depends on transitively. Anything that places a folder can provide
-them: a copy, a symlink, a git submodule, or a deployer such as Phora. Henia
-never installs.
+A skill package is a project used as a dependency: a folder holding `skills/`,
+with its own `henia.toml` and, optionally, lint modules in `.henia/lint/`.
 
-`$XDG_DATA_HOME/henia/sources/<source>/` (default `~/.local/share/henia/sources`)
-holds sources installed for every project; `--source DIR` adds one for a single
-command.
-
-A skill is `<source>:<name>`; the project source is `project`. A bare name
-resolves to the project skill, else to a dependency's, else to an installed
-one. When several sources of the same rank define a name, the name is
+A skill is `<package>:<name>`; the project's own package is `project`. A bare
+name resolves to the project skill, else to a dependency's, else to a global
+one. When several packages of the same rank define a name, the name is
 ambiguous and must be qualified; same-named skills never replace each other
 silently. `<skill>#<section>` addresses a heading anchor.
 
@@ -53,6 +44,41 @@ dependency's skills render with its own harness `variables`, `tools` and
 them key by key and decides everything else;
 `henia lint` lints the project's own files and resolves references against
 its dependencies, whose `.henia/lint/` modules join the rule set.
+
+`--package DIR` adds a package for a single runtime command.
+
+## Dependencies
+
+```
+henia add <name> (--git URL | --path DIR) [--branch B | --tag T | --rev R] [--root DIR] [--skill S]... [--global]
+henia rm <name> [--global]
+henia sync [--global]
+henia update [--global]
+```
+
+`henia add` declares a package in `henia.toml`:
+
+```toml
+[dependencies.gestalt]
+git = "https://github.com/srnnkls/gestalt.git"
+branch = "main"
+skills = ["gestalt"]   # optional; every skill when omitted
+```
+
+`sync` fetches the declared packages at their locked commits, and the packages
+they declare in turn; `update` moves them to the latest commits. Henia hands the
+fetching to [Phora](https://github.com/srnnkls/phora), which must be on PATH,
+through a phora.toml it generates under
+`$XDG_STATE_HOME/henia/packages/<project>/`. Phora's lock is kept as
+`henia.lock` next to `henia.toml`; commit it. `build` and `lint` sync first when
+a declared package is missing.
+
+Packages land in a store shared by every project, under
+`$XDG_DATA_HOME/henia/packages/<project>/<name>/`. `--global` uses the user
+`henia.toml` in `$XDG_CONFIG_HOME/henia/` and installs into
+`$XDG_DATA_HOME/henia/packages/global/`, which every project reads. Unset `XDG_*`
+variables fall back to the platform's directories: `~/.config`, `~/.local/share`
+and `~/.local/state` on Linux, `~/Library/Application Support` on macOS.
 
 ## Runtime
 
@@ -64,9 +90,9 @@ henia context <skill> [--global DIR]...
 henia preload --skill <skill> -- <command>
 ```
 
-- `ls` prints the catalog; `--json` adds each skill's source, digest and
+- `ls` prints the catalog; `--json` adds each skill's package, digest and
   sections.
-- `show` prints a skill or one section, rendered through its source's
+- `show` prints a skill or one section, rendered through its package's
   `henia.toml` for the caller: `--harness`, then `HENIA_HARNESS` (`none`
   renders neutrally), then the nearest agent among Henia's ancestor processes,
   then the `AI_AGENT` prefix (`claude-code` is `claude`), `CODEX_THREAD_ID` or
@@ -180,7 +206,7 @@ refuse more; its rule name appears as `blocked by fas/<rule>`.
 
 A skill is static or dynamic per harness. `henia build` compiles static skills
 into the harness's skill tree, where the harness lists and loads them; dynamic
-skills are not built and are read with `henia show`. The source's `henia.toml`
+skills are not built and are read with `henia show`. The package's `henia.toml`
 decides, per harness, with one of two lists:
 
 ```toml
@@ -196,7 +222,7 @@ dynamic skills render as `henia show` commands.
 When a harness has dynamic skills, the build adds a generated `henia` skill, the
 catalog skill, that names each one with its description and tells the agent to
 read it with `henia show`. Set `catalog = false` in `[harness.<name>.skills]`
-when the source's own instructions already describe the runtime.
+when the package's own instructions already describe the runtime.
 
 Harnesses truncate skill listings early, so keep about ten skills static per
 harness.
@@ -204,6 +230,6 @@ harness.
 ## Guarding
 
 Library content is meant to be read through the runtime. A FAS rule can deny
-direct reads of `.henia/skills` and `henia/sources` paths, as
-[Tropos's `henia_store.cue`](https://github.com/srnnkls/tropos/blob/main/rules/fas/security/henia_store.cue)
+direct reads of `.henia/skills` and `henia/packages` paths, as
+[Tropos's `henia_library.cue`](https://github.com/srnnkls/tropos/blob/main/rules/fas/security/henia_library.cue)
 does for Read, Grep, Glob and reading Bash commands.

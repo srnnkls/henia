@@ -2,11 +2,11 @@
 
 ## Fixture
 
-A global source with an entry skill and two library skills, a project source,
+A global package with an entry skill and two library skills, a project package,
 and projections for two harnesses.
 
 ```scrut
-$ T=$(cd "$(mktemp -d)" && pwd -P); L="$T/data/henia/sources"; P="$T/repo"
+$ T=$(cd "$(mktemp -d)" && pwd -P); L="$T/data/henia/packages/global"; P="$T/repo"
 > henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia "$@"; }
 > mk() { mkdir -p "$(dirname "$1")"; printf -- "$2" > "$1"; }
 > mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nmetadata:\n  slots: "code.style code.check:keyed(list(command))"\n  applies: "code.style code.check"\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n'
@@ -47,7 +47,7 @@ These skills are not installed in this harness. When a task fits one, read it wi
 - `checks`: Validation commands.
 - `style-guide`: House style by language.
 
-`henia ls` lists every skill in the library, including other sources'. `henia show <skill>#<section>` reads a single section. `henia query '<pattern>'` finds headings, paragraphs, code and links across skills and their resources; `henia query --grammar` prints the language.
+`henia ls` lists every skill in the library, including other packages'. `henia show <skill>#<section>` reads a single section. `henia query '<pattern>'` finds headings, paragraphs, code and links across skills and their resources; `henia query --grammar` prints the language.
 ```
 
 ```scrut
@@ -68,7 +68,7 @@ style-guide	global	House style by language.
 ```
 
 ```scrut
-$ henia ls --json | jq -c '.[] | [.id, .source, .tier, (.digest | length), [.sections[].anchor]]'
+$ henia ls --json | jq -c '.[] | [.id, .package, .tier, (.digest | length), [.sections[].anchor]]'
 ["tropos:checks","tropos","global",64,["checks"]]
 ["tropos:code","tropos","global",64,["code"]]
 ["tropos:style-guide","tropos","global",64,["style-guide","go","errors","python"]]
@@ -105,7 +105,7 @@ exit 0
 
 ## Rendering
 
-`henia show` renders through the owning source's configuration for the caller:
+`henia show` renders through the owning package's configuration for the caller:
 `--harness`, then `HENIA_HARNESS` (`none` is neutral), then the nearest agent
 process, then `AI_AGENT` or a vendor marker. References
 to skills the caller's harness projects keep its syntax; the rest render as
@@ -141,7 +141,7 @@ $ find "$T/cache/henia/render" -type f | wc -l | tr -d ' '
 Updated.
 ```
 
-A source renders with its own harness profiles from `.henia/harnesses`.
+A package renders with its own harness profiles from `.henia/harnesses`.
 
 ```scrut
 $ mk "$L/tropos/.henia/harnesses/mini/transform.toml" 'fields = ["name", "description"]\n'
@@ -176,7 +176,7 @@ Run `/skill:code` yourself.
 
 ## Resolution
 
-The project source shadows global sources by name; `source:name` names any
+The project package shadows global packages by name; `package:name` names any
 skill exactly.
 
 ```scrut
@@ -190,7 +190,7 @@ tropos:style-guide	global	House style by language.
 # Style guide
 ```
 
-Two global sources defining a name make it ambiguous; it never resolves silently.
+Two global packages defining a name make it ambiguous; it never resolves silently.
 
 ```scrut
 $ mk "$L/extra/skills/checks/SKILL.md" '---\nname: checks\ndescription: Other checks.\n---\n\n# Other\n'
@@ -281,7 +281,7 @@ Read one with `henia show res/<path>`:
 ```scrut
 $ henia show res/../code/SKILL.md; henia show res/reference/missing.md 2>&1 | sed "s|$T/||"
 henia: res/../code/SKILL.md: resource paths stay inside the skill directory
-henia: res/reference/missing.md: lstat data/henia/sources/tropos/skills/res/reference/missing.md: no such file or directory
+henia: res/reference/missing.md: lstat data/henia/packages/global/tropos/skills/res/reference/missing.md: no such file or directory
 ```
 
 `resources.disclosure = false` turns the list off, globally in a user or project

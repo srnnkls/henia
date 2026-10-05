@@ -13,6 +13,7 @@ import (
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/defaults"
 	"github.com/srnnkls/henia/internal/deps"
+	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/vendor"
@@ -77,15 +78,7 @@ func loadLayers(path string, projectData []byte) (*Config, error) {
 	if filepath.Base(projectRoot) == ".henia" {
 		projectRoot = filepath.Dir(projectRoot)
 	}
-	configHome := os.Getenv("XDG_CONFIG_HOME")
-	if !filepath.IsAbs(configHome) {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		configHome = filepath.Join(home, ".config")
-	}
-	userRoot := filepath.Join(configHome, "henia")
+	userRoot := library.ConfigDir()
 	userData, err := os.ReadFile(filepath.Join(userRoot, "henia.toml"))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err

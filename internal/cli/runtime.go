@@ -30,14 +30,14 @@ import (
 const outputBudget = 28000
 
 type runtimeFlags struct {
-	project string
-	sources []string
-	harness string
+	project  string
+	packages []string
+	harness  string
 }
 
 func (f *runtimeFlags) register(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.project, "project", "", "Project root whose .henia library is read")
-	cmd.Flags().StringArrayVar(&f.sources, "source", nil, "Additional source root, read before the installed sources (repeatable)")
+	cmd.Flags().StringArrayVar(&f.packages, "package", nil, "Additional skill package root, read before the installed packages (repeatable)")
 	cmd.Flags().StringVar(&f.harness, "harness", "", "Harness to render for (default: HENIA_HARNESS, then the calling agent)")
 }
 
@@ -45,7 +45,7 @@ func (f *runtimeFlags) open(cmd *cobra.Command) *library.Library {
 	if f.project == "" {
 		f.project = projectRoot(cmd)
 	}
-	return library.Open(f.project, f.sources)
+	return library.Open(f.project, f.packages)
 }
 
 func newLsCommand() *cobra.Command {
@@ -79,7 +79,7 @@ func newShowCommand() *cobra.Command {
 		Short: "Print a library skill or one of its sections, rendered for the caller",
 		Long: `Print a library skill or one of its sections, rendered for the caller.
 
-A skill is <name> or <source>:<name>. Output longer than the budget prints the
+A skill is <name> or <package>:<name>. Output longer than the budget prints the
 sections instead, each addressable as <skill>#<section>. A full skill ends with
 the list of its resources; <skill>/<path> reads one and <skill>/<dir>/ lists a
 directory. Problems print as
@@ -93,7 +93,7 @@ text; the command always exits successfully so a skill preload never aborts.`,
 				if err != nil {
 					return fmt.Sprintf("henia: preloads not run: %v\n\n%s", err, text)
 				}
-				return settings.runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, Skill: e.Name, Source: e.Source, Tier: e.Tier, Caller: harness})
+				return settings.runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, Skill: e.Name, Package: e.Package, Tier: e.Tier, Caller: harness})
 			}
 			disclose := func(e library.Entry) bool { return discloses(settings.disclosure, e) }
 			show(cmd.OutOrStdout(), lib, newRenderer(harness, lib), args[0], expand, disclose)
@@ -162,7 +162,7 @@ func newPreloadCommand() *cobra.Command {
 		Short: "Run one skill preload under Henia's sandbox and refusal rules",
 		Long: `Run one skill preload under Henia's sandbox and refusal rules and print the
 command above its output. The command must be one of the named library skill's
-own preloads, as rendered for any harness its source configures; projected
+own preloads, as rendered for any harness its package configures; projected
 skills call this for each preload. Problems print as text; the command always
 exits successfully so a skill preload never aborts.`,
 		Args: cobra.ExactArgs(1),
@@ -178,7 +178,7 @@ exits successfully so a skill preload never aborts.`,
 				fmt.Fprint(out, preload.Show(args[0], fmt.Sprintf("henia: blocked by henia/not-a-preload: %s declares no such preload", lib.Reference(entry))))
 				return nil
 			}
-			c := preload.Context{Dir: flags.project, Skill: entry.Name, Source: entry.Source, Tier: entry.Tier, Caller: detectHarness(flags.harness)}
+			c := preload.Context{Dir: flags.project, Skill: entry.Name, Package: entry.Package, Tier: entry.Tier, Caller: detectHarness(flags.harness)}
 			runner, err := preloadRunner(flags.project)
 			if err != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "henia: preload not run: %v\n", err)
@@ -335,8 +335,8 @@ preload never aborts.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			lib := flags.open(cmd)
 			out := cmd.OutOrStdout()
-			skills := slots.Discover(flags.project, globals, lib.Sources)
-			body, found := skillBody(args[0], flags.project, slices.Concat(globals, sourceSkillDirs(lib.Sources)))
+			skills := slots.Discover(flags.project, globals, lib.Packages)
+			body, found := skillBody(args[0], flags.project, slices.Concat(globals, packageSkillDirs(lib.Packages)))
 			if !found {
 				fmt.Fprintf(out, "henia: no skill named %q\n", args[0])
 				return nil
@@ -377,10 +377,10 @@ preload never aborts.`,
 	return cmd
 }
 
-func sourceSkillDirs(sources []library.Source) []string {
+func packageSkillDirs(packages []library.Package) []string {
 	var dirs []string
-	for _, source := range sources {
-		dirs = append(dirs, source.Skills())
+	for _, pkg := range packages {
+		dirs = append(dirs, pkg.Skills())
 	}
 	return dirs
 }
@@ -441,9 +441,9 @@ func (r *renderer) body(e library.Entry) string {
 	}
 	var harness henia.Harness
 	name := ""
-	sourceConfig := r.config(e.Origin.Config)
-	if r.harness != "" && sourceConfig != nil {
-		if harnesses, err := config.Harnesses(sourceConfig); err == nil {
+	packageConfig := r.config(e.Origin.Config)
+	if r.harness != "" && packageConfig != nil {
+		if harnesses, err := config.Harnesses(packageConfig); err == nil {
 			if h, ok := harnesses[r.harness]; ok {
 				harness, name = h, r.harness
 				harness.ProjectRoot, harness.UserRoot = e.Origin.ProjectRoot(), library.ConfigDir()
@@ -451,18 +451,18 @@ func (r *renderer) body(e library.Entry) string {
 		}
 	}
 	if name == "" {
-		sourceConfig = nil
+		packageConfig = nil
 	}
 	served := r.lib.Names()
 	if name != "" {
 		for _, other := range r.lib.Entries {
-			if other.Source == e.Source && build.Projects(harness, other.Name) && build.Invocable(other.Artifact.Frontmatter) {
+			if other.Package == e.Package && build.Projects(harness, other.Name) && build.Invocable(other.Artifact.Frontmatter) {
 				delete(served, other.Name)
 			}
 		}
 	}
 	h := sha256.New()
-	for _, part := range [][]byte{[]byte(rootCmd.Version + executableStamp()), []byte(name), sourceConfig, canonical, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " "))} {
+	for _, part := range [][]byte{[]byte(rootCmd.Version + executableStamp()), []byte(name), packageConfig, canonical, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " "))} {
 		h.Write(part)
 		h.Write([]byte{0})
 	}

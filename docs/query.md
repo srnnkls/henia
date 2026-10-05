@@ -26,7 +26,7 @@ henia query '[(code :lang "toml") (code :lang "yaml")] @c'
 
 | Type | Keys |
 |---|---|
-| `skill` | `:id` (name), `:source` |
+| `skill` | `:id` (name), `:package` |
 | `file` | `:path` (relative to the skill), `:main` (`true` for SKILL.md) |
 | `section` | `:id` (heading anchor, as in `henia show skill#id`), `:title`, `:level` |
 | `heading` | `:level` |

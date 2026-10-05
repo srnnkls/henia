@@ -52,7 +52,7 @@ working directory.`,
 			if project == "" {
 				project = projectRoot(cmd)
 			}
-			skills := slots.Discover(project, globals, library.Open(project, nil).Sources)
+			skills := slots.Discover(project, globals, library.Open(project, nil).Packages)
 			for _, name := range applying {
 				applied, found := slots.Applied(skills, name)
 				if !found {

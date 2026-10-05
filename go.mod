@@ -3,6 +3,7 @@ module github.com/srnnkls/henia
 go 1.26.5
 
 require (
+	github.com/adrg/xdg v0.5.3
 	github.com/expr-lang/expr v1.17.8
 	github.com/landlock-lsm/go-landlock v0.10.1
 	github.com/pelletier/go-toml/v2 v2.2.4

@@ -27,11 +27,11 @@ type Settings struct {
 }
 
 type Context struct {
-	Dir    string
-	Skill  string
-	Source string
-	Tier   string
-	Caller string
+	Dir     string
+	Skill   string
+	Package string
+	Tier    string
+	Caller  string
 }
 
 type Runner struct {
@@ -234,7 +234,7 @@ func (r *Runner) consultFAS(ctx context.Context, command string, c Context) (str
 		return command, nil, nil
 	}
 	input, err := json.Marshal(map[string]string{
-		"command": command, "skill": c.Skill, "source": c.Source, "tier": c.Tier, "caller": c.Caller, "cwd": c.Dir,
+		"command": command, "skill": c.Skill, "package": c.Package, "tier": c.Tier, "caller": c.Caller, "cwd": c.Dir,
 	})
 	if err != nil {
 		return "", nil, err

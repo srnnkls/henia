@@ -105,7 +105,7 @@ Each output line is `<slot>\t<tier>\t<SKILL.md>`, with a fourth `\t<value>`
 for value-typed slots, for each provider of a requested slot, a sub-slot of it
 or an enclosing slot, project providers first. A provider from the
 [library](runtime.md) prints the command that reads it,
-`henia show <source>:<skill>`, in place of its path. Problem rows follow:
+`henia show <package>:<skill>`, in place of its path. Problem rows follow:
 
 | Tier | Meaning | Path |
 |---|---|---|
@@ -159,17 +159,8 @@ resolve_slots = 'henia slots --global "${CODEX_HOME:-$HOME/.codex}/skills"'
 ## Linting
 
 The `invalid-slot` rule reports malformed entries and conflicting declarations
-among the scanned documents. Whether every provided slot is declared depends on
-what is installed; check it over the scanned set with a
-[registry](lint-rules.md#name-registries) that strips types and priorities:
-
-```toml
-[[lint.registries]]
-id = "unknown-slot"
-declare = 'map(split(frontmatter.metadata?.slots ?? "", " "), split(#, ":")[0])'
-reference = 'map(split((frontmatter.metadata?.provides ?? "") + " " + (frontmatter.metadata?.applies ?? ""), " "), split(#, "@")[0])'
-match = "dotted"
-```
+among the scanned documents, and `unknown-slot` reports a provided or applied
+slot that none of them declares.
 
 ## Acceptance tests
 

@@ -101,7 +101,7 @@ func collect(ctx context.Context, paths []string) ([]string, error) {
 			}
 			if info.IsDir() {
 				if slices.Contains([]string{".git", "node_modules", "vendor"}, info.Name()) ||
-					filepath.Base(filepath.Dir(path)) == ".henia" && slices.Contains([]string{"build", "cache", "state", "lint", "sources"}, info.Name()) {
+					filepath.Base(filepath.Dir(path)) == ".henia" && slices.Contains([]string{"build", "cache", "state", "lint"}, info.Name()) {
 					return fs.SkipDir
 				}
 				return nil

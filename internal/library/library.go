@@ -1,4 +1,4 @@
-// Package library catalogs the installed skill sources that the runtime serves.
+// Package library catalogs the installed skill packages that the runtime serves.
 package library
 
 import (
@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/adrg/xdg"
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/markup"
 )
@@ -59,57 +60,49 @@ func Scan(dir string) []File {
 	return files
 }
 
-func xdg(variable string, fallback ...string) string {
-	if dir := os.Getenv(variable); filepath.IsAbs(dir) {
-		return dir
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(append([]string{home}, fallback...)...)
+func dir(home func() string) string {
+	xdg.Reload()
+	return filepath.Join(home(), "henia")
 }
 
-func SourcesDir() string {
-	return filepath.Join(xdg("XDG_DATA_HOME", ".local", "share"), "henia", "sources")
-}
+func legacyDir() string { return filepath.Join(dir(func() string { return xdg.DataHome }), "sources") }
 
-func CacheDir() string { return filepath.Join(xdg("XDG_CACHE_HOME", ".cache"), "henia") }
+func CacheDir() string { return dir(func() string { return xdg.CacheHome }) }
 
-func ConfigDir() string { return filepath.Join(xdg("XDG_CONFIG_HOME", ".config"), "henia") }
+func ConfigDir() string { return dir(func() string { return xdg.ConfigHome }) }
 
-func (s Source) ProjectRoot() string {
+func (s Package) ProjectRoot() string {
 	if filepath.Base(s.Root) == ProjectDir {
 		return filepath.Dir(s.Root)
 	}
 	return s.Root
 }
 
-type Source struct {
+type Package struct {
 	Name   string `json:"name"`
 	Tier   string `json:"tier"`
 	Root   string `json:"root"`
 	Config string `json:"config,omitempty"`
 }
 
-func (s Source) Skills() string { return filepath.Join(s.Root, SkillsDir) }
+func (s Package) Skills() string { return filepath.Join(s.Root, SkillsDir) }
 
 type Entry struct {
 	ID          string             `json:"id"`
 	Name        string             `json:"name"`
-	Source      string             `json:"source"`
+	Package     string             `json:"package"`
 	Tier        string             `json:"tier"`
 	Path        string             `json:"path"`
 	Description string             `json:"description"`
 	Digest      string             `json:"digest"`
 	Sections    []markup.Section   `json:"sections"`
 	Artifact    *artifact.Artifact `json:"-"`
-	Origin      Source             `json:"-"`
+	Origin      Package            `json:"-"`
 }
 
 type Library struct {
-	Sources []Source
-	Entries []Entry
+	Packages []Package
+	Entries  []Entry
 }
 
 func Open(project string, extra []string) *Library {
@@ -123,11 +116,11 @@ func Open(project string, extra []string) *Library {
 				break
 			}
 		}
-		l.add(Source{Name: Project, Tier: Project, Root: root, Config: config})
+		l.add(Package{Name: Project, Tier: Project, Root: root, Config: config})
 		l.dependencies(project)
 	}
 	roots := slices.Clone(extra)
-	for _, dir := range []string{PackagesDir("global"), SourcesDir()} {
+	for _, dir := range []string{PackagesDir("global"), legacyDir()} {
 		if entries, err := os.ReadDir(dir); err == nil {
 			for _, entry := range entries {
 				if entry.IsDir() {
@@ -137,13 +130,13 @@ func Open(project string, extra []string) *Library {
 		}
 	}
 	for _, root := range roots {
-		l.add(source(root, Global))
+		l.add(readPackage(root, Global))
 	}
 	return l
 }
 
-func source(root, tier string) Source {
-	s := Source{Name: filepath.Base(root), Tier: tier, Root: root}
+func readPackage(root, tier string) Package {
+	s := Package{Name: filepath.Base(root), Tier: tier, Root: root}
 	for _, candidate := range []string{filepath.Join(root, ConfigFile), filepath.Join(root, ProjectDir, ConfigFile)} {
 		if _, err := os.Stat(candidate); err == nil {
 			s.Config = candidate
@@ -154,11 +147,11 @@ func source(root, tier string) Source {
 }
 
 func PackagesDir(scope string) string {
-	return filepath.Join(xdg("XDG_DATA_HOME", ".local", "share"), "henia", "packages", scope)
+	return filepath.Join(dir(func() string { return xdg.DataHome }), "packages", scope)
 }
 
 func StateDir(scope string) string {
-	return filepath.Join(xdg("XDG_STATE_HOME", ".local", "state"), "henia", "packages", scope)
+	return filepath.Join(dir(func() string { return xdg.StateHome }), "packages", scope)
 }
 
 func ProjectKey(project string) string {
@@ -181,38 +174,38 @@ func (l *Library) dependencies(project string) {
 	}
 	for _, entry := range entries {
 		if root := filepath.Join(dir, entry.Name()); entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
-			l.add(source(root, Dependency))
+			l.add(readPackage(root, Dependency))
 		}
 	}
 }
 
-func (l *Library) add(source Source) {
-	files := Scan(source.Skills())
+func (l *Library) add(pkg Package) {
+	files := Scan(pkg.Skills())
 	if len(files) == 0 {
 		return
 	}
-	l.Sources = append(l.Sources, source)
+	l.Packages = append(l.Packages, pkg)
 	for _, f := range files {
 		name := filepath.Base(filepath.Dir(f.Path))
 		f.Artifact.Name, f.Artifact.Type = name, artifact.TypeSkill
 		description, _ := f.Artifact.Frontmatter["description"].(string)
 		sections, _ := markup.Sections([]byte(f.Artifact.Body))
 		l.Entries = append(l.Entries, Entry{
-			ID: source.Name + ":" + name, Name: name, Source: source.Name, Tier: source.Tier, Path: f.Path,
+			ID: pkg.Name + ":" + name, Name: name, Package: pkg.Name, Tier: pkg.Tier, Path: f.Path,
 			Description: strings.TrimSpace(description), Digest: digest(filepath.Dir(f.Physical)),
-			Sections: sections, Artifact: f.Artifact, Origin: source,
+			Sections: sections, Artifact: f.Artifact, Origin: pkg,
 		})
 	}
 }
 
 func (l *Library) Resolve(ref string) (Entry, error) {
-	source, name, qualified := strings.Cut(ref, ":")
+	pkg, name, qualified := strings.Cut(ref, ":")
 	if !qualified {
-		name, source = ref, ""
+		name, pkg = ref, ""
 	}
 	var matches []Entry
 	for _, e := range l.Entries {
-		if e.Name == name && (source == "" || e.Source == source) {
+		if e.Name == name && (pkg == "" || e.Package == pkg) {
 			matches = append(matches, e)
 		}
 	}
