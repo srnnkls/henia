@@ -47,7 +47,10 @@ one. When several sources of the same rank define a name, the name is
 ambiguous and must be qualified; same-named skills never replace each other
 silently. `<skill>#<section>` addresses a heading anchor.
 
-`henia build` compiles the project's skills together with its dependencies';
+`henia build` compiles the project's skills together with its dependencies'. A
+dependency's skills render with its own harness `variables`, `tools` and
+`references` as defaults; the project's harness of the same name overrides
+them key by key and decides everything else;
 `henia lint` lints the project's own files and resolves references against
 its dependencies, whose `.henia/lint/` modules join the rule set.
 

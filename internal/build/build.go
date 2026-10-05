@@ -31,19 +31,44 @@ type Result struct {
 }
 
 // Run compiles local source directories. Each harness writes beneath output/name.
-func Run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness) (*Result, error) {
-	return run(ctx, sources, output, harnesses, false)
+type Dependency struct {
+	Root      string
+	Harnesses map[string]henia.Harness
+}
+
+func Run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, dependencies ...Dependency) (*Result, error) {
+	return run(ctx, sources, output, harnesses, false, dependencies)
 }
 
 // RunClean publishes a complete output tree only after every artifact was written successfully.
-func RunClean(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness) (*Result, error) {
+func RunClean(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, dependencies ...Dependency) (*Result, error) {
 	if err := validateCleanOutput(sources, output); err != nil {
 		return nil, err
 	}
-	return run(ctx, sources, output, harnesses, true)
+	return run(ctx, sources, output, harnesses, true, dependencies)
 }
 
-func run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, clean bool) (*Result, error) {
+func layered(harness henia.Harness, name, path string, dependencies []Dependency) henia.Harness {
+	for _, d := range dependencies {
+		own, ok := d.Harnesses[name]
+		if !ok || !strings.HasPrefix(path, d.Root+string(filepath.Separator)) {
+			continue
+		}
+		for _, field := range []struct{ project, dependency *map[string]string }{
+			{&harness.Variables, &own.Variables}, {&harness.Tools, &own.Tools}, {&harness.References, &own.References},
+		} {
+			merged := maps.Clone(*field.dependency)
+			if merged == nil {
+				merged = map[string]string{}
+			}
+			maps.Copy(merged, *field.project)
+			*field.project = merged
+		}
+	}
+	return harness
+}
+
+func run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, clean bool, dependencies []Dependency) (*Result, error) {
 	if output == "" {
 		return nil, fmt.Errorf("build output directory is required")
 	}
@@ -114,7 +139,7 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 			filtered = append(filtered, &artifact.Artifact{Name: "support files", SourcePath: sources[0], Files: files})
 		}
 		for _, art := range filtered {
-			effective, tr, err := transformerFor(harnessName, outputPath, harness, art.Type)
+			effective, tr, err := transformerFor(harnessName, outputPath, layered(harness, harnessName, art.SourcePath, dependencies), art.Type)
 			if err != nil {
 				result.Errors = append(result.Errors, err)
 				continue
