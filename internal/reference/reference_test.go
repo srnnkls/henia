@@ -1,6 +1,7 @@
 package reference
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -217,7 +218,7 @@ func TestParse_BacktickWithNonReference(t *testing.T) {
 }
 
 func TestParse_AllSigilTypes(t *testing.T) {
-	input := "`$skill` `/command` `@agent` `#file` `!tool`"
+	input := "`$skill` `/command` `@agent` `#file.md` `!tool`"
 	refs := Parse(input)
 
 	if len(refs) != 5 {
@@ -300,5 +301,16 @@ func TestReferenceType_String(t *testing.T) {
 				t.Errorf("Type.String() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParse_HashNeedsAPath(t *testing.T) {
+	refs := Parse("Issue `#172`, PR `#N`, file `#notes.md`, dir `#reference/guide`")
+	var names []string
+	for _, ref := range refs {
+		names = append(names, string(ref.Type)+":"+ref.Name)
+	}
+	if got := strings.Join(names, " "); got != "file:notes.md file:reference/guide" {
+		t.Fatalf("refs = %s", got)
 	}
 }

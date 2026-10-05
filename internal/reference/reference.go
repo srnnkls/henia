@@ -73,6 +73,9 @@ func Parse(body string) []Reference {
 		if strings.Contains("$/@", sigil) && !artifactName.MatchString(name) {
 			return ast.WalkSkipChildren, nil
 		}
+		if sigil == "#" && !strings.ContainsAny(name, "./") {
+			return ast.WalkSkipChildren, nil
+		}
 
 		var refType Type
 		switch sigil {
