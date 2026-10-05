@@ -651,9 +651,9 @@ $ H="$T/hybrid"; mk "$H/skills/route/SKILL.md" '---\nname: route\ndescription: R
 > printf '[harness.claude]\nprofile = "claude"\nartifacts = ["skills"]\n\n[harness.claude.skills]\ndefault = "dynamic"\nhybrid = ["route"]\n\n[harness.codex]\nprofile = "codex"\nartifacts = ["skills"]\n\n[harness.codex.skills]\ndefault = "dynamic"\nhybrid = ["route"]\n' > "$H/henia.toml"
 > henia build "$H" --output "$T/hybrid-build" > /dev/null
 > digest=$(shasum -a 256 "$H/skills/route/SKILL.md" | cut -c1-12)
-> sed -e '1,/^---$/d' -e '1,/^---$/d' -e "s/$digest/DIGEST/" "$T/hybrid-build/claude/skills/route/SKILL.md"
+> sed -e '1,/^---$/d' -e "s/$digest/DIGEST/" "$T/hybrid-build/claude/skills/route/SKILL.md"
 > grep allowed-tools "$T/hybrid-build/claude/skills/route/SKILL.md"
-> sed -e '1,/^---$/d' -e '1,/^---$/d' -e "s/$digest/DIGEST/" "$T/hybrid-build/codex/skills/route/SKILL.md"
+> sed -e '1,/^---$/d' -e "s/$digest/DIGEST/" "$T/hybrid-build/codex/skills/route/SKILL.md"
 
 !`henia preload --skill route -- 'henia show route --head --digest DIGEST'`
 allowed-tools: Bash(henia preload *)
