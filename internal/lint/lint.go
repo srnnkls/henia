@@ -36,15 +36,20 @@ type Location struct {
 	Column int    `json:"column"`
 }
 
+type ModuleDir struct {
+	Dir    string
+	Prefix string
+}
+
 type Options struct {
-	Rules    []InlineRule              `toml:"rules,omitempty"`
-	Config   map[string]map[string]any `toml:"config,omitempty"`
-	Modules  []string                  `toml:"-"`
-	Disable  []string                  `toml:"disable,omitempty"`
-	Semantic SemanticOptions           `toml:"semantic,omitempty"`
-	Builtin  []string                  `toml:"-"`
-	Known    []string                  `toml:"-"`
-	Now      time.Time                 `toml:"-"`
+	Rules        []InlineRule              `toml:"rules,omitempty"`
+	Config       map[string]map[string]any `toml:"config,omitempty"`
+	Modules      []ModuleDir               `toml:"-"`
+	Disable      []string                  `toml:"disable,omitempty"`
+	Semantic     SemanticOptions           `toml:"semantic,omitempty"`
+	Builtin      []string                  `toml:"-"`
+	Dependencies []string                  `toml:"-"`
+	Now          time.Time                 `toml:"-"`
 }
 
 func (o Options) Validate() error { return o.Semantic.validate() }
@@ -76,56 +81,49 @@ func sortDiagnostics(diagnostics []Diagnostic) []Diagnostic {
 	})
 }
 
-type scanned struct {
-	path   string
-	linted bool
-}
-
-func collect(ctx context.Context, paths []string) ([]scanned, error) {
+func collect(ctx context.Context, paths []string) ([]string, error) {
 	seen := make(map[string]bool)
-	var files []scanned
+	var files []string
 	for _, root := range paths {
 		ignored, err := gitIgnored(ctx, root)
 		if err != nil {
 			return nil, err
 		}
-		var dependencies []string
 		err = artifact.Walk(root, func(path string, info fs.FileInfo) error {
 			if err := ctx.Err(); err != nil {
 				return err
+			}
+			if absolute, err := filepath.Abs(path); err == nil && path != root && ignored[absolute] {
+				if info.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if info.IsDir() {
+				if slices.Contains([]string{".git", "node_modules", "vendor"}, info.Name()) ||
+					filepath.Base(filepath.Dir(path)) == ".henia" && slices.Contains([]string{"build", "cache", "state", "lint", "sources"}, info.Name()) {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if !info.Mode().IsRegular() || !strings.EqualFold(filepath.Ext(path), ".md") {
+				return nil
 			}
 			absolute, err := filepath.Abs(path)
 			if err != nil {
 				return err
 			}
-			dependency := path != root && ignored[absolute] || slices.ContainsFunc(dependencies, func(dir string) bool {
-				return strings.HasPrefix(absolute, dir+string(filepath.Separator))
-			})
-			if info.IsDir() {
-				if slices.Contains([]string{".git", "node_modules", "vendor"}, info.Name()) ||
-					filepath.Base(filepath.Dir(path)) == ".henia" && slices.Contains([]string{"build", "cache", "state", "lint"}, info.Name()) {
-					return fs.SkipDir
-				}
-				if dependency && path != root && ignored[absolute] {
-					dependencies = append(dependencies, absolute)
-				}
-				return nil
+			if !seen[absolute] {
+				files = append(files, path)
+				seen[absolute] = true
 			}
-			if !info.Mode().IsRegular() || !strings.EqualFold(filepath.Ext(path), ".md") || seen[absolute] {
-				return nil
-			}
-			if dependency && artifactKind(path) == artifact.TypeUnknown {
-				return nil
-			}
-			seen[absolute] = true
-			files = append(files, scanned{path, !dependency})
 			return nil
 		})
 		if err != nil {
 			return nil, fmt.Errorf("scan %s: %w", root, err)
 		}
 	}
-	slices.SortFunc(files, func(a, b scanned) int { return strings.Compare(a.path, b.path) })
+	slices.Sort(files)
 	return files, nil
 }
 

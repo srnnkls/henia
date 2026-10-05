@@ -62,7 +62,7 @@ func TestModulesCompose(t *testing.T) {
 	writeFile(t, root, "skills/guide/SKILL.md", "---\nname: guide\ndescription: A guide skill for tests.\n---\n\n# Guide\n\n## Usage\n\nText.\n\n## Usage\n\nMore.\n")
 	modules := filepath.Join(root, ".henia", "lint")
 	writeFile(t, modules, "team/headings.md", "---\ndata:\n  banned: [usage]\n---\n\n## repeated-usage\n\n```hq\n(import std/structure)\n(rule repeated-usage\n  :message \"{@h.text} repeats; first on line {@first.line}\"\n  :at @h\n  (repeated-heading @first @h ?text)\n  (row :table banned :value ?text))\n```\n")
-	diagnostics, err := Run(t.Context(), []string{skill}, Options{Modules: []string{modules}, Disable: []string{"duplicate-heading"}})
+	diagnostics, err := Run(t.Context(), []string{skill}, Options{Modules: []ModuleDir{{Dir: modules}}, Disable: []string{"duplicate-heading"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestModulesCompose(t *testing.T) {
 		t.Fatalf("%+v", diagnostics)
 	}
 	writeFile(t, modules, "team/clash.md", "## duplicate-heading\n\n```hq\n(rule duplicate-heading :message \"m\" (heading) @h)\n```\n")
-	if _, err := Run(t.Context(), []string{skill}, Options{Modules: []string{modules}}); err == nil || !strings.Contains(err.Error(), "lint rule duplicate-heading is defined in std/structure and team/clash") {
+	if _, err := Run(t.Context(), []string{skill}, Options{Modules: []ModuleDir{{Dir: modules}}}); err == nil || !strings.Contains(err.Error(), "lint rule duplicate-heading is defined in std/structure and team/clash") {
 		t.Fatalf("shadowing a stdlib rule: %v", err)
 	}
 }

@@ -25,18 +25,31 @@ A project keeps its source in `.henia/`:
   henia.toml     # or henia.toml at the repository root, not both
   skills/
   harnesses/
+  lint/
+  sources/       # dependencies; ignored
   build/  cache/  state/    # ignored
 ```
 
-Installed sources live in `$XDG_DATA_HOME/henia/sources/<source>/`
-(default `~/.local/share/henia/sources`), each with its own `skills/` and
-`henia.toml`. Phora places them there; Henia never installs.
+A source is a set of skills with its own `henia.toml` and, optionally, `lint/`
+modules: a folder holding `skills/`. A project's dependencies are the sources in
+its `.henia/sources/<source>/`, and theirs in turn, so a project sees every
+skill it depends on transitively. Anything that places a folder can provide
+them: a copy, a symlink, a git submodule, or a deployer such as Phora. Henia
+never installs.
+
+`$XDG_DATA_HOME/henia/sources/<source>/` (default `~/.local/share/henia/sources`)
+holds sources installed for every project; `--source DIR` adds one for a single
+command.
 
 A skill is `<source>:<name>`; the project source is `project`. A bare name
-resolves to the project skill, else to the only installed skill of that name.
-When several installed sources define a name the project does not, the name is
+resolves to the project skill, else to a dependency's, else to an installed
+one. When several sources of the same rank define a name, the name is
 ambiguous and must be qualified; same-named skills never replace each other
 silently. `<skill>#<section>` addresses a heading anchor.
+
+`henia build` compiles the project's skills together with its dependencies';
+`henia lint` lints the project's own files and resolves references against
+its dependencies, whose `lint/` modules join the rule set.
 
 ## Runtime
 

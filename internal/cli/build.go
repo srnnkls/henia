@@ -66,7 +66,13 @@ func newBuildCommand() *cobra.Command {
 			if clean || cfg.Build.Clean {
 				compile = build.RunClean
 			}
-			result, err := compile(cmd.Context(), []string{source}, destination, harnesses)
+			sources := []string{source}
+			for _, dependency := range library.Open(source, nil).Sources {
+				if dependency.Tier == library.Dependency {
+					sources = append(sources, dependency.Root)
+				}
+			}
+			result, err := compile(cmd.Context(), sources, destination, harnesses)
 			if err != nil {
 				return err
 			}

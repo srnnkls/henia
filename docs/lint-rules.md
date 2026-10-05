@@ -50,11 +50,9 @@ message = "Resolve the TODO before release."
 
 References resolve against everything lint can know, never a hand-kept list:
 
-- the scanned files, plus the skills, commands and agents in git-ignored
-  dependencies under the scanned paths, such as phora-deployed skills. Those
-  are read for their names but never linted, and links into them are checked
-  against the files on disk.
-- the installed library, the same skills `henia show` serves.
+- the scanned files;
+- the skills of the project's dependency sources under `.henia/sources/`,
+  transitively. Those are read for their names and anchors but never linted.
 - the commands and agents built into each harness in `henia.toml`, which come
   from its profile's `commands` and `agents`.
 
@@ -67,7 +65,7 @@ the diagnostics, including `related` locations and, for similarity findings,
 Lint loads modules from these layers, in order:
 
 1. the standard library;
-2. `lint/` in each installed source;
+2. `lint/` in each dependency source, named `<source>/<module>`;
 3. `$XDG_CONFIG_HOME/henia/lint/`;
 4. the project's `.henia/lint/`;
 5. inline rules.

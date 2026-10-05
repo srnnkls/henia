@@ -117,13 +117,16 @@ func lintOptions(cmd *cobra.Command) (lint.Options, error) {
 	}
 	options := cfg.Lint
 	project := projectRoot(cmd)
-	seen := map[string]bool{}
 	lib := library.Open(project, nil)
 	for _, source := range lib.Sources {
-		options.Modules = append(options.Modules, filepath.Join(source.Root, "lint"))
+		if source.Tier == library.Dependency {
+			options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(source.Root, "lint"), Prefix: source.Name})
+		}
 	}
 	for _, entry := range lib.Entries {
-		options.Known = append(options.Known, "skill:"+entry.Name)
+		if entry.Tier == library.Dependency {
+			options.Dependencies = append(options.Dependencies, entry.Path)
+		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Harness)) {
 		h := cfg.Harness[name]
@@ -141,11 +144,6 @@ func lintOptions(cmd *cobra.Command) (lint.Options, error) {
 			options.Builtin = append(options.Builtin, "agent:"+agent)
 		}
 	}
-	options.Modules = append(options.Modules, filepath.Join(library.ConfigDir(), "lint"), filepath.Join(project, library.ProjectDir, "lint"))
-	options.Modules = slices.DeleteFunc(options.Modules, func(dir string) bool {
-		duplicate := seen[dir]
-		seen[dir] = true
-		return duplicate
-	})
+	options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(library.ConfigDir(), "lint")}, lint.ModuleDir{Dir: filepath.Join(project, library.ProjectDir, "lint")})
 	return options, nil
 }

@@ -76,3 +76,34 @@ func TestEnsureGitignoreKeepsExisting(t *testing.T) {
 		t.Fatalf("EnsureGitignore overwrote an existing file: %q", data)
 	}
 }
+
+func TestDependencySources(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
+	project := filepath.Join(root, "dotfiles")
+	tropos := filepath.Join(project, ProjectDir, DependencyDir, "tropos")
+	gestalt := filepath.Join(tropos, ProjectDir, DependencyDir, "gestalt")
+	installed := filepath.Join(root, "data", "henia", "sources", "global")
+	skill(t, tropos, "review")
+	skill(t, tropos, "shared")
+	skill(t, gestalt, "gestalt")
+	skill(t, installed, "shared")
+	if err := os.WriteFile(filepath.Join(tropos, ConfigFile), []byte("[harness.claude]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(gestalt, ProjectDir, DependencyDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(tropos, filepath.Join(gestalt, ProjectDir, DependencyDir, "loop")); err != nil {
+		t.Fatal(err)
+	}
+	lib := Open(project, nil)
+	for ref, want := range map[string]string{"review": "tropos:review", "gestalt": "gestalt:gestalt", "shared": "tropos:shared", "global:shared": "global:shared"} {
+		if got, err := lib.Resolve(ref); err != nil || got.ID != want || (want != "global:shared" && got.Tier != Dependency) {
+			t.Errorf("Resolve(%q) = %q (%s), %v; want %q", ref, got.ID, got.Tier, err, want)
+		}
+	}
+	if review, _ := lib.Resolve("review"); review.Origin.Config != filepath.Join(tropos, ConfigFile) {
+		t.Errorf("tropos config = %q", review.Origin.Config)
+	}
+}

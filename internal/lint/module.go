@@ -60,7 +60,7 @@ type registry struct {
 	loading map[string]bool
 }
 
-func loadModules(dirs []string) (*registry, error) {
+func loadModules(dirs []ModuleDir) (*registry, error) {
 	r := &registry{files: map[string]moduleFile{}, defines: map[string]map[string]pattern.Define{}, loading: map[string]bool{}}
 	err := fs.WalkDir(stdlib, "std", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -74,7 +74,8 @@ func loadModules(dirs []string) (*registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, dir := range dirs {
+	for _, layer := range dirs {
+		dir := layer.Dir
 		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				if errors.Is(err, fs.ErrNotExist) {
@@ -90,7 +91,7 @@ func loadModules(dirs []string) (*registry, error) {
 				return err
 			}
 			rel, _ := filepath.Rel(dir, path)
-			name := filepath.ToSlash(strings.TrimSuffix(rel, filepath.Ext(rel)))
+			name := filepath.ToSlash(filepath.Join(layer.Prefix, strings.TrimSuffix(rel, filepath.Ext(rel))))
 			if first, taken := r.files[name]; taken {
 				return fmt.Errorf("lint module %s is defined by %s and %s; rename one and import it where needed", name, first.path, path)
 			}
@@ -272,7 +273,7 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 	if tables == nil {
 		tables = map[string]table{}
 	}
-	tables["builtin"], tables["installed"] = table{list: true, values: options.Builtin}, table{list: true, values: options.Known}
+	tables["builtin"] = table{list: true, values: options.Builtin}
 	env := pattern.Environment{Resolve: ev.corpus, Params: s.params, Data: dataRoot(tables), Now: options.Now}
 	if rule.Query.Semantic {
 		if !options.Semantic.Enabled {

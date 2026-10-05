@@ -16,11 +16,13 @@ import (
 )
 
 const (
-	ProjectDir = ".henia"
-	ConfigFile = "henia.toml"
-	SkillsDir  = "skills"
-	Project    = "project"
-	Global     = "global"
+	ProjectDir    = ".henia"
+	ConfigFile    = "henia.toml"
+	SkillsDir     = "skills"
+	Project       = "project"
+	Dependency    = "dependency"
+	Global        = "global"
+	DependencyDir = "sources"
 )
 
 type File struct {
@@ -122,6 +124,7 @@ func Open(project string, extra []string) *Library {
 			}
 		}
 		l.add(Source{Name: Project, Tier: Project, Root: root, Config: config})
+		l.dependencies(project, map[string]bool{})
 	}
 	roots := slices.Clone(extra)
 	if entries, err := os.ReadDir(SourcesDir()); err == nil {
@@ -132,13 +135,41 @@ func Open(project string, extra []string) *Library {
 		}
 	}
 	for _, root := range roots {
-		source := Source{Name: filepath.Base(root), Tier: Global, Root: root}
-		if _, err := os.Stat(filepath.Join(root, ConfigFile)); err == nil {
-			source.Config = filepath.Join(root, ConfigFile)
-		}
-		l.add(source)
+		l.add(source(root, Global))
 	}
 	return l
+}
+
+func source(root, tier string) Source {
+	s := Source{Name: filepath.Base(root), Tier: tier, Root: root}
+	for _, candidate := range []string{filepath.Join(root, ConfigFile), filepath.Join(root, ProjectDir, ConfigFile)} {
+		if _, err := os.Stat(candidate); err == nil {
+			s.Config = candidate
+			break
+		}
+	}
+	return s
+}
+
+func (l *Library) dependencies(project string, seen map[string]bool) {
+	dir := filepath.Join(project, ProjectDir, DependencyDir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		root := filepath.Join(dir, entry.Name())
+		physical, err := filepath.EvalSymlinks(root)
+		if err != nil || seen[physical] {
+			continue
+		}
+		if info, err := os.Stat(physical); err != nil || !info.IsDir() {
+			continue
+		}
+		seen[physical] = true
+		l.add(source(root, Dependency))
+		l.dependencies(root, seen)
+	}
 }
 
 func (l *Library) add(source Source) {
@@ -174,8 +205,13 @@ func (l *Library) Resolve(ref string) (Entry, error) {
 	switch {
 	case len(matches) == 0:
 		return Entry{}, fmt.Errorf("no skill named %q in the library; henia ls lists them", ref)
-	case len(matches) == 1, matches[0].Tier == Project:
+	case len(matches) == 1:
 		return matches[0], nil
+	}
+	for _, tier := range []string{Project, Dependency} {
+		if found := slices.DeleteFunc(slices.Clone(matches), func(e Entry) bool { return e.Tier != tier }); len(found) == 1 {
+			return found[0], nil
+		}
 	}
 	var ids []string
 	for _, e := range matches {
