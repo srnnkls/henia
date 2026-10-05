@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.1.0-alpha.13](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.12...v0.1.0-alpha.13) (2026-10-05)
+
+
+### Features
+
+* build and lint sync declared packages missing from the store ([80d9943](https://github.com/srnnkls/henia/commit/80d9943e23a50b603de0f3964952102956b87945))
+* **build:** dependency harness settings as overridable defaults ([0e2babf](https://github.com/srnnkls/henia/commit/0e2babfa436ee9246bc7b5b21704f3f67e3306a8))
+* **config:** remove legacy config fallbacks ([7d4767b](https://github.com/srnnkls/henia/commit/7d4767bcabbb25e39c0968ef223f1c0d12d70679))
+* **deps:** fetch the pinned phora release when none fits ([6d71e04](https://github.com/srnnkls/henia/commit/6d71e0455c02d5c7b655f26419c9bbde5b173ce4))
+* henia add/rm/sync/update manage skill packages through phora ([3a30b06](https://github.com/srnnkls/henia/commit/3a30b06d4316e0212776d9ffb8cdabddc152690f))
+* **library:** corpus facts for lint and a corpus from scanned documents ([4fe11de](https://github.com/srnnkls/henia/commit/4fe11de7998987e6c585c9bb791b71a9bf6af8b0))
+* **library:** dependency sources under .henia/sources ([d02363b](https://github.com/srnnkls/henia/commit/d02363bd2e2b188e84cdd642ce3ea9850e75b302))
+* **lint:** check henia show section references ([b970482](https://github.com/srnnkls/henia/commit/b970482ce83ed3ee413ec02fa54b10b216768a54))
+* **lint:** compile lint configuration into a typed plan ([18aece6](https://github.com/srnnkls/henia/commit/18aece65720dae1c7a7863eab31cb17e91566ad2))
+* **lint:** express metadata, reference and duplicate rules in the standard library ([bb00cad](https://github.com/srnnkls/henia/commit/bb00cad8198b7f355d34c43733a3164bbb6bf6f9))
+* **lint:** load lint modules from sources, user and project, and test them ([737ba70](https://github.com/srnnkls/henia/commit/737ba7067f3169fef83eff425220e858c0bd2708))
+* **lint:** resolve references against dependencies, the library and harness built-ins ([240cd52](https://github.com/srnnkls/henia/commit/240cd52f87906d33046c0ca89e2263393101d2ff))
+* **lint:** run lint rules from hq modules with a standard library ([f0bce81](https://github.com/srnnkls/henia/commit/f0bce81aeeceab3f3cf831eff09b053357ab4207))
+* **lint:** similarity rules in the standard library ([76ee417](https://github.com/srnnkls/henia/commit/76ee417ef8a2c11ef423ce310a7e3a1b6791182e))
+* **lint:** slot rules in the standard library; registries give way to hq ([6653301](https://github.com/srnnkls/henia/commit/6653301c2caa728ac9ce491bb23deabd70a0fd05))
+* **query:** join patterns on shared variables ([5f7f63a](https://github.com/srnnkls/henia/commit/5f7f63ac38d8a6570baaac04409e2fb22c452924))
+* **query:** join top-level patterns on shared variables and follow links ([e271f09](https://github.com/srnnkls/henia/commit/e271f09612d08aeeae87b3ee9073a10bf9103e8f))
+* **query:** match inbound skill links and negate relations ([9e164d3](https://github.com/srnnkls/henia/commit/9e164d305ed82b8f7e7412422eeda215845348dc))
+* **query:** measure words and compare text by shingles and embeddings ([1503939](https://github.com/srnnkls/henia/commit/1503939c4414c689a60f0a9f4106294b958ff9ef))
+* **query:** params, comparisons, data rows and date checks ([db70f38](https://github.com/srnnkls/henia/commit/db70f3802d79126b2b9eaf30fa2145d2c36bd152))
+* **query:** query skills and resources with S-expression patterns ([4eb0507](https://github.com/srnnkls/henia/commit/4eb0507007c10d78ff440f080c8bde92f696b739))
+* **query:** read modules of rules, defines and imports ([362e74a](https://github.com/srnnkls/henia/commit/362e74ac53ac575991cbb38c374caa9770c64f7e))
+* **runtime:** disclose a skill's resources in henia show ([5f5a5ce](https://github.com/srnnkls/henia/commit/5f5a5cec8e7d702f505c62ba56313d93bdd5931c))
+
+
+### Bug Fixes
+
+* **lint:** dependency lint modules live in the source's .henia/lint ([c3b07ad](https://github.com/srnnkls/henia/commit/c3b07ad3d45e9755a543326c78759d767fa20a6c))
+* **lint:** read only artifacts from git-ignored dependencies ([c0fea9b](https://github.com/srnnkls/henia/commit/c0fea9bb6732e9a14ac18ec0f6b73f21c541f30a))
+
 ## [0.1.0-alpha.12](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.11...v0.1.0-alpha.12) (2026-10-04)
 
 
