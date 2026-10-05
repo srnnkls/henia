@@ -11,6 +11,7 @@ import (
 	"github.com/srnnkls/henia/internal/canonical"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
+	"github.com/srnnkls/henia/internal/slots"
 	"github.com/srnnkls/henia/internal/vendor"
 )
 
@@ -147,6 +148,7 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	if err != nil {
 		return nil, fmt.Errorf("transform body: %w", err)
 	}
+	body = slots.Expand(body, slots.Preload)
 
 	body, err = markup.Render(body, t.OutputFormat)
 	if err != nil {

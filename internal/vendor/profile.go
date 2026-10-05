@@ -219,7 +219,7 @@ func (c *Compiler) Compile(directory string, input map[string]any, context Conte
 		}
 	}
 	for key := range settings {
-		if !slices.Contains([]string{"auto_invoke", "user_invocable", "variables", "targets", "resources"}, key) {
+		if !slices.Contains([]string{"auto_invoke", "user_invocable", "variables", "targets", "resources", "lint", "slots", "provides"}, key) {
 			return nil, fmt.Errorf("unknown henia field %q", key)
 		}
 	}

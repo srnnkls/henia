@@ -27,6 +27,21 @@ type Config struct {
 	Preload   preload.Settings           `toml:"preload,omitempty"`
 	Resources ResourceOptions            `toml:"resources,omitempty"`
 	Depends   map[string]deps.Dependency `toml:"dependencies,omitempty"`
+	Slots     map[string]SlotOptions     `toml:"slots,omitempty"`
+}
+
+type SlotOptions struct {
+	Disable []string `toml:"disable,omitempty"`
+}
+
+func (c *Config) DisabledProviders() map[string][]string {
+	disabled := map[string][]string{}
+	for slot, options := range c.Slots {
+		if len(options.Disable) > 0 {
+			disabled[slot] = options.Disable
+		}
+	}
+	return disabled
 }
 
 type ResourceOptions struct {

@@ -108,7 +108,7 @@ henia preload --skill <skill> -- <command>
   and prints each capture with an address `show` reads; see
   [henia query](query.md).
 - `context` prints a skill's runtime context for a preload: the providers of the
-  slots it applies and the sections of the library skills it references. It
+  [slots](slots.md) it applies and the sections of the library skills it references. It
   never repeats the skill's own text.
 - Renders are cached by content under `$XDG_CACHE_HOME/henia/render`;
   preload output never is.

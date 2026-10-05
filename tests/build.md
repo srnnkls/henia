@@ -21,7 +21,7 @@ Available Commands:
   query       Match S-expression patterns against library skills and their resources
   rm          Remove a skill package dependency and its files
   show        Print a library skill or one of its sections, rendered for the caller
-  slots       Resolve the installed providers of skill slots
+  slots       Resolve the providers of skill slots across the library
   sync        Fetch the declared skill packages at their locked commits
   update      Move the declared skill packages to their latest commits
 

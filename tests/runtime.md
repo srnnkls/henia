@@ -9,9 +9,9 @@ and projections for two harnesses.
 $ T=$(cd "$(mktemp -d)" && pwd -P); L="$T/data/henia/packages/global"; P="$T/repo"
 > henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia "$@"; }
 > mk() { mkdir -p "$(dirname "$1")"; printf -- "$2" > "$1"; }
-> mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nmetadata:\n  slots: "code.style code.check:keyed(list(command))"\n  applies: "code.style code.check"\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n'
-> mk "$L/tropos/skills/style-guide/SKILL.md" '---\nname: style-guide\ndescription: House style by language.\nmetadata:\n  provides: "code.style.go"\n---\n\n# Style guide\n\nShared rules.\n\n## Go\n\nRun gofmt. Canary: CANARY-GO.\n\n### Errors\n\nWrap with %%w.\n\n## Python\n\nUse ruff.\n'
-> mk "$L/tropos/skills/checks/SKILL.md" '---\nname: checks\ndescription: Validation commands.\nmetadata:\n  provides: "code.check.go"\n  code.check.go: "go vet ./..."\n---\n\n# Checks\n\nSee `$style-guide` and `$code`.{{with .flavor}} Flavor: {{.}}.{{end}}\n'
+> mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nhenia:\n  slots:\n    code.style:\n    code.check: keyed(list(command))\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n\n:slot[code.style code.check]\n'
+> mk "$L/tropos/skills/style-guide/SKILL.md" '---\nname: style-guide\ndescription: House style by language.\nhenia:\n  provides:\n    code.style.go:\n---\n\n# Style guide\n\nShared rules.\n\n## Go\n\nRun gofmt. Canary: CANARY-GO.\n\n### Errors\n\nWrap with %%w.\n\n## Python\n\nUse ruff.\n'
+> mk "$L/tropos/skills/checks/SKILL.md" '---\nname: checks\ndescription: Validation commands.\nhenia:\n  provides:\n    code.check.go: {command: go vet ./...}\n---\n\n# Checks\n\nSee `$style-guide` and `$code`.{{with .flavor}} Flavor: {{.}}.{{end}}\n'
 > printf '[harness.claude]\nartifacts = ["skills"]\n\n[harness.claude.skills]\nstatic = ["code"]\n\n[harness.claude.references]\nskill = "/{{.Name}}"\n\n[harness.pi]\nartifacts = ["skills"]\n\n[harness.pi.variables]\nflavor = "pi"\n\n[harness.pi.references]\nskill = "/skill:{{.Name}}"\n' > "$L/tropos/henia.toml"
 > henia build "$L/tropos" --output "$T/build" > /dev/null
 > mkdir -p "$P" && git -C "$P" init -q && cd "$P"
@@ -30,9 +30,11 @@ skills render as `henia show` commands, and a generated `henia` catalog skill
 lists the dynamic ones.
 
 ```scrut
-$ tail -n 1 "$T/build/claude/skills/code/SKILL.md"; tail -n 1 "$T/build/pi/skills/code/SKILL.md"
+$ grep -h -e '^Follow' -e 'henia slots' "$T/build/claude/skills/code/SKILL.md" "$T/build/pi/skills/code/SKILL.md"
 Follow `henia show style-guide` and `henia show checks`.
+!`henia preload --skill code -- 'henia slots code.style code.check'`
 Follow `/skill:style-guide` and `/skill:checks`.
+run first: `henia preload --skill code -- 'henia slots code.style code.check'`
 ```
 
 The catalog skill names each dynamic skill with its description and the
@@ -164,7 +166,7 @@ through `henia show` even where it is projected; its own text keeps naming it in
 the harness's syntax.
 
 ```scrut
-$ mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nhenia:\n  auto_invoke: false\nmetadata:\n  slots: "code.style code.check:keyed(list(command))"\n  applies: "code.style code.check"\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n'
+$ mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nhenia:\n  auto_invoke: false\n  slots:\n    code.style:\n    code.check: keyed(list(command))\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n\n:slot[code.style code.check]\n'
 > henia show checks --harness claude | grep '^See'
 > henia build "$L/tropos" --harness pi --output "$T/slash" > /dev/null && grep '^See' "$T/slash/pi/skills/checks/SKILL.md" | sed 's/ Flavor.*//'
 > printf 'Run `$code` yourself.\n' >> "$L/tropos/skills/code/SKILL.md"
@@ -209,7 +211,7 @@ skills it references; it never repeats the skill's own text.
 
 ```scrut
 $ rm -rf "$L/extra" "$P/.henia"
-> henia context code --global "$T/build/claude/skills" | sed "s|$T/||g"
+> henia context code | sed "s|$T/||g"
 Slot providers:
 code.check.go	global	henia show tropos:checks	go vet ./...
 code.style.go	global	henia show tropos:style-guide
@@ -226,7 +228,7 @@ checks#checks  Checks
 
 ```scrut
 $ henia context nothing; echo "exit $?"
-henia: no skill named "nothing"
+henia: no skill named "nothing" in the library; henia ls lists them
 exit 0
 ```
 
@@ -621,6 +623,9 @@ henia query: this pattern shares no variable with the first, so every combinatio
 ```scrut
 $ mk "$L/tropos/skills/echo/SKILL.md" '---\nname: echo\ndescription: Echo.\n---\n\n# Echo\n\nRun gofmt. Canary: CANARY-GO again.\n'
 > henia query '(skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.5)) @b)'
+@a  checks#checks  L3-4  paragraph  See `henia show style-guide` and `henia show code`.
+@b  code#code  L3  paragraph  Follow `henia show style-guide` and `henia show checks`.
+
 @a  echo#echo  L3  paragraph  Run gofmt. Canary: CANARY-GO again.
 @b  style-guide#go  L7  paragraph  Run gofmt. Canary: CANARY-GO.
 ```

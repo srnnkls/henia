@@ -14,20 +14,24 @@ import (
 type Tier string
 
 const (
-	Project Tier = "project"
-	Global  Tier = "global"
+	Project    Tier = library.Project
+	Dependency Tier = library.Dependency
+	Global     Tier = library.Global
 )
+
+var tiers = []Tier{Project, Dependency, Global}
 
 func (t Tier) String() string { return string(t) }
 
 func (t Tier) priority() Priority {
-	if t == Global {
+	switch t {
+	case Global:
 		return Fallback
+	case Dependency:
+		return inherited
 	}
 	return Normal
 }
-
-var ProjectDirs = []string{".claude/skills", ".agents/skills", ".agent/skills", ".codex/skills", ".pi/skills", ".omp/skills", ".github/skills"}
 
 type Skill struct {
 	Path string
@@ -38,40 +42,11 @@ type Skill struct {
 
 func (s Skill) Name() string { return filepath.Base(filepath.Dir(s.Path)) }
 
-func Discover(root string, globals []string, packages []library.Package) []Skill {
+func Discover(lib *library.Library) []Skill {
 	var skills []Skill
-	seen := make(map[string]bool)
-	scan := func(dir string, tier Tier, pkg string) {
-		for _, f := range library.Scan(dir) {
-			if seen[f.Physical] {
-				continue
-			}
-			metadata, err := Entries(f.Artifact.Frontmatter)
-			if err != nil {
-				continue
-			}
-			seen[f.Physical] = true
-			skill := Skill{Path: f.Path, Tier: tier, Metadata: metadata}
-			if pkg != "" {
-				skill.Ref = pkg + ":" + skill.Name()
-			}
-			skills = append(skills, skill)
-		}
-	}
-	for _, pkg := range packages {
-		tier := Global
-		if pkg.Tier == library.Project {
-			tier = Project
-		}
-		scan(pkg.Skills(), tier, pkg.Name)
-	}
-	if root != "" {
-		for _, dir := range ProjectDirs {
-			scan(filepath.Join(root, dir), Project, "")
-		}
-	}
-	for _, dir := range globals {
-		scan(filepath.Clean(dir), Global, "")
+	for _, e := range lib.Entries {
+		tier := Tier(e.Tier)
+		skills = append(skills, Skill{Path: e.Path, Ref: e.ID, Tier: tier, Metadata: Read(e.Artifact.Frontmatter, e.Artifact.Body, tier.priority())})
 	}
 	return skills
 }
@@ -90,6 +65,7 @@ const (
 	Conflict   = "conflict"
 	Selected   = "selected"
 	Shadowed   = "shadowed"
+	Disabled   = "disabled"
 )
 
 type Owner struct {
@@ -100,7 +76,6 @@ type Owner struct {
 
 type Provider struct {
 	Slot       string    `json:"slot"`
-	Entry      string    `json:"entry"`
 	Skill      string    `json:"skill"`
 	Path       string    `json:"path"`
 	Tier       Tier      `json:"tier"`
@@ -108,7 +83,8 @@ type Provider struct {
 	Explicit   bool      `json:"explicit"`
 	Status     string    `json:"status"`
 	Value      string    `json:"value,omitempty"`
-	Ref        string    `json:"ref,omitempty"`
+	Section    string    `json:"section,omitempty"`
+	Ref        string    `json:"ref"`
 	Reason     string    `json:"reason,omitempty"`
 	ShadowedBy *Provider `json:"shadowed_by,omitempty"`
 }
@@ -128,16 +104,14 @@ type Resolution struct {
 	declared  map[string]Owner
 }
 
-func Evaluate(skills []Skill) *Resolution {
+func Evaluate(skills []Skill, disabled map[string][]string) *Resolution {
 	r := &Resolution{Owners: []Owner{}, Providers: []*Provider{}, Consumers: []Consumer{}, Problems: []Row{}, declared: make(map[string]Owner)}
 	types := make(map[string]map[Type]bool)
 	for _, s := range skills {
-		for _, entry := range s.Declared {
-			d, err := ParseDeclaration(entry)
-			if err != nil {
-				r.Problems = append(r.Problems, Row{Slot: entry, Kind: Invalid, Path: s.Path})
-				continue
-			}
+		for _, problem := range s.Problems {
+			r.Problems = append(r.Problems, Row{Slot: problem.Slot, Kind: Invalid, Path: s.Path})
+		}
+		for _, d := range s.Declared {
 			owner := Owner{d.Slot, d.Type, s.Path}
 			r.Owners = append(r.Owners, owner)
 			if _, ok := r.declared[d.Slot]; !ok {
@@ -154,31 +128,26 @@ func Evaluate(skills []Skill) *Resolution {
 	}
 
 	for _, s := range skills {
-		for _, entry := range s.Provided {
-			d, err := ParseDefinition(entry, s.Tier.priority())
-			if err != nil {
-				r.Problems = append(r.Problems, Row{Slot: entry, Kind: Invalid, Path: s.Path})
-				continue
-			}
-			p := &Provider{Slot: d.Slot, Entry: entry, Skill: s.Name(), Path: s.Path, Ref: s.Ref, Tier: s.Tier, Priority: d.Priority, Explicit: strings.Contains(entry, "@"), Status: Selected}
-			if !r.known(d.Slot) {
+		for _, o := range s.Offered {
+			p := &Provider{Slot: o.Slot, Skill: s.Name(), Path: s.Path, Ref: s.Ref, Tier: s.Tier, Priority: o.Priority, Explicit: o.Explicit, Section: o.Section, Status: Selected}
+			switch {
+			case !r.known(o.Slot):
 				p.Status = Unknown
-				r.Problems = append(r.Problems, Row{Slot: d.Slot, Kind: Unknown, Path: s.Path})
-			} else if err := p.assign(r, s); err != nil {
-				p.Status, p.Reason = Invalid, err.Error()
-				r.Problems = append(r.Problems, Row{Slot: d.Slot, Kind: Invalid, Path: s.Path})
+				r.Problems = append(r.Problems, Row{Slot: o.Slot, Kind: Unknown, Path: s.Path})
+			case off(disabled, o.Slot, s.Ref):
+				p.Status = Disabled
+			default:
+				if err := p.assign(r, s, o); err != nil {
+					p.Status, p.Reason = Invalid, err.Error()
+					r.Problems = append(r.Problems, Row{Slot: o.Slot, Kind: Invalid, Path: s.Path})
+				}
 			}
 			r.Providers = append(r.Providers, p)
 		}
 	}
 
 	for _, s := range skills {
-		for _, entry := range s.Applied {
-			slot, err := ParseApplication(entry)
-			if err != nil {
-				r.Problems = append(r.Problems, Row{Slot: entry, Kind: Invalid, Path: s.Path})
-				continue
-			}
+		for _, slot := range s.Applied {
 			r.Consumers = append(r.Consumers, Consumer{slot, s.Name(), s.Path, s.Tier})
 			if !r.declares(slot) {
 				r.Problems = append(r.Problems, Row{Slot: slot, Kind: Undeclared, Path: s.Path})
@@ -243,7 +212,7 @@ func (r *Resolution) Rows(requested []string, check bool) []Row {
 	var rows []Row
 	problems := slices.Clone(r.Problems)
 	if !check {
-		for _, tier := range []Tier{Project, Global} {
+		for _, tier := range tiers {
 			for _, p := range r.Providers {
 				if p.Tier == tier && p.Status == Selected && relevant(p.Slot, requested) {
 					rows = append(rows, Row{Slot: p.Slot, Kind: string(p.Tier), Path: p.location(), Value: p.Value})
@@ -284,50 +253,40 @@ func (r *Resolution) Select(requested []string) *Resolution {
 	return selected
 }
 
-func Applied(skills []Skill, skill string) ([]string, bool) {
-	var applied []string
-	found := false
-	for _, s := range skills {
-		if s.Name() == skill {
-			found = true
-			applied = append(applied, s.Applied...)
+func off(disabled map[string][]string, slot, ref string) bool {
+	for key, refs := range disabled {
+		if Within(slot, key) && slices.Contains(refs, ref) {
+			return true
 		}
 	}
-	return applied, found
+	return false
 }
 
-func (p *Provider) assign(r *Resolution, s Skill) error {
+func (p *Provider) assign(r *Resolution, s Skill, o Offer) error {
 	owner, _ := r.Owner(p.Slot)
-	value, given := s.Values[p.Slot]
-	switch owner.Type.Value {
-	case SkillValue:
-		if given {
-			return fmt.Errorf("%s takes a skill, not a value", owner.Slot)
-		}
-		return nil
-	case PathValue:
-		if !given || value == "" {
-			return fmt.Errorf("%s needs a path", owner.Slot)
-		}
-		path := filepath.Join(filepath.Dir(s.Path), value)
+	want := owner.Type.Value
+	switch {
+	case want == SkillValue && o.Kind != SkillValue:
+		return fmt.Errorf("%s takes a skill, not a %s", owner.Slot, o.Kind)
+	case want != SkillValue && o.Kind != want:
+		return fmt.Errorf("%s needs a %s", owner.Slot, want)
+	case want == PathValue:
+		path := filepath.Join(filepath.Dir(s.Path), o.Value)
 		if _, err := os.Stat(path); err != nil {
 			return err
 		}
 		p.Value = path
-		return nil
+	default:
+		p.Value = o.Value
 	}
-	if !given || value == "" {
-		return fmt.Errorf("%s needs a %s", owner.Slot, owner.Type.Value)
-	}
-	p.Value = value
 	return nil
 }
 
 func (p *Provider) location() string {
-	if p.Ref != "" {
-		return "henia show " + p.Ref
+	if p.Section != "" {
+		return "henia show " + p.Ref + "#" + p.Section
 	}
-	return p.Path
+	return "henia show " + p.Ref
 }
 
 func (p *Provider) competes() bool { return p.Status == Selected || p.Status == Shadowed }
@@ -348,6 +307,14 @@ func dedupe(rows []Row) []Row {
 	return result
 }
 
+func (r Row) Line() string {
+	line := r.Slot + "\t" + r.Kind + "\t" + r.Path
+	if r.Value != "" {
+		line += "\t" + r.Value
+	}
+	return line
+}
+
 func (r Row) Problem() bool {
-	return r.Kind != string(Project) && r.Kind != string(Global)
+	return !slices.Contains(tiers, Tier(r.Kind))
 }

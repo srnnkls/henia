@@ -2,7 +2,6 @@ package lint
 
 import (
 	"bytes"
-	"strings"
 
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/slots"
@@ -25,43 +24,27 @@ func addSlots(root *markup.Element, documents []document) {
 		add := func(attrs map[string]string, offset int) {
 			line := bytes.Count(d.source[:offset], []byte{'\n'}) + 1
 			column := offset - bytes.LastIndexByte(d.source[:offset], '\n')
-			head.Children = append(head.Children, &markup.Element{Type: "slot", Attrs: attrs, Text: attrs["entry"], Line: line, EndLine: line, Column: column, Parent: head, Index: len(head.Children)})
+			head.Children = append(head.Children, &markup.Element{Type: "slot", Attrs: attrs, Text: attrs["slot"], Line: line, EndLine: line, Column: column, Parent: head, Index: len(head.Children)})
 		}
-		entries, err := slots.Entries(d.art.Frontmatter)
-		if err != nil {
-			add(map[string]string{"role": "metadata", "error": err.Error()}, 0)
-			continue
+		inFrontmatter := func(slot string) int {
+			if index := bytes.Index(d.source[:d.offset], []byte(slot)); index >= 0 {
+				return index
+			}
+			return 0
 		}
-		for _, group := range []struct {
-			role, cut string
-			entries   []string
-			parse     func(string) error
-		}{
-			{"declare", ":", entries.Declared, func(e string) error { _, err := slots.ParseDeclaration(e); return err }},
-			{"provide", "@", entries.Provided, func(e string) error { _, err := slots.ParseDefinition(e, slots.Normal); return err }},
-			{"apply", "", entries.Applied, func(e string) error { _, err := slots.ParseApplication(e); return err }},
-		} {
-			for _, entry := range group.entries {
-				if strings.Contains(entry, "{{") {
-					continue
-				}
-				attrs := map[string]string{"role": group.role, "entry": entry, "slot": entry}
-				if group.cut != "" {
-					attrs["slot"], _, _ = strings.Cut(entry, group.cut)
-				}
-				if group.role == "declare" {
-					if declared, err := slots.ParseDeclaration(entry); err == nil {
-						attrs["type"] = declared.Type.String()
-					}
-				}
-				if err := group.parse(entry); err != nil {
-					attrs["error"] = err.Error()
-				}
-				offset := 0
-				if index := bytes.Index(d.source[:d.offset], []byte(entry)); index >= 0 {
-					offset = index
-				}
-				add(attrs, offset)
+		metadata := slots.Read(d.art.Frontmatter, d.art.Body, slots.Normal)
+		for _, problem := range metadata.Problems {
+			add(map[string]string{"role": problem.Role, "slot": problem.Slot, "error": problem.Message}, inFrontmatter(problem.Slot))
+		}
+		for _, declared := range metadata.Declared {
+			add(map[string]string{"role": "declare", "slot": declared.Slot, "type": declared.Type.String()}, inFrontmatter(declared.Slot))
+		}
+		for _, offered := range metadata.Offered {
+			add(map[string]string{"role": "provide", "slot": offered.Slot, "priority": offered.Priority.String()}, inFrontmatter(offered.Slot))
+		}
+		for _, application := range slots.Applications(d.art.Body) {
+			for _, slot := range application.Slots {
+				add(map[string]string{"role": "apply", "slot": slot}, d.offset+application.Start)
 			}
 		}
 	}

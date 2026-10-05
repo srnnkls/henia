@@ -121,30 +121,34 @@ warnings. See [lint rules](docs/lint-rules.md).
 
 ## Slots
 
-Skills declare typed extension points in `metadata.slots` and fill them in
-`metadata.provides`; priorities decide which providers shadow others. Types and
-priorities follow the Nix module system (`listOf`, `uniq`, `attrsOf`; `mkForce`,
-plain definitions, `mkDefault`):
+Skills declare typed extension points in `henia.slots`, fill them in
+`henia.provides`, and apply them where they use them with a `:slot[...]`
+directive. Types and priorities follow the Nix module system (`listOf`, `uniq`,
+`attrsOf`; `mkForce`, plain definitions, `mkDefault`):
 
 ```yaml
-# skills/code/SKILL.md
-metadata:
-  slots: "code.style:keyed(list) review.criteria:unique"
+# tropos: skills/code/SKILL.md
+henia:
+  slots:
+    code.style: keyed(list)
+    review.criteria: unique
 
-# .agents/skills/house-go/SKILL.md, in a repository
-metadata:
-  provides: "code.style.go review.criteria@fallback"
+# a repository: .henia/skills/house-go/SKILL.md
+henia:
+  provides:
+    code.style.go:
+    review.criteria: {priority: fallback}
 ```
 
-Installed skills stay open for extension, so `henia slots` resolves them when a
-skill runs, over a harness's global skills directory and the project's skill
-directories. Skills preload the resulting rows; `--explain` shows where each
-provider and override comes from, `--json` emits the same, and `--check`
-reports problems:
+Slots resolve over the library when a skill is read: the project overrides its
+skill packages, which override global packages. `henia show` and built skills
+render `:slot[code.style]` as a preload of `henia slots code.style`;
+`--explain` shows where each provider and override comes from, `--json` emits
+the same, and `--check` reports problems:
 
 ```bash
-henia slots --global ~/.claude/skills code.style review.criteria
-henia slots --global ~/.claude/skills --explain code.style.go
+henia slots code.style review.criteria
+henia slots --explain code.style.go
 ```
 
 See [slots](docs/slots.md) for types, priorities, output and lineage, and

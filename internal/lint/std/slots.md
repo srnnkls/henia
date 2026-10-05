@@ -1,13 +1,13 @@
 ---
-description: Slot declarations, providers and applications in skill metadata.
+description: Slot declarations, providers and applications in skills.
 ---
 
 # Slots
 
 ## invalid-slot
 
-`metadata.slots`, `metadata.provides` and `metadata.applies` entries must parse,
-and one slot must not be declared with different types.
+`henia.slots` and `henia.provides` entries and `:slot[...]` directives must
+parse, and one slot must not be declared with different types.
 
 ```hq
 (rule invalid-slot
@@ -36,8 +36,9 @@ and one slot must not be declared with different types.
 ---
 name: example
 description: An example skill.
-metadata:
-  slots: "code.style:bogus("
+henia:
+  slots:
+    code.style: bogus(
 ---
 # Example
 ```
@@ -48,16 +49,18 @@ metadata:
 ---
 name: example
 description: An example skill.
-metadata:
-  slots: "code.style"
+henia:
+  slots:
+    code.style:
 ---
 # Example
 ```
 
 ## unknown-slot
 
-A provided or applied slot must lie within a slot some scanned skill declares,
-so `code.style.go` needs `code.style` or `code.style.go` declared.
+A provided or applied slot must lie within a slot that a scanned skill or a
+skill package declares, so `code.style.go` needs `code.style` or
+`code.style.go` declared.
 
 ```hq
 (rule unknown-slot
@@ -73,10 +76,21 @@ so `code.style.go` needs `code.style` or `code.style.go` declared.
 ---
 name: example
 description: An example skill.
-metadata:
-  provides: "code.style.go"
+henia:
+  provides:
+    code.style.go:
 ---
 # Example
+```
+
+```md
+---
+name: example
+description: An example skill.
+---
+# Example
+
+:slot[git.commits]
 ```
 
 ### Passes
@@ -85,9 +99,11 @@ metadata:
 ---
 name: example
 description: An example skill.
-metadata:
-  slots: "code.style"
-  provides: "code.style.go"
+henia:
+  slots:
+    code.style:
+  provides:
+    code.style.go:
 ---
 # Example
 ```

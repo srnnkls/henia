@@ -152,8 +152,9 @@ Beyond the document tree that queries see, lint rules match these:
   `markup` and a `:message`.
 - `entry` nodes under `frontmatter`, one per scalar, with a dotted `:key`,
   `:value`, `:index` for list items, and `:tag` (YAML type, as in `!!str`).
-- `slot` nodes for `metadata.slots`, `provides` and `applies` entries, with
-  `:role`, `:slot`, `:type`, `:entry` and `:error`.
+- `slot` nodes for `henia.slots` and `henia.provides` entries and `:slot[...]`
+  directives, with `:role` (`declare`, `provide` or `apply`), `:slot`, `:type`,
+  `:priority` and `:error`.
 - `link` and `image` facts:
   - `:dest` is the destination as written;
   - `:exists`, `:anchored` and `:valid` are `true` or `false`;

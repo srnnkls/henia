@@ -323,7 +323,6 @@ func showResource(out io.Writer, name, skillDir, path, anchor string, sectioned 
 
 func newContextCommand() *cobra.Command {
 	var flags runtimeFlags
-	var globals []string
 	cmd := &cobra.Command{
 		Use:   "context <skill>",
 		Short: "Print a skill's runtime context",
@@ -335,34 +334,38 @@ preload never aborts.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			lib := flags.open(cmd)
 			out := cmd.OutOrStdout()
-			skills := slots.Discover(flags.project, globals, lib.Packages)
-			body, found := skillBody(args[0], flags.project, slices.Concat(globals, packageSkillDirs(lib.Packages)))
-			if !found {
-				fmt.Fprintf(out, "henia: no skill named %q\n", args[0])
+			entry, err := lib.Resolve(args[0])
+			if err != nil {
+				fmt.Fprintf(out, "henia: %v\n", err)
 				return nil
 			}
 			var b strings.Builder
-			if applied, _ := slots.Applied(skills, args[0]); len(applied) > 0 {
+			var applied []string
+			for _, application := range slots.Applications(entry.Artifact.Body) {
+				applied = append(applied, application.Slots...)
+			}
+			if len(applied) > 0 {
 				b.WriteString("Slot providers:\n")
-				for _, row := range slots.Evaluate(skills).Rows(applied, false) {
-					line := row.Slot + "\t" + row.Kind + "\t" + row.Path
-					if row.Value != "" {
-						line += "\t" + row.Value
+				resolution, err := resolveSlots(flags.project, lib)
+				if err != nil {
+					fmt.Fprintf(&b, "henia: %v\n", err)
+				} else {
+					for _, row := range resolution.Rows(applied, false) {
+						b.WriteString(row.Line() + "\n")
 					}
-					b.WriteString(line + "\n")
 				}
 			}
 			r := newRenderer(detectHarness(flags.harness), lib)
 			var seen []string
-			for _, ref := range libraryReferences(body) {
-				entry, err := lib.Resolve(ref)
-				if err != nil || entry.Name == args[0] || slices.Contains(seen, entry.ID) {
+			for _, ref := range libraryReferences(entry.Artifact.Body) {
+				referenced, err := lib.Resolve(ref)
+				if err != nil || referenced.ID == entry.ID || slices.Contains(seen, referenced.ID) {
 					continue
 				}
-				seen = append(seen, entry.ID)
-				name := lib.Reference(entry)
-				fmt.Fprintf(&b, "\nSkill %s: %s\n", name, entry.Description)
-				contents(&b, name, r.body(entry))
+				seen = append(seen, referenced.ID)
+				name := lib.Reference(referenced)
+				fmt.Fprintf(&b, "\nSkill %s: %s\n", name, referenced.Description)
+				contents(&b, name, r.body(referenced))
 			}
 			text := b.String()
 			if len(text) > outputBudget {
@@ -373,16 +376,7 @@ preload never aborts.`,
 		},
 	}
 	flags.register(cmd)
-	cmd.Flags().StringArrayVar(&globals, "global", nil, "Harness skills directory searched for the skill and its global providers (repeatable)")
 	return cmd
-}
-
-func packageSkillDirs(packages []library.Package) []string {
-	var dirs []string
-	for _, pkg := range packages {
-		dirs = append(dirs, pkg.Skills())
-	}
-	return dirs
 }
 
 func libraryReferences(body string) []string {
@@ -391,21 +385,6 @@ func libraryReferences(body string) []string {
 		refs = append(refs, ref.Name)
 	}
 	return refs
-}
-
-func skillBody(name, project string, dirs []string) (string, bool) {
-	var search []string
-	for _, dir := range slots.ProjectDirs {
-		search = append(search, filepath.Join(project, dir))
-	}
-	for _, dir := range append(search, dirs...) {
-		for _, f := range library.Scan(dir) {
-			if filepath.Base(filepath.Dir(f.Path)) == name {
-				return f.Artifact.Body, true
-			}
-		}
-	}
-	return "", false
 }
 
 func detectHarness(flag string) string {
