@@ -111,6 +111,11 @@ func Skills(body string) []Reference {
 			refs = append(refs, ref)
 		}
 	}
+	return append(refs, Shown(body)...)
+}
+
+func Shown(body string) []Reference {
+	var refs []Reference
 	for _, m := range shown.FindAllStringSubmatchIndex(body, -1) {
 		ref := Reference{Type: TypeSkill, Name: body[m[2]:m[3]], Raw: body[m[0]+1 : m[1]], Start: m[0], End: m[1]}
 		if m[4] >= 0 {

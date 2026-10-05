@@ -3,17 +3,22 @@ package library
 import (
 	"bytes"
 	"cmp"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"text/template"
 	"unicode/utf8"
 
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
+	"gopkg.in/yaml.v3"
 )
 
 const maxCorpusFile = 1 << 20
@@ -31,115 +36,281 @@ type Rendering struct {
 	Reference func(Entry) *regexp.Regexp
 }
 
+type Document struct {
+	Path string
+	Kind string
+}
+
 func (l *Library) Corpus(rendering *Rendering) *Corpus {
-	c := &Corpus{Root: &markup.Element{Type: "corpus", Attrs: map[string]string{}}, lib: l, skills: map[string]*markup.Element{}, rendering: rendering}
+	c := newCorpus()
+	c.lib, c.rendering = l, rendering
 	for _, e := range l.Entries {
-		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": e.Name, "source": e.Source, "ref": l.Reference(e)}}
+		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": e.Name, "name": e.Name, "source": e.Source, "ref": l.Reference(e)}}
 		c.adopt(c.Root, skill)
 		c.skills[e.ID] = skill
+	}
+	for _, e := range l.Entries {
+		skill := c.skills[e.ID]
 		dir := filepath.Dir(e.Path)
-		c.file(skill, e, e.Path, "SKILL.md")
+		entry := e
+		var render func() (string, *regexp.Regexp)
+		if rendering != nil {
+			render = func() (string, *regexp.Regexp) { return rendering.Body(entry), rendering.Reference(entry) }
+		}
+		c.file(skill, e.Path, "SKILL.md", "skill", render)
 		for _, path := range resourceFiles(dir) {
 			rel, _ := filepath.Rel(dir, path)
-			c.file(skill, e, path, filepath.ToSlash(rel))
+			c.file(skill, path, filepath.ToSlash(rel), "resource", nil)
 		}
 	}
 	return c
 }
 
-func (c *Corpus) Skill(ref string) *markup.Element {
-	e, err := c.lib.Resolve(ref)
-	if err != nil {
-		return nil
+func Documents(docs []Document) *Corpus {
+	c := newCorpus()
+	dirs := map[string]*markup.Element{}
+	for _, d := range docs {
+		if filepath.Base(d.Path) != "SKILL.md" {
+			continue
+		}
+		id := filepath.Base(filepath.Dir(d.Path))
+		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": id, "name": id, "ref": id}}
+		if data, err := os.ReadFile(d.Path); err == nil {
+			if art, err := artifact.Parse(data); err == nil {
+				if name, ok := art.Frontmatter["name"].(string); ok && name != "" {
+					skill.Attrs["name"] = name
+					c.skills[name] = skill
+				}
+			}
+		}
+		c.adopt(c.Root, skill)
+		c.skills[id] = skill
+		dirs[filepath.Dir(d.Path)] = skill
 	}
-	return c.skills[e.ID]
+	for _, d := range docs {
+		if skill := dirs[filepath.Dir(d.Path)]; skill != nil && filepath.Base(d.Path) == "SKILL.md" {
+			c.file(skill, d.Path, "SKILL.md", d.Kind, nil)
+			continue
+		}
+		owner := ""
+		for dir := filepath.Dir(d.Path); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+			if dirs[dir] != nil {
+				owner = dir
+				break
+			}
+		}
+		if owner != "" && d.Kind == "" {
+			rel, _ := filepath.Rel(owner, d.Path)
+			c.file(dirs[owner], d.Path, filepath.ToSlash(rel), "resource", nil)
+			continue
+		}
+		c.file(c.Root, d.Path, filepath.ToSlash(d.Path), cmp.Or(d.Kind, "document"), nil)
+	}
+	return c
 }
 
-func (c *Corpus) file(skill *markup.Element, entry Entry, path, rel string) {
-	data, err := os.ReadFile(path)
+func newCorpus() *Corpus {
+	return &Corpus{Root: &markup.Element{Type: "corpus", Attrs: map[string]string{}}, skills: map[string]*markup.Element{}}
+}
+
+func (c *Corpus) Skill(ref string) *markup.Element {
+	if c.lib != nil {
+		e, err := c.lib.Resolve(ref)
+		if err != nil {
+			return nil
+		}
+		return c.skills[e.ID]
+	}
+	if _, name, qualified := strings.Cut(ref, ":"); qualified {
+		ref = name
+	}
+	return c.skills[ref]
+}
+
+func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render func() (string, *regexp.Regexp)) {
+	data, err := os.ReadFile(physical)
 	if err != nil || len(data) > maxCorpusFile || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
 		return
 	}
-	var file *markup.Element
-	var body string
-	offset, shift := 0, 0
-	var frontmatter map[string]any
-	if strings.EqualFold(filepath.Ext(path), ".md") {
-		art, err := artifact.Parse(data)
-		if err != nil {
-			c.Problems = append(c.Problems, fmt.Sprintf("%s/%s: %v", skill.Attrs["ref"], rel, err))
-			return
+	attrs := map[string]string{"path": rel, "main": fmt.Sprint(rel == "SKILL.md"), "kind": kind, "file": physical}
+	typed := kind == "skill" || kind == "command" || kind == "agent"
+	if !strings.EqualFold(filepath.Ext(physical), ".md") {
+		file := markup.PlainTree(data)
+		for k, v := range attrs {
+			file.Attrs[k] = v
 		}
-		offset, frontmatter = len(data)-len(art.Body), art.Frontmatter
-		body, shift = art.Body, bytes.Count(data[:offset], []byte{'\n'})
-		var syntax *regexp.Regexp
-		if rel == "SKILL.md" && c.rendering != nil {
-			body, shift, syntax = c.rendering.Body(entry), 0, c.rendering.Reference(entry)
-		}
-		file, err = markup.Tree([]byte(body), c.references(body, syntax)...)
-		if err != nil {
-			c.Problems = append(c.Problems, fmt.Sprintf("%s/%s: %v", skill.Attrs["ref"], rel, err))
-		}
-		c.resolveLinks(file, skill.Attrs["id"], rel)
-	} else {
-		file = markup.PlainTree(data)
+		c.adopt(parent, file)
+		return
 	}
-	file.Attrs["path"], file.Attrs["main"] = rel, fmt.Sprint(rel == "SKILL.md")
-	if shift > 0 {
-		file.Walk(func(e *markup.Element) bool {
-			e.Line, e.EndLine = e.Line+shift, e.EndLine+shift
-			return true
-		})
+	art, err := artifact.Parse(data)
+	if err != nil {
+		file := &markup.Element{Type: "file", Attrs: attrs, Line: 1, EndLine: 1}
+		c.adopt(file, problem("frontmatter", err.Error(), 1, 1))
+		c.adopt(parent, file)
+		c.Problems = append(c.Problems, fmt.Sprintf("%s: %v", physical, err))
+		return
 	}
-	if offset > 0 {
-		attrs := map[string]string{}
-		for key, value := range frontmatter {
-			switch value.(type) {
-			case string, bool, int, float64:
-				attrs[key] = fmt.Sprint(value)
+	offset := len(data) - len(art.Body)
+	body, shift := art.Body, bytes.Count(data[:offset], []byte{'\n'})
+	var syntax *regexp.Regexp
+	if render != nil {
+		body, syntax = render()
+		shift = 0
+	}
+	file, err := markup.Tree([]byte(body), c.references(body, syntax)...)
+	var problems []*markup.Element
+	if location, ok := errors.AsType[*markup.Error](err); ok {
+		problems = append(problems, problem("markup", location.Message, location.Line, location.Column))
+	} else if err != nil {
+		problems = append(problems, problem("markup", err.Error(), 1, 1))
+	}
+	if typed && strings.Contains(body, "{{") {
+		if _, err := template.New("skill").Parse(body); err != nil {
+			problems = append(problems, problem("template", err.Error(), 1, 1))
+		}
+	}
+	for k, v := range attrs {
+		file.Attrs[k] = v
+	}
+	if typed {
+		name, _ := art.Frontmatter["name"].(string)
+		if name == "" {
+			name = strings.TrimSuffix(filepath.Base(physical), ".md")
+			if filepath.Base(physical) == artifact.MainFileName(artifact.Type(kind)) {
+				name = filepath.Base(filepath.Dir(physical))
 			}
 		}
-		head := &markup.Element{Type: "frontmatter", Attrs: attrs, Text: strings.TrimSpace(strings.Trim(strings.TrimSpace(string(data[:offset])), "-"))}
-		if shift > 0 {
-			head.Line, head.EndLine = 1, shift
+		file.Attrs["name"], file.Attrs["artifact"] = name, kind+":"+name
+	}
+	c.resolveLinks(file, parent.Attrs["id"], rel, physical)
+	file.Walk(func(e *markup.Element) bool {
+		if strings.Contains(e.Text, "{{") {
+			e.Attrs["dynamic"] = "true"
 		}
-		file.Children = append([]*markup.Element{head}, file.Children...)
-		for i, child := range file.Children {
-			child.Parent, child.Index = file, i
+		e.Line, e.EndLine = e.Line+shift, e.EndLine+shift
+		return true
+	})
+	for _, p := range problems {
+		p.Line += shift
+		p.EndLine = p.Line
+	}
+	var head []*markup.Element
+	if offset > 0 {
+		head = append(head, frontmatter(art.Frontmatter, data[:offset], shift))
+	}
+	file.Children = append(append(head, problems...), file.Children...)
+	for i, child := range file.Children {
+		child.Parent, child.Index = file, i
+	}
+	c.adopt(parent, file)
+}
+
+func problem(kind, message string, line, column int) *markup.Element {
+	return &markup.Element{Type: "problem", Attrs: map[string]string{"kind": kind, "message": message}, Text: message, Line: line, EndLine: line, Column: column}
+}
+
+func frontmatter(values map[string]any, header []byte, lines int) *markup.Element {
+	attrs := map[string]string{}
+	for key, value := range values {
+		switch value.(type) {
+		case string, bool, int, float64:
+			attrs[key] = fmt.Sprint(value)
 		}
 	}
-	c.adopt(skill, file)
+	head := &markup.Element{Type: "frontmatter", Attrs: attrs, Text: strings.TrimSpace(strings.Trim(strings.TrimSpace(string(header)), "-")), Line: 1, EndLine: lines, Column: 1}
+	var document yaml.Node
+	if yaml.Unmarshal([]byte(head.Text), &document) == nil && len(document.Content) > 0 {
+		var walk func(key string, index int, node *yaml.Node, line, column int)
+		walk = func(key string, index int, node *yaml.Node, line, column int) {
+			switch node.Kind {
+			case yaml.MappingNode:
+				for i := 0; i+1 < len(node.Content); i += 2 {
+					k := node.Content[i]
+					walk(strings.TrimPrefix(key+"."+k.Value, "."), index, node.Content[i+1], k.Line+1, k.Column)
+				}
+			case yaml.SequenceNode:
+				for i, item := range node.Content {
+					walk(key, i, item, item.Line+1, item.Column)
+				}
+			default:
+				entry := &markup.Element{Type: "entry", Attrs: map[string]string{"key": key, "value": node.Value}, Text: node.Value, Line: line, EndLine: line, Column: column}
+				if index >= 0 {
+					entry.Attrs["index"] = strconv.Itoa(index)
+				}
+				head.Children = append(head.Children, entry)
+				entry.Parent, entry.Index = head, len(head.Children)-1
+			}
+		}
+		walk("", -1, document.Content[0], 1, 1)
+	}
+	return head
 }
 
 func (c *Corpus) references(body string, syntax *regexp.Regexp) []*markup.Element {
-	refs := reference.Skills(body)
-	if syntax != nil {
-		for _, m := range syntax.FindAllStringSubmatchIndex(body, -1) {
-			refs = append(refs, reference.Reference{Name: body[m[2]:m[3]], Start: m[0], End: m[1]})
+	var links []*markup.Element
+	add := func(start, end int, attrs map[string]string) {
+		links = append(links, &markup.Element{Type: "link", Attrs: attrs, Start: start + 1, End: end - 1})
+	}
+	for _, ref := range reference.Parse(body) {
+		switch ref.Type {
+		case reference.TypeSkill:
+			add(ref.Start, ref.End, c.skillLink(ref))
+		case reference.TypeCommand, reference.TypeAgent:
+			add(ref.Start, ref.End, map[string]string{"ref": string(ref.Type), "artifact": string(ref.Type) + ":" + ref.Name})
+		case reference.TypeFile:
+			add(ref.Start, ref.End, map[string]string{"ref": "file", "url": ref.Name})
 		}
 	}
-	var links []*markup.Element
-	for _, ref := range refs {
-		target := ref.Name
-		if e, err := c.lib.Resolve(ref.Name); err == nil {
-			target = e.Name
+	for _, ref := range reference.Shown(body) {
+		add(ref.Start, ref.End+1, c.skillLink(ref))
+	}
+	if syntax != nil {
+		for _, m := range syntax.FindAllStringSubmatchIndex(body, -1) {
+			add(m[0], m[1], c.skillLink(reference.Reference{Name: body[m[2]:m[3]]}))
 		}
-		attrs := map[string]string{"target": target}
-		if ref.Resource != "" || ref.Anchor != "" {
-			attrs["path"] = cmp.Or(ref.Resource, "SKILL.md")
-		}
-		if ref.Anchor != "" {
-			attrs["anchor"] = ref.Anchor
-		}
-		links = append(links, &markup.Element{Type: "link", Attrs: attrs, Start: ref.Start, End: ref.End})
 	}
 	return links
 }
 
-func (c *Corpus) resolveLinks(file *markup.Element, self, rel string) {
+func (c *Corpus) skillLink(ref reference.Reference) map[string]string {
+	target := ref.Name
+	if _, name, qualified := strings.Cut(target, ":"); qualified && c.lib == nil {
+		target = name
+	}
+	if skill := c.Skill(ref.Name); skill != nil {
+		target = skill.Attrs["id"]
+	}
+	attrs := map[string]string{"ref": "skill", "target": target, "artifact": "skill:" + target}
+	if ref.Resource != "" || ref.Anchor != "" {
+		attrs["path"] = cmp.Or(ref.Resource, "SKILL.md")
+	}
+	if ref.Anchor != "" {
+		attrs["anchor"] = ref.Anchor
+	}
+	return attrs
+}
+
+func (c *Corpus) resolveLinks(file *markup.Element, self, rel, physical string) {
 	file.Walk(func(e *markup.Element) bool {
 		destination, anchor, _ := strings.Cut(e.Attrs["url"], "#")
-		if e.Type != "link" || e.Attrs["url"] == "" || strings.Contains(destination, ":") {
+		if e.Type != "link" || e.Attrs["url"] == "" || strings.Contains(e.Attrs["url"], "{{") {
+			return true
+		}
+		u, err := url.Parse(e.Attrs["url"])
+		if err != nil {
+			e.Attrs["valid"] = "false"
+			return true
+		}
+		if u.IsAbs() || u.Host != "" || strings.HasPrefix(u.Path, "~") || filepath.IsAbs(u.Path) {
+			return true
+		}
+		local := physical
+		if u.Path != "" {
+			local = filepath.Join(filepath.Dir(physical), filepath.FromSlash(u.Path))
+		}
+		_, err = os.Stat(local)
+		e.Attrs["exists"] = fmt.Sprint(err == nil)
+		if self == "" {
 			return true
 		}
 		target, inside := self, rel
@@ -148,11 +319,11 @@ func (c *Corpus) resolveLinks(file *markup.Element, self, rel string) {
 		}
 		if outside, escapes := strings.CutPrefix(inside, "../"); escapes {
 			name, resource, _ := strings.Cut(outside, "/")
-			entry, err := c.lib.Resolve(name)
-			if err != nil {
+			skill := c.Skill(name)
+			if skill == nil {
 				return true
 			}
-			target, inside = entry.Name, cmp.Or(resource, "SKILL.md")
+			target, inside = skill.Attrs["id"], cmp.Or(resource, "SKILL.md")
 		}
 		e.Attrs["target"], e.Attrs["path"] = target, inside
 		if anchor != "" {

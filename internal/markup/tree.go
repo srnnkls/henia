@@ -23,6 +23,7 @@ type Element struct {
 	Text          string
 	Start, End    int
 	Line, EndLine int
+	Column        int
 	Parent        *Element
 	Children      []*Element
 	Index         int
@@ -276,6 +277,9 @@ func (b *builder) finish(e *Element) {
 	}
 	if e.Start < 0 {
 		e.Start, e.End = 0, 0
+	}
+	if e.Column == 0 {
+		e.Column = e.Start - bytes.LastIndexByte(b.source[:e.Start], '\n')
 	}
 	if e.Type == "section" || e.Type == "heading" {
 		e.Start = bytes.LastIndexByte(b.source[:e.Start], '\n') + 1

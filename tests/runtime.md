@@ -580,10 +580,10 @@ syntax; `--canonical` reads them as authored, with lines in the file on disk.
 ```scrut
 $ henia query '(skill :id "checks" (paragraph) @p (link) @l)' --harness pi; henia query '(skill :id "checks" (paragraph) @p)' --canonical
 @p  checks#checks  L3-4  paragraph  See `/skill:style-guide` and `henia show code`. Flavor: pi.
-@l  checks#checks  L3  link  `/skill:style-guide`
+@l  checks#checks  L3  link  /skill:style-guide
 
 @p  checks#checks  L3-4  paragraph  See `/skill:style-guide` and `henia show code`. Flavor: pi.
-@l  checks#checks  L3  link  `henia show code
+@l  checks#checks  L3  link  henia show code
 @p  checks#checks  L11-12  paragraph  See `$style-guide` and `$code`.{{with .flavor}} Flavor: {{.}}.{{end}}
 ```
 
@@ -602,7 +602,7 @@ matches nothing.
 ```scrut
 $ mk "$L/tropos/skills/linker/SKILL.md" '---\nname: linker\ndescription: Links.\n---\n\n# Linker\n\nSee `henia show style-guide#go` and `henia show style-guide#rust`.\n'
 > henia query '(link :anchor /./ (not (to (section)))) @broken'
-@broken  linker#linker  L3  link  `henia show style-guide#rust
+@broken  linker#linker  L3  link  henia show style-guide#rust
 ```
 
 Patterns side by side join on shared variables; a top-level `(not P)` drops the
@@ -610,7 +610,7 @@ rows P matches, and patterns that share no variable are rejected.
 
 ```scrut
 $ henia query '(skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a))))'; henia query '(skill (heading)) @a (code) @c' | head -n 3
-@l  linker#linker  L3  link  `henia show style-guide#rust
+@l  linker#linker  L3  link  henia show style-guide#rust
 henia query: this pattern shares no variable with the first, so every combination would match: a cartesian product between disconnected patterns
   (skill (heading)) @a (code) @c
                        ^
