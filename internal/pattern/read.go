@@ -17,6 +17,7 @@ type Query struct {
 	Semantic bool
 	Group    *Group
 	params   map[string]bool
+	sorts    []sortKey
 }
 
 type Pattern struct {
@@ -311,14 +312,22 @@ type reader struct {
 	params   map[string]bool
 	defines  map[string]Define
 	expanded int
+	sorts    []sortKey
 }
 
-func Read(src string) (*Query, error) {
+func Read(src string, sort ...string) (*Query, error) {
 	tokens, err := lex(src)
 	if err != nil {
 		return nil, err
 	}
 	r := &reader{tokens: tokens}
+	for _, text := range sort {
+		key, err := parseSort(text, len(src))
+		if err != nil {
+			return nil, err
+		}
+		r.sorts = append(r.sorts, key)
+	}
 	return r.query(tEOF)
 }
 
@@ -375,7 +384,7 @@ func (r *reader) query(end tokenKind) (*Query, error) {
 	if len(q.Members) == 0 {
 		return nil, &Error{Offset: start, Message: "a query needs a pattern outside (not ...)", Hint: `try (skill :id "NAME" (heading) @h)`}
 	}
-	q.Captures, q.Semantic, q.params = r.captures, r.semantic, r.params
+	q.Captures, q.Semantic, q.params, q.sorts = r.captures, r.semantic, r.params, r.sorts
 	if len(q.Captures) == 0 {
 		if len(q.Members) > 1 || len(q.Absent) > 0 {
 			return nil, &Error{Offset: start, Message: "a query of several patterns prints its captures; name one with @", Hint: `e.g. (link :target ?s) @l (skill :id ?s)`}
@@ -450,7 +459,11 @@ func (r *reader) pattern(quants string) (*Pattern, error) {
 	}
 	if t := r.peek(); t.kind == tQuant {
 		if !strings.Contains(quants, t.text) {
-			return nil, &Error{Offset: t.pos, Message: "quantifiers apply to patterns nested in another pattern"}
+			hint := "nest it in another pattern, as (skill (code)+ @c)"
+			if strings.Contains(quants, "?") {
+				hint += ", or use ? for an optional top-level pattern"
+			}
+			return nil, &Error{Offset: t.pos, Message: "quantifiers apply to patterns nested in another pattern", Hint: hint}
 		}
 		p.Quant = r.next().text[0]
 	}

@@ -127,15 +127,17 @@ func (q *Query) Run(root *markup.Element, env Environment) ([]Row, error) {
 		return nil, err
 	}
 	if q.Group != nil {
-		return q.Group.rows(q, bindings, env.Params), nil
-	}
-	for _, b := range bindings {
-		row, key := q.row(b)
-		if !seen[key] {
-			seen[key] = true
-			rows = append(rows, row)
+		rows = q.Group.rows(q, bindings, env.Params)
+	} else {
+		for _, b := range bindings {
+			row, key := q.row(b)
+			if !seen[key] {
+				seen[key] = true
+				rows = append(rows, row)
+			}
 		}
 	}
+	q.sortRows(rows)
 	return rows, nil
 }
 
@@ -325,6 +327,13 @@ func (q *Query) row(b binding) (Row, string) {
 			key.WriteString(strconv.Itoa(e.Order) + ",")
 		}
 		key.WriteByte(';')
+	}
+	for _, s := range q.sorts {
+		if value, ok := b.vars[s.variable]; ok && s.variable != "" {
+			key.WriteString(strconv.Quote(value))
+		} else {
+			key.WriteByte('-')
+		}
 	}
 	return row, key.String()
 }

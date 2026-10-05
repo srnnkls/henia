@@ -151,6 +151,43 @@ batches:
         claim: unnamed collected cell prints a bare N nodes line; 1 nodes wording
         reason: folded into QAG-006 printer edit
     reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b5-*
+  - batch: 6
+    tasks:
+      - QAG-006
+    reviewers:
+      - claude-opus
+      - peer-gpt6.1-sol
+      - peer-gpt6-astra
+    gates:
+      correctness: pass after fix
+      security: pass
+      performance: pass
+      architecture: pass
+      style: pass
+    admitted:
+      - id: B6-H1
+        found_by:
+          - claude-opus (general)
+        mechanism: ungrouped dedupe dropped rows differing only in a --sort variable
+        status: fixed
+      - id: B6-M1
+        found_by:
+          - peer-gpt6-astra
+          - peer-gpt6.1-sol
+        mechanism: top-level */+ error lacked the TR-1 hint
+        status: fixed
+    residual:
+      - id: B6-R1
+        found_by:
+          - peer-gpt6.1-sol
+        claim: collected captures must print one address line per node
+        reason: review prompt carried stale AD-6 text; AD-6 was changed in batch 5 (B5-O1) to one N-nodes line
+      - id: B6-R2
+        found_by:
+          - claude-opus (rereview)
+        claim: no regression test for B6-H1
+        reason: TestQuerySortKeepsRowsDifferingInSortVariable exists (cli_test.go:250) and passes; re-review diff omitted that file
+    reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b6-*
 deferred:
   - id: B4-D1
     found_by:

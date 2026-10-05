@@ -82,10 +82,21 @@ tasks:
       fix_round: B5-H1 var keys ignore implicit capture; B5-H2 JSON emits all Vars; B5-H3 non-finite operands skipped; B5-O1 collected captures summarized; re-review fixed
   - id: QAG-006
     content: "--sort ?var | @capture.key: leading - descends, first node of multi-node cells, missing last, numeric when all present values parse, stable; names count as used (FR-6, TR-1)"
-    status: pending
+    status: completed
     active_form: "Adding --sort"
     depends_on: [QAG-005]
-    files: [internal/cli/query.go, internal/pattern/read.go, internal/pattern/check.go, internal/cli/cli_test.go]
+    files: [internal/cli/query.go, internal/pattern/read.go, internal/pattern/check.go, internal/pattern/match.go, internal/pattern/sort.go, internal/pattern/sort_test.go, internal/cli/cli_test.go]
+    evidence:
+      tests:
+        - TestQuerySortReader
+        - TestQuerySortOrder
+        - TestQueryGroupCellLabels
+        - TestQuerySortKeepsRowsDifferingInSortVariable
+        - TestReadTopLevelRepeatHint
+      red: unknown flag --sort; printer said 1 nodes
+      green: go test ./... -count=1 ok; go vet + go build ok
+      tropos: 'skills by sections: loqui 1308, scope 153, git 90; --sort ?nope reader error'
+      fix_round: B6-H1 sort vars in dedupe key; B6-M1 top-level */+ hint; re-review fixed
   - id: QAG-007
     content: "Lint rules ending in (group …) with $param filters; unreferenced-skill test; docs/query.md and docs/lint-rules.md (FR-8, TR-2, TR-3)"
     status: pending
@@ -95,7 +106,7 @@ tasks:
 meta:
   created: 2026-10-05
   last_updated: "2026-10-05"
-  progress: 5/7
+  progress: 6/7
 phases:
   - id: zero-groups
     tasks: [QAG-001, QAG-002, QAG-003]
