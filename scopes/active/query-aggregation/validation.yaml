@@ -1,0 +1,111 @@
+metadata:
+  issue_type: Feature
+  created: 2026-10-05
+  questions_used: 4
+  questions_limit: 5
+  approach: "Top-level (group …) clause; zero groups via optional relation targets and top-level left joins; ordering via --sort"
+  source: scope
+ambiguity_scan:
+  scope:
+    status: clear
+    gaps: []
+  behavior:
+    status: clear
+    gaps: []
+  data_model:
+    status: clear
+    gaps: []
+  constraints:
+    status: clear
+    gaps: []
+  edge_cases:
+    status: clear
+    gaps: []
+  integration:
+    status: clear
+    gaps: []
+  terminology:
+    status: clear
+    gaps: []
+taxonomy_coverage:
+  scope: {status: covered, source: scope.md#goal}
+  behavior: {status: covered, source: scope.md#architecture-decisions}
+  data_model: {status: covered, source: "scope.md#ad-2-aggregates-and-their-null-and-duplicate-semantics"}
+  constraints: {status: covered, source: scope.md#constraints}
+  edge_cases: {status: covered, source: scope.md#gotchas--learnings}
+  integration: {status: covered, source: scope.md#key-files}
+  terminology: {status: covered, source: scope.md#architecture-decisions}
+clarification_log:
+  - id: C001
+    area: scope
+    question: "What type of work is this?"
+    answer: "Feature"
+    impact_uncertainty: 2
+    integration: scope.md frontmatter
+  - id: C002
+    area: behavior
+    question: "Where does ordering live?"
+    answer: "--sort flag outside (group …)"
+    impact_uncertainty: 6
+    integration: "scope.md#ad-5-ordering-lives-in---sort-outside-group-"
+  - id: C003
+    area: scope
+    question: "Include link-destination stripping for similarity in this scope?"
+    answer: "Separate scope/PR"
+    impact_uncertainty: 3
+    integration: scope.md#non-goals
+markers: []
+complexity_tracking: []
+gates:
+  simplicity: {status: n/a, reason: "Feature"}
+  anti_abstraction: {status: n/a, reason: "Feature"}
+  integration_first: {status: n/a, reason: "Feature"}
+deferred: []
+design_context:
+  design_opted_in: false
+  alternatives_described: true
+  alternative_descriptions:
+    - "Per-capture :group/:count keys"
+    - "Soufflé-style nested aggregates"
+    - "(asc|desc) inside (group …)"
+readiness:
+  high_priority_areas_covered: true
+  success_criteria_measurable: true
+  scope_boundaries_clear: true
+  integration_points_identified: true
+  edge_cases_addressed: true
+code_style_check:
+  present: false
+  language: go
+  status: n/a
+  violations: []
+  adherence_notes: ""
+review_config:
+  reasoning_effort: high
+  reviewers: [sol, opus, astra]
+notes: ""
+review_gate:
+  status: passed
+  reviewers:
+    - peer-gpt6.1-sol
+    - claude-opus
+    - peer-gpt6-astra
+  reviewed_at: "2026-10-05T21:10:00Z"
+  blocking_resolved: 0
+  deferred_nits: []
+  folded_medium:
+    - per-row optional fallback (astra)
+    - group before capture dedup (sol, opus)
+    - empty, keyless and unbound-key groups
+    - numeric operand and filter edge cases
+    - fresh aggregate outputs
+    - capture retention and lint :at
+    - sort over multi-node cells and missing values
+    - FR-4 counted text
+    - AC-3 split
+    - dependency graph alignment
+    - JSON number typing via Row aggregate names
+    - required top-level pattern
+    - --text meaning kept
+    - sum restricted to words/lines/chars
+  report_dir: .peer/scope-query-aggregation/20261005T203329Z-45e93b/review
