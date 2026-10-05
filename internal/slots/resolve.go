@@ -219,6 +219,7 @@ func (r *Resolution) Rows(requested []string, check bool) []Row {
 				}
 			}
 		}
+		problems = slices.DeleteFunc(problems, func(row Row) bool { return !relevant(row.Slot, requested) })
 		for _, request := range requested {
 			if !r.declares(request) {
 				problems = append(problems, Row{Slot: request, Kind: Undeclared, Path: "-"})

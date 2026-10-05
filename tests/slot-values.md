@@ -29,7 +29,6 @@ git.style global henia show acme:gitstyle conventional
 code.check.go global henia show acme:gocheck go vet ./...
 docs.template global henia show acme:tpl acme/skills/tpl/template.md
 code.check.python invalid acme/skills/pycheck/SKILL.md
-code.style.go invalid acme/skills/styled/SKILL.md
 exit 0
 ```
 

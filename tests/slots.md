@@ -70,10 +70,10 @@ Any declaration switches validation on.
 ```scrut
 $ skill "$G/tropos/skills/owner" 'henia:\n  slots:\n    code.style:\n    code.validation:\n    git.branching:\n    git.commits: list\n    review.criteria: unique\n'
 > skill "$P/.henia/skills/typo" 'henia:\n  provides:\n    code.styles:\n    git.brnching:\n'
-> slots "$P" git.branchs
+> slots "$P" git.branchs code.styles
 code.styles unknown my repo/.henia/skills/typo/SKILL.md
-git.brnching unknown my repo/.henia/skills/typo/SKILL.md
 git.branchs undeclared -
+code.styles undeclared -
 exit 0
 ```
 
