@@ -22,6 +22,7 @@ type Element struct {
 	Type          string
 	Attrs         map[string]string
 	Text          string
+	Body          string
 	Start, End    int
 	Line, EndLine int
 	Column        int
@@ -39,6 +40,7 @@ func Tree(source []byte, extra ...*Element) (*Element, error) {
 	doc := md.Parser().Parse(text.NewReader(source))
 	b := &builder{source: source}
 	root := b.file()
+	root.Body = string(source)
 	b.blocks(root, doc, true)
 	b.finish(root)
 	for _, e := range extra {
@@ -51,6 +53,7 @@ func Tree(source []byte, extra ...*Element) (*Element, error) {
 func PlainTree(source []byte) *Element {
 	b := &builder{source: source}
 	root := b.file()
+	root.Body = string(source)
 	start := -1
 	for offset := 0; offset <= len(source); {
 		end := bytes.IndexByte(source[offset:], '\n')

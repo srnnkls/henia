@@ -771,11 +771,11 @@ func (a Attr) value(e *markup.Element) (string, bool) {
 	case "text":
 		return strings.TrimSpace(e.Text), true
 	case "words":
-		return strconv.Itoa(len(similarity.Words(e.Text))), true
+		return strconv.Itoa(count(e, func(f *markup.Element) int { return len(similarity.Words(f.Text + f.Body)) })), true
 	case "lines":
-		return strconv.Itoa(e.EndLine - e.Line + 1), true
+		return strconv.Itoa(count(e, lines)), true
 	case "chars":
-		return strconv.Itoa(utf8.RuneCountInString(e.Text)), true
+		return strconv.Itoa(count(e, func(f *markup.Element) int { return utf8.RuneCountInString(f.Text + f.Body) })), true
 	case "norm":
 		return strings.ToLower(strings.Join(strings.Fields(e.Text), " ")), true
 	case "node":
@@ -789,6 +789,16 @@ func (a Attr) value(e *markup.Element) (string, bool) {
 	}
 	value, ok := e.Attrs[a.Key]
 	return value, ok
+}
+
+func lines(e *markup.Element) int {
+	if e.Type != "file" {
+		return e.EndLine - e.Line + 1
+	}
+	if e.Body == "" {
+		return 0
+	}
+	return strings.Count(e.Body[:len(e.Body)-1], "\n") + 1
 }
 
 func (m *matcher) test(a Attr, e *markup.Element) bool {
@@ -952,4 +962,17 @@ func (q *Query) Impossible(env Environment) bool {
 		}
 	}
 	return false
+}
+
+func count(e *markup.Element, measure func(*markup.Element) int) int {
+	if e.Type != "skill" {
+		return measure(e)
+	}
+	total := 0
+	for _, child := range e.Children {
+		if child.Type == "file" {
+			total += measure(child)
+		}
+	}
+	return total
 }

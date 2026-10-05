@@ -2,10 +2,12 @@ package library
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/srnnkls/henia/internal/markup"
+	"github.com/srnnkls/henia/internal/pattern"
 )
 
 func TestCorpus(t *testing.T) {
@@ -44,5 +46,108 @@ func TestCorpus(t *testing.T) {
 	}
 	if script := a.Children[2]; len(script.Children) != 2 {
 		t.Errorf("run.sh paragraphs = %d", len(script.Children))
+	}
+}
+
+func countFixture(t *testing.T) *Library {
+	t.Helper()
+	root := t.TempDir()
+	skills := filepath.Join(root, ProjectDir, SkillsDir)
+	write(t, filepath.Join(skills, "a", "SKILL.md"), "---\nname: a\ndescription: Alpha beta gamma.\n---\n# Title\n\nOne two three")
+	write(t, filepath.Join(skills, "a", "run.sh"), "echo one\n\necho two")
+	return Open(root, nil)
+}
+
+func matches(t *testing.T, corpus *Corpus, query string) int {
+	t.Helper()
+	q, err := pattern.Read(query)
+	if err != nil {
+		t.Fatalf("read %q: %v", query, err)
+	}
+	rows, err := q.Run(corpus.Root, pattern.Environment{Resolve: corpus})
+	if err != nil {
+		t.Fatalf("run %q: %v", query, err)
+	}
+	return len(rows)
+}
+
+func TestCountsAuthored(t *testing.T) {
+	corpus := countFixture(t).Corpus(nil)
+	for query, want := range map[string]int{
+		`(skill :id "a" (file :path "SKILL.md" :words 4))`:  1,
+		`(skill :id "a" (file :path "SKILL.md" :chars 22))`: 1,
+		`(skill :id "a" (file :path "SKILL.md" :lines 3))`:  1,
+		`(skill :id "a" (file :path "run.sh" :words 4))`:    1,
+		`(skill :id "a" (file :path "run.sh" :chars 18))`:   1,
+		`(skill :id "a" (file :path "run.sh" :lines 3))`:    1,
+		`(skill :id "a" :words 8)`:                          1,
+		`(skill :id "a" :chars 40)`:                         1,
+		`(skill :id "a" :lines 6)`:                          1,
+		`(skill :id "a" (file :contains "one"))`:            0,
+		`(skill :id "a" :contains "one")`:                   0,
+	} {
+		if got := matches(t, corpus, query); got != want {
+			t.Errorf("%s: %d rows, want %d", query, got, want)
+		}
+	}
+}
+
+func TestCountsRendered(t *testing.T) {
+	corpus := countFixture(t).Corpus(&Rendering{
+		Body:      func(Entry) string { return "# Title\n\nOne two three four five\n\nsix" },
+		Reference: func(Entry) *regexp.Regexp { return nil },
+	})
+	for query, want := range map[string]int{
+		`(skill :id "a" (file :path "SKILL.md" :words 7))`:  1,
+		`(skill :id "a" (file :path "SKILL.md" :chars 37))`: 1,
+		`(skill :id "a" (file :path "SKILL.md" :lines 5))`:  1,
+		`(skill :id "a" :words 11)`:                         1,
+		`(skill :id "a" :chars 55)`:                         1,
+		`(skill :id "a" :lines 8)`:                          1,
+	} {
+		if got := matches(t, corpus, query); got != want {
+			t.Errorf("%s: %d rows, want %d", query, got, want)
+		}
+	}
+}
+
+func TestCountsDependencyStub(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a", "SKILL.md")
+	write(t, path, "---\nname: a\ndescription: Alpha beta gamma.\n---\n# Title\n\nOne two three")
+	corpus := Documents([]Document{{Path: path, Kind: "skill", Dependency: true}})
+	for query, want := range map[string]int{
+		`(skill :id "a" (file :path "SKILL.md" :lines 3))`: 1,
+		`(skill :id "a" (file :path "SKILL.md" :words 4))`: 1,
+		`(skill :id "a" :lines 3)`:                         1,
+		`(skill :id "a" :words 4)`:                         1,
+	} {
+		if got := matches(t, corpus, query); got != want {
+			t.Errorf("%s: %d rows, want %d", query, got, want)
+		}
+	}
+}
+
+func TestCountsMalformedFrontmatter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a", "SKILL.md")
+	write(t, path, "---\nbroken: [\n---\none two\n")
+	corpus := Documents([]Document{{Path: path, Kind: "skill"}})
+	for query, want := range map[string]int{
+		`(skill :id "a" (file :path "SKILL.md" :words 2))`:     1,
+		`(skill :id "a" (file :path "SKILL.md" :chars 8))`:     1,
+		`(skill :id "a" (file :path "SKILL.md" :lines 1))`:     1,
+		`(skill :id "a" (file (problem :kind "frontmatter")))`: 1,
+	} {
+		if got := matches(t, corpus, query); got != want {
+			t.Errorf("%s: %d rows, want %d", query, got, want)
+		}
+	}
+}
+
+func TestCountsEmptyBody(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a", "SKILL.md")
+	write(t, path, "---\nname: a\ndescription: Alpha.\n---\n")
+	corpus := Documents([]Document{{Path: path, Kind: "skill"}})
+	if got := matches(t, corpus, `(skill :id "a" (file :path "SKILL.md" :lines 0))`); got != 1 {
+		t.Errorf("empty body :lines 0: %d rows, want 1", got)
 	}
 }

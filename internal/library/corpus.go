@@ -149,7 +149,7 @@ func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render
 	}
 	art, err := artifact.Parse(data)
 	if err != nil {
-		file := &markup.Element{Type: "file", Attrs: attrs, Line: 1, EndLine: 1}
+		file := &markup.Element{Type: "file", Attrs: attrs, Body: string(withoutFrontmatter(data)), Line: 1, EndLine: 1}
 		c.adopt(file, problem("frontmatter", err.Error(), 1, 1))
 		c.adopt(parent, file)
 		c.Problems = append(c.Problems, fmt.Sprintf("%s: %v", physical, err))
@@ -225,7 +225,7 @@ func (c *Corpus) stub(parent *markup.Element, physical, rel, kind string, _ func
 	if err != nil {
 		return
 	}
-	file := &markup.Element{Type: "file", Attrs: map[string]string{"path": rel, "main": fmt.Sprint(rel == "SKILL.md"), "kind": kind, "file": physical, "dependency": "true"}}
+	file := &markup.Element{Type: "file", Attrs: map[string]string{"path": rel, "main": fmt.Sprint(rel == "SKILL.md"), "kind": kind, "file": physical, "dependency": "true"}, Body: art.Body}
 	if kind == "skill" || kind == "command" || kind == "agent" {
 		name, _ := art.Frontmatter["name"].(string)
 		if name == "" {
@@ -241,6 +241,17 @@ func (c *Corpus) stub(parent *markup.Element, physical, rel, kind string, _ func
 		c.adopt(file, &markup.Element{Type: "section", Attrs: map[string]string{"id": section.Anchor, "title": section.Title, "level": strconv.Itoa(section.Level)}})
 	}
 	c.adopt(parent, file)
+}
+
+func withoutFrontmatter(data []byte) []byte {
+	if !bytes.HasPrefix(data, []byte("---\n")) {
+		return data
+	}
+	end := bytes.Index(data[3:], []byte("\n---\n"))
+	if end < 0 {
+		return data
+	}
+	return data[3+end+len("\n---\n"):]
 }
 
 func problem(kind, message string, line, column int) *markup.Element {

@@ -49,10 +49,21 @@ tasks:
       fix_round: B3-H1 Impossible skips optional members; B3-H2 before() counts scores; re-review fixed
   - id: QAG-004
     content: ":words/:chars/:lines on file over the text the query reads (rendered body by default, authored with --canonical and lint, frontmatter excluded, resources whole), on skill summed over files; :text unchanged (FR-4)"
-    status: pending
+    status: completed
     active_form: "Deriving counts for skill and file nodes"
     depends_on: [QAG-003]
     files: [internal/markup/tree.go, internal/library/corpus.go, internal/pattern/match.go, internal/library/corpus_test.go, internal/pattern/counts_test.go]
+    evidence:
+      tests:
+        - TestCountsAuthored
+        - TestCountsRendered
+        - TestCountsDependencyStub
+        - TestCountsMalformedFrontmatter
+        - TestCountsEmptyBody
+      red: '12 assertion failures: skill/file :words/:chars were 0'
+      green: go test ./... -count=1 ok; go vet + go build ok
+      tropos: (file :words 0) 0 rows; 3 skills remain 0 from the duplicate-id corpus quirk (gotcha)
+      fix_round: B4-H1 file :lines from Body; B4-H2 fallback strips frontmatter; re-review fixed
   - id: QAG-005
     content: "(group key* aggregate*) clause over bindings before capture dedup: reader (fresh outputs, comparisons), checks, evaluation incl. empty/keyless/unbound-key groups, grouped Row output in text and --json, --count counts groups (FR-5, FR-7, TR-1)"
     status: pending
@@ -74,7 +85,7 @@ tasks:
 meta:
   created: 2026-10-05
   last_updated: "2026-10-05"
-  progress: 3/7
+  progress: 4/7
 phases:
   - id: zero-groups
     tasks: [QAG-001, QAG-002, QAG-003]
