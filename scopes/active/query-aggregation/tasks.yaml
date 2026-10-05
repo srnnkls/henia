@@ -1,0 +1,64 @@
+scope: query-aggregation
+code: QAG
+next_id: 8
+tasks:
+  - id: QAG-001
+    content: "Optional siblings and relation targets fall back per enclosing row; ? and * on relation targets yield one empty row when nothing related unifies (FR-1)"
+    status: completed
+    active_form: "Making optional fallback per enclosing row"
+    depends_on: []
+    files: [internal/pattern/match.go, internal/pattern/relation_test.go]
+    evidence:
+      tests:
+        - TestOptionalRelationTargetFallsBackPerRow
+        - TestOptionalSiblingFallsBackPerRow
+      red: '6 assertion failures: relation targets ignored quant; sibling fallback only without any candidate'
+      green: go test ./... ok; go vet + go build ok
+  - id: QAG-002
+    content: "Optional-binding check errors only without a required binding in the same or an enclosing scope (FR-2)"
+    status: pending
+    active_form: "Relaxing the optional-binding check"
+    depends_on:
+      - QAG-001
+    files: [internal/pattern/check.go, internal/pattern/check_test.go]
+  - id: QAG-003
+    content: "Top-level P? as left join after required members; * and + still rejected at top level (FR-3, TR-1)"
+    status: pending
+    active_form: "Adding top-level optional members as left joins"
+    depends_on: [QAG-002]
+    files: [internal/pattern/read.go, internal/pattern/check.go, internal/pattern/match.go, internal/pattern/leftjoin_test.go]
+  - id: QAG-004
+    content: ":words/:chars/:lines on file over the text the query reads (rendered body by default, authored with --canonical and lint, frontmatter excluded, resources whole), on skill summed over files; :text unchanged (FR-4)"
+    status: pending
+    active_form: "Deriving counts for skill and file nodes"
+    depends_on: [QAG-003]
+    files: [internal/markup/tree.go, internal/library/corpus.go, internal/pattern/match.go, internal/library/corpus_test.go, internal/pattern/counts_test.go]
+  - id: QAG-005
+    content: "(group key* aggregate*) clause over bindings before capture dedup: reader (fresh outputs, comparisons), checks, evaluation incl. empty/keyless/unbound-key groups, grouped Row output in text and --json, --count counts groups (FR-5, FR-7, TR-1)"
+    status: pending
+    active_form: "Implementing the group clause"
+    depends_on: [QAG-004]
+    files: [internal/pattern/read.go, internal/pattern/check.go, internal/pattern/match.go, internal/pattern/group.go, internal/pattern/group_test.go, internal/cli/query.go, internal/cli/cli_test.go]
+  - id: QAG-006
+    content: "--sort ?var | @capture.key: leading - descends, first node of multi-node cells, missing last, numeric when all present values parse, stable; names count as used (FR-6, TR-1)"
+    status: pending
+    active_form: "Adding --sort"
+    depends_on: [QAG-005]
+    files: [internal/cli/query.go, internal/pattern/read.go, internal/pattern/check.go, internal/cli/cli_test.go]
+  - id: QAG-007
+    content: "Lint rules ending in (group …) with $param filters; unreferenced-skill test; docs/query.md and docs/lint-rules.md (FR-8, TR-2, TR-3)"
+    status: pending
+    active_form: "Wiring grouping into lint and documenting it"
+    depends_on: [QAG-006]
+    files: [internal/pattern/module.go, internal/lint/module.go, internal/lint/group_test.go, docs/query.md, docs/lint-rules.md]
+meta:
+  created: 2026-10-05
+  last_updated: "2026-10-05"
+  progress: 1/7
+phases:
+  - id: zero-groups
+    tasks: [QAG-001, QAG-002, QAG-003]
+  - id: counts
+    tasks: [QAG-004]
+  - id: aggregation
+    tasks: [QAG-005, QAG-006, QAG-007]

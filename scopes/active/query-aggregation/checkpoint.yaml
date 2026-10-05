@@ -1,0 +1,29 @@
+checkpoint:
+  scope_name: query-aggregation
+  scope_path: scopes/active/query-aggregation
+  branch: feat/query-aggregation
+  last_commit: 8fbb3c0
+  updated_at: "2026-10-05T20:42:41Z"
+  batch:
+    number: 1
+    tasks: [QAG-001]
+    phase: review
+    status: in_progress
+  routing_snapshot:
+    epoch_id: 20261005T203329Z-45e93b
+    tester: {agent: inherit, effort: inherit, class: native}
+    implementer: {agent: inherit, effort: inherit, class: native}
+    reviewer:
+      agents:
+        - {agent: peer-gpt6.1-sol, effort: high, class: peer}
+        - {agent: claude-opus, effort: high, class: native}
+        - {agent: peer-gpt6-astra, effort: high, class: peer}
+  reports:
+    tester: {QAG-001: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b1-tester-QAG-001}
+    implementer:
+      QAG-001: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b1-implementer-QAG-001
+    review:
+      general: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b1-review-general
+      architecture: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b1-review-architecture
+      compliance: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b1-review-compliance
+  in_flight_mutations: []

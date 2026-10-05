@@ -1,0 +1,9 @@
+version: 1
+epoch:
+  id: 20261005T203329Z-45e93b
+  started_at: 2026-10-05T20:33:29Z
+  updated_at: 2026-10-05T20:33:29Z
+routing:
+  tester: {agent: inherit, effort: inherit}
+  implementer: {agent: inherit, effort: inherit}
+  reviewer: {agents: [peer-gpt6.1-sol, claude-opus, peer-gpt6-astra], effort: high}

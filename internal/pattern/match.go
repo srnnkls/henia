@@ -374,8 +374,10 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 		if err != nil {
 			return nil, err
 		}
+		optional := chain.optional()
 		var next []partial
 		for _, r := range results {
+			kept := len(next)
 			for _, c := range matched {
 				if c.first >= 0 && c.first <= r.last {
 					continue
@@ -386,6 +388,9 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 				if joined, ok := m.unify(r.b, c.b); ok {
 					next = append(next, partial{joined, max(r.last, c.last)})
 				}
+			}
+			if optional && len(next) == kept {
+				next = append(next, r)
 			}
 		}
 		results = next
@@ -399,8 +404,10 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 			}
 			targets = append(targets, bindings...)
 		}
+		optional := relation.Target.Quant == '?' || relation.Target.Quant == '*'
 		var next []partial
 		for _, r := range results {
+			kept := len(next)
 			for _, t := range targets {
 				if m.produced++; m.produced > maxBindings {
 					return nil, ErrTooMany
@@ -408,6 +415,9 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 				if joined, ok := m.unify(r.b, t); ok {
 					next = append(next, partial{joined, r.last})
 				}
+			}
+			if optional && len(next) == kept {
+				next = append(next, r)
 			}
 		}
 		results = next
@@ -446,18 +456,19 @@ type chainMatch struct {
 	first, last int
 }
 
-func (m *matcher) chain(c Chain, e *markup.Element) ([]chainMatch, error) {
-	pivot := -1
+func (c Chain) pivot() int {
 	for i, l := range c.Links {
 		if l.Pattern.Quant == 0 || l.Pattern.Quant == '+' {
-			pivot = i
-			break
+			return i
 		}
 	}
-	optional := pivot < 0
-	if optional {
-		pivot = 0
-	}
+	return -1
+}
+
+func (c Chain) optional() bool { return c.pivot() < 0 }
+
+func (m *matcher) chain(c Chain, e *markup.Element) ([]chainMatch, error) {
+	pivot := max(c.pivot(), 0)
 	candidates := descendants(e, c.Links[0].Direct && pivot == 0)
 	var out []chainMatch
 	for _, d := range candidates {
@@ -524,9 +535,6 @@ func (m *matcher) chain(c Chain, e *markup.Element) ([]chainMatch, error) {
 			}
 		}
 		out = append(out, matches...)
-	}
-	if optional && len(out) == 0 {
-		out = []chainMatch{{binding{}, -1, -1}}
 	}
 	return out, nil
 }

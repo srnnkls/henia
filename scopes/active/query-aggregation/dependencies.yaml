@@ -1,0 +1,55 @@
+phases:
+  - id: zero-groups
+    name: Zero groups
+    tasks:
+      - id: QAG-001
+        files: [internal/pattern/match.go, internal/pattern/relation_test.go]
+        depends_on: []
+      - id: QAG-002
+        files: [internal/pattern/check.go, internal/pattern/check_test.go]
+        depends_on:
+          - QAG-001
+      - id: QAG-003
+        files: [internal/pattern/read.go, internal/pattern/check.go, internal/pattern/match.go, internal/pattern/leftjoin_test.go]
+        depends_on: [QAG-002]
+  - id: counts
+    name: Skill and file counts
+    tasks:
+      - id: QAG-004
+        files: [internal/markup/tree.go, internal/library/corpus.go, internal/pattern/match.go, internal/library/corpus_test.go, internal/pattern/counts_test.go]
+        depends_on: [QAG-003]
+  - id: aggregation
+    name: Aggregation
+    tasks:
+      - id: QAG-005
+        files: [internal/pattern/read.go, internal/pattern/check.go, internal/pattern/match.go, internal/pattern/group.go, internal/pattern/group_test.go, internal/cli/query.go, internal/cli/cli_test.go]
+        depends_on: [QAG-004]
+      - id: QAG-006
+        files: [internal/cli/query.go, internal/pattern/read.go, internal/pattern/check.go, internal/cli/cli_test.go]
+        depends_on: [QAG-005]
+      - id: QAG-007
+        files: [internal/pattern/module.go, internal/lint/module.go, internal/lint/group_test.go, docs/query.md, docs/lint-rules.md]
+        depends_on: [QAG-006]
+batches:
+  - batch: 1
+    tasks:
+      - QAG-001
+  - batch: 2
+    tasks:
+      - QAG-002
+  - batch: 3
+    tasks:
+      - QAG-003
+  - batch: 4
+    tasks:
+      - QAG-004
+  - batch: 5
+    tasks:
+      - QAG-005
+  - batch: 6
+    tasks:
+      - QAG-006
+  - batch: 7
+    tasks:
+      - QAG-007
+actions: []

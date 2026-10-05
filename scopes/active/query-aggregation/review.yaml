@@ -1,0 +1,15 @@
+batches:
+  - batch: 1
+    tasks: [QAG-001]
+    reviewers: [claude-opus, peer-gpt6.1-sol, peer-gpt6-astra]
+    roles: [general, architecture, compliance]
+    gates: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
+    admitted: []
+    residual:
+      - id: B1-R1
+        found_by: [peer-gpt6.1-sol]
+        location: internal/pattern/match.go:392
+        claim: "Optional fallback rows bypass maxBindings; (heading (link)? @l) @h over 100001 headings no longer returns ErrTooMany."
+        reason: "No wrong outcome: maxBindings bounds join combinations; a fallback keeps at most one row per enclosing row and multiplies nothing, as uncounted single-pattern rows like (heading) @h already do."
+    reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b1-review-*
+deferred: []
