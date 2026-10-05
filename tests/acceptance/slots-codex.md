@@ -13,14 +13,14 @@ staged
 ```
 
 ```scrut
-$ cd "$W/project" && henia slots --global "$W/home/codex/skills" code.style.go review.criteria | cut -f1,2
+$ cd "$W/project" && XDG_DATA_HOME="$W/data" XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/config" henia slots code.style.go review.criteria | cut -f1,2
 code.style.go	project
 review.criteria	project
 review.criteria	global
 ```
 
 ```scrut
-$ cd "$W/project" && ZDOTDIR="$W/zdotdir" CODEX_HOME="$W/home/codex" codex exec --skip-git-repo-check --sandbox read-only -o "$W/codex.txt" 'Use the $code skill: run its context commands, then read every SKILL.md listed as a slot provider. Reply with each canary token you found, one per line, and nothing else.' > "$W/codex.log" 2>&1; grep -o 'CANARY-[A-Z][A-Z-]*' "$W/codex.txt" | sort -u
+$ cd "$W/project" && ZDOTDIR="$W/zdotdir" XDG_DATA_HOME="$W/data" XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/config" CODEX_HOME="$W/home/codex" codex exec --skip-git-repo-check --sandbox read-only -o "$W/codex.txt" 'Use the $code skill: run its context commands, then run every henia show command listed as a slot provider. Reply with each canary token you found, one per line, and nothing else.' > "$W/codex.log" 2>&1; grep -o 'CANARY-[A-Z][A-Z-]*' "$W/codex.txt" | sort -u
 CANARY-ACME-REVIEW
 CANARY-HOUSE-GO
 CANARY-HOUSE-REVIEW

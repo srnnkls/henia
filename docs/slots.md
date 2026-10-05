@@ -165,8 +165,9 @@ declares.
 ## Acceptance tests
 
 `mise run test:acceptance` stages [the fixture](../tests/acceptance/slots) with
-Phora: a pinned Tropos built by the henia under test, third-party global skills
-and a project. Claude Code and Codex then run Tropos's `code` skill in isolated
+Phora: a pinned Tropos built by the henia under test, an isolated Henia
+library holding Tropos and a third-party global package, and a project with its
+own providers. Claude Code and Codex then run Tropos's `code` skill in isolated
 homes and report the canaries of the providers they read. `TROPOS=<checkout>`
 links a local Tropos working tree instead of the pin. The Claude Code document
 needs `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`; each document is skipped

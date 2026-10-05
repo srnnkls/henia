@@ -7,7 +7,7 @@ mise = true
 
 [sources.tropos]
 git = "https://github.com/srnnkls/tropos.git"
-rev = "58ac749f61e6844d43f5ef2930d7cad00a17cb70"
+rev = "d2c542b1e2715d1311286818d3da1eb4b1885887"
 transitive = true
 
 [sources.global]
@@ -17,9 +17,15 @@ deploy = "link"
 [targets.claude]
 path = "home/claude/skills"
 sources.tropos = { offer = "claude", take = [{ "skills/" = "." }], collapse = false }
-sources.global = { collapse = false }
 
 [targets.codex]
 path = "home/codex/skills"
 sources.tropos = { offer = "codex", take = [{ "skills/" = "." }], collapse = false }
+
+[targets.tropos]
+path = "data/henia/packages/global/tropos"
+sources.tropos = { offer = "library", collapse = false }
+
+[targets.acme]
+path = "data/henia/packages/global/acme"
 sources.global = { collapse = false }

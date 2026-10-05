@@ -1,8 +1,9 @@
 ---
 name: acme-review
 description: Acme review criteria. Read only when listed as a slot provider.
-metadata:
-  provides: review.criteria
+henia:
+  provides:
+    review.criteria:
 ---
 
 Canary: CANARY-ACME-REVIEW
