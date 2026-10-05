@@ -150,6 +150,10 @@ func PackagesDir(scope string) string {
 	return filepath.Join(dir(func() string { return xdg.DataHome }), "packages", scope)
 }
 
+func InstallManifest(harness string) string {
+	return filepath.Join(dir(func() string { return xdg.StateHome }), "install", harness+".json")
+}
+
 func StateDir(scope string) string {
 	return filepath.Join(dir(func() string { return xdg.StateHome }), "packages", scope)
 }

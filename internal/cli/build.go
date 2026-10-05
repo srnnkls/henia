@@ -38,64 +38,22 @@ func newBuildCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			harnesses := cfg.Harness
-			if len(harnesses) == 0 {
-				return fmt.Errorf("no harnesses configured")
-			}
-			if len(selected) > 0 {
-				harnesses = make(map[string]henia.Harness, len(selected))
-				for _, name := range selected {
-					h, ok := cfg.Harness[name]
-					if !ok {
-						return fmt.Errorf("unknown harness %q", name)
-					}
-					harnesses[name] = h
-				}
-			}
-			for name, h := range harnesses {
-				if len(h.Artifacts) == 0 {
-					h.Artifacts = cfg.Artifacts
-				}
-				harnesses[name] = h
-			}
 			destination := output
 			if !cmd.Flags().Changed("output") {
 				destination = cfg.Build.Output
 			}
-			compile := build.Run
-			if clean || cfg.Build.Clean {
-				compile = build.RunClean
-			}
 			if err := ensurePackages(cmd, source); err != nil {
 				return err
 			}
-			sources := []string{source}
-			var dependencies []build.Dependency
+			var dependencies []library.Package
 			for _, dependency := range library.Open(source, nil).Packages {
-				if dependency.Tier != library.Dependency {
-					continue
+				if dependency.Tier == library.Dependency {
+					dependencies = append(dependencies, dependency)
 				}
-				sources = append(sources, dependency.Root)
-				own := map[string]henia.Harness{}
-				if data, err := os.ReadFile(dependency.Config); err == nil {
-					if own, err = config.Harnesses(data); err != nil {
-						return fmt.Errorf("package %s: %w", dependency.Name, err)
-					}
-				}
-				dependencies = append(dependencies, build.Dependency{Root: dependency.Root, Harnesses: own})
 			}
-			result, err := compile(cmd.Context(), sources, destination, harnesses, dependencies...)
+			result, err := compilePackage(cmd, source, cfg, selected, destination, clean || cfg.Build.Clean, dependencies)
 			if err != nil {
 				return err
-			}
-			for _, warning := range result.Warnings {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s\n", warning)
-			}
-			if err := errors.Join(result.Errors...); err != nil {
-				return err
-			}
-			if result.Built == 0 {
-				return fmt.Errorf("no artifacts found for selected harnesses")
 			}
 			for dir := filepath.Clean(destination); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
 				if filepath.Base(dir) == library.ProjectDir {
@@ -142,4 +100,57 @@ func optionalConfig(cmd *cobra.Command, source string) (*config.Config, error) {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 	return config.LoadOptional(configPath)
+}
+
+func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selected []string, destination string, clean bool, dependencies []library.Package) (*build.Result, error) {
+	harnesses := cfg.Harness
+	if len(harnesses) == 0 {
+		return nil, fmt.Errorf("no harnesses configured")
+	}
+	if len(selected) > 0 {
+		harnesses = make(map[string]henia.Harness, len(selected))
+		for _, name := range selected {
+			h, ok := cfg.Harness[name]
+			if !ok {
+				return nil, fmt.Errorf("unknown harness %q", name)
+			}
+			harnesses[name] = h
+		}
+	}
+	for name, h := range harnesses {
+		if len(h.Artifacts) == 0 {
+			h.Artifacts = cfg.Artifacts
+		}
+		harnesses[name] = h
+	}
+	compile := build.Run
+	if clean {
+		compile = build.RunClean
+	}
+	sources := []string{source}
+	var layers []build.Dependency
+	for _, dependency := range dependencies {
+		sources = append(sources, dependency.Root)
+		own := map[string]henia.Harness{}
+		if data, err := os.ReadFile(dependency.Config); err == nil {
+			if own, err = config.Harnesses(data); err != nil {
+				return nil, fmt.Errorf("package %s: %w", dependency.Name, err)
+			}
+		}
+		layers = append(layers, build.Dependency{Root: dependency.Root, Harnesses: own})
+	}
+	result, err := compile(cmd.Context(), sources, destination, harnesses, layers...)
+	if err != nil {
+		return nil, err
+	}
+	for _, warning := range result.Warnings {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s\n", warning)
+	}
+	if err := errors.Join(result.Errors...); err != nil {
+		return nil, err
+	}
+	if result.Built == 0 {
+		return nil, fmt.Errorf("no artifacts found for selected harnesses")
+	}
+	return result, nil
 }

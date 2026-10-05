@@ -121,18 +121,13 @@ func phoraManifest(dependencies map[string]Dependency, scope Scope) ([]byte, err
 				fmt.Fprintf(&b, "%s = %s\n", ref.key, strconv.Quote(ref.value))
 			}
 		}
-		include := []string{"henia.toml", ".henia/henia.toml", ".henia/lint/"}
-		if len(d.Skills) == 0 {
-			include = append(include, "skills/")
+		if len(d.Skills) > 0 {
+			quoted := []string{strconv.Quote("henia.toml"), strconv.Quote(".henia/")}
+			for _, skill := range d.Skills {
+				quoted = append(quoted, strconv.Quote("skills/"+skill+"/"))
+			}
+			fmt.Fprintf(&b, "include = [%s]\n", strings.Join(quoted, ", "))
 		}
-		for _, skill := range d.Skills {
-			include = append(include, "skills/"+skill+"/")
-		}
-		var quoted []string
-		for _, pattern := range include {
-			quoted = append(quoted, strconv.Quote(pattern))
-		}
-		fmt.Fprintf(&b, "include = [%s]\n", strings.Join(quoted, ", "))
 		fmt.Fprintf(&b, "\n[targets.%s]\npath = %s\nsources = [%s]\n", key, strconv.Quote(filepath.ToSlash(filepath.Join(relative, key))), strconv.Quote(key))
 	}
 	return []byte(b.String()), nil

@@ -15,6 +15,7 @@ Available Commands:
   completion  Generate the autocompletion script for the specified shell
   context     Print a skill's runtime context
   help        Help about any command
+  install     Write the global skill packages into harness directories
   lint        Check skill metadata, references, duplication and freshness
   ls          List the skills in the library
   preload     Run one skill preload under Henia's sandbox and refusal rules

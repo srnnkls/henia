@@ -58,6 +58,13 @@ func ensurePackages(cmd *cobra.Command, project string) error {
 	return nil
 }
 
+func syncThenInstall(cmd *cobra.Command, scope deps.Scope, update, global bool) error {
+	if err := syncPackages(cmd, scope, update); err != nil || !global {
+		return err
+	}
+	return install(cmd, nil, false, false)
+}
+
 func syncPackages(cmd *cobra.Command, scope deps.Scope, update bool) error {
 	report, err := deps.Sync(cmd.Context(), scope, update)
 	if err != nil {
@@ -100,7 +107,7 @@ fetches it for every project.`,
 			if offline {
 				return nil
 			}
-			return syncPackages(cmd, scope, false)
+			return syncThenInstall(cmd, scope, false, global)
 		},
 	}
 	cmd.Flags().StringVar(&d.Git, "git", "", "Git URL of the package")
@@ -129,7 +136,7 @@ func newRemoveCommand() *cobra.Command {
 			if err := deps.Remove(scope.Manifest, args[0]); err != nil {
 				return err
 			}
-			return syncPackages(cmd, scope, false)
+			return syncThenInstall(cmd, scope, false, global)
 		},
 	}
 	cmd.Flags().BoolVar(&global, "global", false, "Use the user henia.toml and the shared package store")
@@ -147,7 +154,7 @@ func newSyncCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return syncPackages(cmd, scope, false)
+			return syncThenInstall(cmd, scope, false, global)
 		},
 	}
 	cmd.Flags().BoolVar(&global, "global", false, "Use the user henia.toml and the shared package store")
@@ -165,7 +172,7 @@ func newUpdateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return syncPackages(cmd, scope, true)
+			return syncThenInstall(cmd, scope, true, global)
 		},
 	}
 	cmd.Flags().BoolVar(&global, "global", false, "Use the user henia.toml and the shared package store")

@@ -28,6 +28,11 @@ type Config struct {
 	Resources ResourceOptions            `toml:"resources,omitempty"`
 	Depends   map[string]deps.Dependency `toml:"dependencies,omitempty"`
 	Slots     map[string]SlotOptions     `toml:"slots,omitempty"`
+	Install   map[string]InstallTarget   `toml:"install,omitempty"`
+}
+
+type InstallTarget struct {
+	Path string `toml:"path"`
 }
 
 type SlotOptions struct {

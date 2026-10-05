@@ -83,7 +83,33 @@ Packages land in a store shared by every project, under
 variables fall back to the platform's directories: `~/.config`, `~/.local/share`
 and `~/.local/state` on Linux, `~/Library/Application Support` on macOS.
 
-## Runtime
+## Installing
+
+`henia install` writes the global packages into harness directories: static
+skills, hybrid heads, the catalog skill, agents and harness files, each rendered
+by the package that configures that harness, with the other global packages as
+its dependencies. The user `henia.toml` names the directories:
+
+```toml
+[dependencies.tropos]
+git = "https://github.com/srnnkls/tropos.git"
+branch = "main"
+
+[install.claude]
+path = "~/.claude"
+
+[install.codex]
+path = "~/.codex"
+```
+
+`henia sync --global`, `update --global`, `add --global` and `rm --global`
+install afterwards, so a harness copy and the library it reads from come from
+the same `henia.lock`. Henia records what it wrote under
+`$XDG_STATE_HOME/henia/install/<harness>.json`. It never overwrites a file it
+did not write, or one edited since, without `--force`, never writes through a
+symlink, and removes files a previous install wrote that the packages no longer
+produce.
+
 
 ```
 henia ls [--json]
