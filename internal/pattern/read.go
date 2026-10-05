@@ -15,6 +15,7 @@ type Query struct {
 	Absent   []*Pattern
 	Captures []string
 	Semantic bool
+	Group    *Group
 	params   map[string]bool
 }
 
@@ -337,6 +338,22 @@ func (r *reader) query(end tokenKind) (*Query, error) {
 			}
 			continue
 		}
+		if r.peek().kind == tOpen && isGroup(head) {
+			open := r.next()
+			r.next()
+			if q.Group != nil {
+				return nil, &Error{Offset: open.pos, Message: "a query takes one (group ...)", Hint: "list every key and aggregate in one (group ...)"}
+			}
+			g, err := r.group(open)
+			if err != nil {
+				return nil, err
+			}
+			q.Group = g
+			continue
+		}
+		if q.Group != nil {
+			return nil, &Error{Offset: r.peek().pos, Message: "(group ...) follows the patterns of a query", Hint: "move the pattern before (group ...)"}
+		}
 		if r.peek().kind == tOpen && head.kind == tSymbol && head.text == "not" {
 			r.at += 2
 			p, err := r.pattern("")
@@ -411,6 +428,9 @@ func (r *reader) pattern(quants string) (*Pattern, error) {
 				return nil, err
 			}
 			return r.pattern(quants)
+		}
+		if isGroup(head) {
+			return nil, &Error{Offset: head.pos, Message: "(group ...) belongs at the top level of a query, after its patterns", Hint: `e.g. (code :lang ?l) @c (group ?l (count @c ?n))`}
 		}
 		if isForm(head) {
 			return nil, &Error{Offset: head.pos, Message: fmt.Sprintf("(%s ...) belongs inside a pattern", head.text), Hint: `e.g. (skill :id "X" (` + head.text + ` (skill) @t))`}

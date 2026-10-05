@@ -79,7 +79,7 @@ An aggregate takes one trailing comparison, `(>, >=, <, <=)` with a number or `$
 
 #### AD-6: Output
 
-- Text: per group, the bound key and aggregate variables on one line (`?l=bash  ?n=41`), then every capture in the existing format, one address line per node. `--text` keeps its meaning of whole-node text. Ungrouped rows add the variable line only for variables named by `--sort`.
+- Text: per group, the bound key and aggregate variables on one line (`?l=bash  ?n=41`), then each key capture in the existing format, one address line per node, and each other capture as one line `@c  N nodes`. `--text` prints every node of every capture with its whole text. Ungrouped rows add the variable line only for variables named by `--sort`.
 - `--json`: captures as today, plus every bound variable under a `"?name"` key. Aggregate outputs are JSON numbers, every other variable a string; `Row` gains the set of its aggregate output names to carry that distinction.
 - `--count` prints the number of rows after grouping, i.e. groups.
 - Every non-key capture, aggregate inputs included, collects the distinct non-empty nodes of its group into one cell in document order; an all-empty capture stays empty. Lint `:at` and `:related` on such a cell take its first node, as they do today. Unaggregated non-key variables are dropped.

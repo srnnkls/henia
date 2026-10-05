@@ -107,12 +107,16 @@ func (q *Query) check() error {
 	if problem != nil {
 		return problem
 	}
+	if err := q.Group.check(q, mentions); err != nil {
+		return err
+	}
+	uses := q.Group.uses()
 	count := map[string]int{}
 	for _, m := range mentions {
 		count[m.name]++
 	}
 	for _, m := range mentions {
-		if count[m.name] == 1 && !m.output {
+		if count[m.name]+uses[m.name] == 1 && !m.output {
 			return &Error{Offset: m.pos, Message: fmt.Sprintf("?%s appears only once, so it matches anything", m.name), Hint: fmt.Sprintf("use ?%s again to join on it, or drop it", m.name)}
 		}
 	}
