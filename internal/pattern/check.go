@@ -85,13 +85,17 @@ func (q *Query) check() error {
 	if problem != nil {
 		return problem
 	}
+	count := map[string]int{}
 	for _, m := range mentions {
-		if !slices.ContainsFunc(mentions, func(o mention) bool { return o.name == m.name && o.pos != m.pos }) {
+		count[m.name]++
+	}
+	for _, m := range mentions {
+		if count[m.name] == 1 {
 			return &Error{Offset: m.pos, Message: fmt.Sprintf("?%s appears only once, so it matches anything", m.name), Hint: fmt.Sprintf("use ?%s again to join on it, or drop it", m.name)}
 		}
 	}
 	for _, m := range mentions {
-		if m.binds && m.optional && slices.ContainsFunc(mentions, func(o mention) bool { return o.name == m.name && o.pos != m.pos }) {
+		if m.binds && m.optional && count[m.name] > 1 {
 			return &Error{Offset: m.pos, Message: fmt.Sprintf("?%s is bound in an optional pattern, so it may be unbound where it is used again", m.name), Hint: "bind it in a pattern that always matches, or use it only once"}
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"math"
 	"net/url"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
 	"github.com/yuin/goldmark"
@@ -46,22 +48,24 @@ type Location struct {
 }
 
 type Options struct {
-	Rules                 []Rule            `toml:"rules,omitempty"`
-	Registries            []Registry        `toml:"registries,omitempty"`
-	Disable               []string          `toml:"disable,omitempty"`
-	Outdated              map[string]string `toml:"outdated,omitempty"`
-	External              []string          `toml:"external,omitempty"`
-	MaxLines              int               `toml:"max_lines,omitempty"`
-	MaxAgeDays            int               `toml:"max_age_days,omitempty"`
-	DuplicateMinWords     int               `toml:"duplicate_min_words,omitempty"`
-	DuplicateSimilarity   float64           `toml:"duplicate_similarity,omitempty"`
-	DuplicateContainment  float64           `toml:"duplicate_containment,omitempty"`
-	DuplicateShingleWords int               `toml:"duplicate_shingle_words,omitempty"`
-	Semantic              SemanticOptions   `toml:"semantic,omitempty"`
-	Now                   time.Time         `toml:"-"`
+	Rules                 []InlineRule              `toml:"rules,omitempty"`
+	Config                map[string]map[string]any `toml:"config,omitempty"`
+	Modules               []string                  `toml:"-"`
+	Registries            []Registry                `toml:"registries,omitempty"`
+	Disable               []string                  `toml:"disable,omitempty"`
+	Outdated              map[string]string         `toml:"outdated,omitempty"`
+	External              []string                  `toml:"external,omitempty"`
+	MaxLines              int                       `toml:"max_lines,omitempty"`
+	MaxAgeDays            int                       `toml:"max_age_days,omitempty"`
+	DuplicateMinWords     int                       `toml:"duplicate_min_words,omitempty"`
+	DuplicateSimilarity   float64                   `toml:"duplicate_similarity,omitempty"`
+	DuplicateContainment  float64                   `toml:"duplicate_containment,omitempty"`
+	DuplicateShingleWords int                       `toml:"duplicate_shingle_words,omitempty"`
+	Semantic              SemanticOptions           `toml:"semantic,omitempty"`
+	Now                   time.Time                 `toml:"-"`
 }
 
-var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-heading", "duplicate-content", "similar-content", "semantic-content", "duplicate-skill", "outdated-reference", "large-skill", "stale-review", "invalid-slot"}
+var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-content", "similar-content", "semantic-content", "duplicate-skill", "outdated-reference", "stale-review", "invalid-slot"}
 
 func (o Options) Validate() error {
 	for _, limit := range []struct {
@@ -75,16 +79,12 @@ func (o Options) Validate() error {
 	if err := o.Semantic.validate(); err != nil {
 		return err
 	}
-	if _, err := compileRules(o.Rules); err != nil {
-		return err
+	var custom []string
+	for _, rule := range o.Rules {
+		custom = append(custom, rule.ID)
 	}
-	if _, err := compileRegistries(o.Registries, o.Rules); err != nil {
+	if _, err := compileRegistries(o.Registries, custom); err != nil {
 		return err
-	}
-	for _, rule := range o.Disable {
-		if !slices.Contains(rules, rule) && !slices.ContainsFunc(o.Rules, func(r Rule) bool { return r.ID == rule }) && !slices.ContainsFunc(o.Registries, func(r Registry) bool { return r.ID == rule }) {
-			return fmt.Errorf("unknown lint rule %q", rule)
-		}
 	}
 	if o.MaxLines < 0 || o.MaxAgeDays < 0 || o.DuplicateMinWords < 0 || o.DuplicateShingleWords < 0 {
 		return fmt.Errorf("lint limits must not be negative")
@@ -107,7 +107,6 @@ type document struct {
 }
 
 type checker struct {
-	rules             []compiledRule
 	registries        []compiledRegistry
 	options           Options
 	diagnostics       []Diagnostic
@@ -147,11 +146,34 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 		return nil, fmt.Errorf("no Markdown files found")
 	}
 	c := checker{options: options, diagnostics: []Diagnostic{}, names: make(map[string]Location), paragraphs: make(map[string]Diagnostic), anchors: make(map[string]map[string]bool), shingleIndex: make(map[string][]int)}
-	c.rules, err = compileRules(options.Rules)
+	registry, err := loadModules(options.Modules)
 	if err != nil {
 		return nil, err
 	}
-	c.registries, err = compileRegistries(options.Registries, options.Rules)
+	specs, err := registry.specs(options.Rules)
+	if err != nil {
+		return nil, err
+	}
+	known := slices.Clone(rules)
+	for _, s := range specs {
+		known = append(known, s.rule.ID)
+		if err := s.configure(options.Config[s.rule.ID]); err != nil {
+			return nil, err
+		}
+	}
+	for _, r := range options.Registries {
+		known = append(known, r.ID)
+	}
+	for _, rule := range slices.Concat(options.Disable, slices.Collect(maps.Keys(options.Config))) {
+		if !slices.Contains(known, rule) {
+			return nil, fmt.Errorf("unknown lint rule %q", rule)
+		}
+	}
+	var custom []string
+	for _, rule := range options.Rules {
+		custom = append(custom, rule.ID)
+	}
+	c.registries, err = compileRegistries(options.Registries, custom)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +218,24 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 		if err := c.check(d); err != nil {
 			return nil, err
 		}
+	}
+	var docs []library.Document
+	for _, d := range documents {
+		docs = append(docs, library.Document{Path: d.path, Kind: string(d.kind)})
+	}
+	ev := &evaluation{corpus: library.Documents(docs)}
+	for _, s := range specs {
+		if slices.Contains(options.Disable, s.rule.ID) {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		diagnostics, err := ev.run(s, options)
+		if err != nil {
+			return nil, err
+		}
+		c.diagnostics = append(c.diagnostics, diagnostics...)
 	}
 	c.checkRegistries(documents)
 	c.checkSlots(documents)
@@ -275,20 +315,12 @@ func (c *checker) add(d document, offset int, severity, rule, message string) {
 }
 
 func (c *checker) check(d document) error {
-	c.checkRules(d)
 	if d.kind != artifact.TypeUnknown {
 		for _, key := range []string{"name", "description"} {
 			value, _ := d.art.Frontmatter[key].(string)
 			if strings.TrimSpace(value) == "" {
 				c.add(d, 0, "warning", "metadata", "frontmatter requires a nonempty string "+key)
 			}
-		}
-		lines := bytes.Count(d.body, []byte{'\n'})
-		if len(d.body) > 0 && d.body[len(d.body)-1] != '\n' {
-			lines++
-		}
-		if lines > c.options.MaxLines {
-			c.add(d, d.offset, "warning", "large-skill", fmt.Sprintf("%d lines exceeds %d; consider moving reference material into resources", lines, c.options.MaxLines))
 		}
 	}
 	if value, ok := d.art.Frontmatter["last_verified"]; ok {
@@ -328,7 +360,6 @@ func (c *checker) check(d document) error {
 		c.add(d, offset, "error", "invalid-markup", err.Error())
 	}
 	c.checkDuplicates(d, markupSource)
-	headings := make(map[string]Location)
 	root := goldmark.New().Parser().Parse(text.NewReader(d.body))
 	// Plain Goldmark retains canonical directive text, which lets lint inspect
 	// references in directive content without rewriting diagnostic positions.
@@ -339,17 +370,6 @@ func (c *checker) check(d document) error {
 		switch n := node.(type) {
 		case *ast.FencedCodeBlock, *ast.CodeBlock, *ast.HTMLBlock:
 			return ast.WalkSkipChildren, nil
-		case *ast.Heading:
-			if n.Lines().Len() == 0 {
-				return ast.WalkSkipChildren, nil
-			}
-			key := normalize(string(n.Text(d.body)))
-			offset := d.offset + n.Lines().At(0).Start
-			if first, ok := headings[key]; ok {
-				c.addDuplicate(d, offset, "duplicate-heading", fmt.Sprintf("heading repeated; first occurrence on line %d", first.Line), first)
-			} else {
-				headings[key] = sourceLocation(d, offset)
-			}
 		case *ast.CodeSpan:
 			value := string(n.Text(d.body))
 			offset := d.offset + nodeOffset(n)

@@ -131,7 +131,7 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 		var records []map[string]any
 		for _, row := range rows {
 			record := map[string]any{}
-			for _, cell := range row {
+			for _, cell := range row.Cells {
 				name := cell.Name
 				if name == "" {
 					name = "match"
@@ -160,10 +160,10 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 	shown := 0
 	for _, row := range rows {
 		var block strings.Builder
-		if shown > 0 && len(row) > 1 && !o.text {
+		if shown > 0 && len(row.Cells) > 1 && !o.text {
 			block.WriteString("\n")
 		}
-		for _, cell := range row {
+		for _, cell := range row.Cells {
 			label := ""
 			if cell.Name != "" {
 				label = "@" + cell.Name + "  "

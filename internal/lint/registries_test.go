@@ -87,7 +87,7 @@ func TestInvalidRegistries(t *testing.T) {
 	if err := (Options{Registries: []Registry{base, base}}).Validate(); err == nil {
 		t.Fatal("accepted duplicate registry")
 	}
-	if err := (Options{Registries: []Registry{base}, Rules: []Rule{{ID: "unknown-slot", Select: "document", Assert: "true", Message: "m"}}}).Validate(); err == nil {
+	if err := (Options{Registries: []Registry{base}, Rules: []InlineRule{{ID: "unknown-slot", Query: "(file) @f", Message: "m"}}}).Validate(); err == nil {
 		t.Fatal("accepted registry id shared with a custom rule")
 	}
 	if err := (Options{Registries: []Registry{base}, Disable: []string{"unknown-slot"}}).Validate(); err != nil {

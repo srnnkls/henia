@@ -96,8 +96,8 @@ func (e *Error) Explain(query string) string {
 }
 
 var types = map[string][]string{
-	"skill":       {"id", "source"},
-	"file":        {"path", "main"},
+	"skill":       {"id", "name", "source"},
+	"file":        {"path", "main", "kind", "name", "artifact", "file"},
 	"section":     {"id", "title", "level"},
 	"heading":     {"level"},
 	"paragraph":   nil,
@@ -107,12 +107,14 @@ var types = map[string][]string{
 	"table":       nil,
 	"code":        {"lang"},
 	"row":         {"table", "key", "value", "index"},
-	"link":        {"target", "path", "anchor", "url"},
+	"link":        {"target", "path", "anchor", "url", "ref", "artifact", "exists", "valid"},
+	"entry":       {"key", "value", "index"},
+	"problem":     {"kind", "message"},
 	"directive":   nil,
 	"frontmatter": nil,
 }
 
-var textKeys = []string{"text", "contains", "matches", "words", "node", "lines", "chars", "norm"}
+var textKeys = []string{"text", "contains", "matches", "words", "node", "lines", "chars", "norm", "dynamic"}
 
 var numericKeys = []string{"level", "words", "lines", "chars"}
 
@@ -151,6 +153,8 @@ type token struct {
 func isName(c byte, first bool) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || !first && (c >= '0' && c <= '9' || c == '-' || c == '.')
 }
+
+func isSymbol(c byte, first bool) bool { return isName(c, first) || !first && c == '/' }
 
 func lex(src string) ([]token, error) {
 	var tokens []token
@@ -278,7 +282,7 @@ func lex(src string) ([]token, error) {
 			i = j
 		case isName(c, true):
 			j := i
-			for j < len(src) && isName(src[j], j == i) {
+			for j < len(src) && isSymbol(src[j], j == i) {
 				j++
 			}
 			tokens = append(tokens, token{kind: tSymbol, text: src[i:j], pos: i})
@@ -322,6 +326,13 @@ func (r *reader) query(end tokenKind) (*Query, error) {
 			return nil, &Error{Offset: start, Message: "unclosed (rule", Hint: "add the matching )"}
 		}
 		head := r.tokens[r.at+1]
+		if define, ok := r.defines[head.text]; ok && r.peek().kind == tOpen {
+			r.at += 2
+			if err := r.expand(define, r.tokens[r.at-2]); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if r.peek().kind == tOpen && head.kind == tSymbol && head.text == "not" {
 			r.at += 2
 			p, err := r.pattern(true)

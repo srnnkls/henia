@@ -85,7 +85,7 @@ func texts(rows []Row) []string {
 	var out []string
 	for _, row := range rows {
 		var cells []string
-		for _, cell := range row {
+		for _, cell := range row.Cells {
 			var parts []string
 			for _, e := range cell.Elements {
 				parts = append(parts, e.Text)
@@ -150,7 +150,7 @@ func TestReachIDs(t *testing.T) {
 	c := fixture(t)
 	var ids []string
 	for _, row := range run(t, c, `(skill :id "a" (reaches (skill) @t))`) {
-		ids = append(ids, row[0].Elements[0].Attrs["id"])
+		ids = append(ids, row.Cells[0].Elements[0].Attrs["id"])
 	}
 	if strings.Join(ids, ",") != "a,b,c" {
 		t.Errorf("reach = %v, want a,b,c", ids)

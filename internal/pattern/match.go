@@ -32,7 +32,10 @@ type Cell struct {
 	Elements []*markup.Element
 }
 
-type Row []Cell
+type Row struct {
+	Cells []Cell
+	Vars  map[string]string
+}
 
 type binding struct {
 	captures map[string][]*markup.Element
@@ -286,10 +289,10 @@ func (b binding) key(names []string) (string, bool) {
 }
 
 func (q *Query) row(b binding) (Row, string) {
-	row := make(Row, 0, len(q.Captures))
+	row := Row{Cells: make([]Cell, 0, len(q.Captures)), Vars: b.vars}
 	var key strings.Builder
 	for _, name := range q.Captures {
-		row = append(row, Cell{Name: name, Elements: b.captures[name]})
+		row.Cells = append(row.Cells, Cell{Name: name, Elements: b.captures[name]})
 		for _, e := range b.captures[name] {
 			key.WriteString(strconv.Itoa(e.Order) + ",")
 		}

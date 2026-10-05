@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -30,11 +31,20 @@ type compiledRegistry struct {
 	declare, reference *vm.Program
 }
 
-func compileRegistries(definitions []Registry, custom []Rule) ([]compiledRegistry, error) {
+type ruleDocument struct {
+	Path  string `expr:"path"`
+	Kind  string `expr:"kind"`
+	Body  string `expr:"body"`
+	Lines int    `expr:"lines"`
+}
+
+var ruleID = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+func compileRegistries(definitions []Registry, custom []string) ([]compiledRegistry, error) {
 	seen := make(map[string]bool)
 	var result []compiledRegistry
 	for _, registry := range definitions {
-		if !ruleID.MatchString(registry.ID) || seen[registry.ID] || slices.Contains(rules, registry.ID) || slices.ContainsFunc(custom, func(r Rule) bool { return r.ID == registry.ID }) {
+		if !ruleID.MatchString(registry.ID) || seen[registry.ID] || slices.Contains(rules, registry.ID) || slices.Contains(custom, registry.ID) {
 			return nil, fmt.Errorf("invalid, duplicate or reserved lint registry id %q", registry.ID)
 		}
 		seen[registry.ID] = true

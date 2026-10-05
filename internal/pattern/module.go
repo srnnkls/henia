@@ -1,10 +1,12 @@
 package pattern
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 type Rule struct {
@@ -60,6 +62,9 @@ func ReadModule(src string, imported func(name string) (map[string]Define, error
 				return nil, &Error{Offset: name.pos, Message: err.Error()}
 			}
 			for key, d := range defines {
+				if _, taken := r.defines[key]; taken {
+					return nil, &Error{Offset: name.pos, Message: fmt.Sprintf("(import %s) defines %s, which is already defined here", name.text, key), Hint: "rename one of the defines"}
+				}
 				r.defines[key] = d
 			}
 			module.Imports = append(module.Imports, name.text)
@@ -91,20 +96,29 @@ func (r *reader) define(open token) (Define, error) {
 		return Define{}, &Error{Offset: name.pos, Message: fmt.Sprintf("%q cannot name a pattern", name.text), Hint: "pick a name that is not a type or form"}
 	}
 	d := Define{Name: name.text}
-	for r.peek().kind == tVar {
-		d.Params = append(d.Params, r.next().text)
+	for r.peek().kind == tVar || r.peek().kind == tCapture {
+		param := r.next()
+		d.Params = append(d.Params, sigil(param))
 	}
 	if t := r.next(); t.kind != tClose {
-		return Define{}, r.unexpected(t, "?parameters and ) closing the signature")
+		return Define{}, r.unexpected(t, "?variables, @captures and ) closing the signature")
 	}
 	start := r.at
-	if err := r.skip(); err != nil {
-		return Define{}, err
+	for r.peek().kind != tClose {
+		if err := r.skip(); err != nil {
+			return Define{}, err
+		}
 	}
 	d.Body = slices.Clone(r.tokens[start:r.at])
-	if c := r.next(); c.kind != tClose {
-		return Define{}, r.unexpected(c, ") closing (define; a define holds one pattern")
+	if len(d.Body) == 0 {
+		return Define{}, &Error{Offset: open.pos, Message: fmt.Sprintf("(define (%s ...)) has no pattern", d.Name)}
 	}
+	for _, t := range d.Body {
+		if t.kind == tCapture && !slices.Contains(d.Params, "@"+t.text) {
+			return Define{}, &Error{Offset: t.pos, Message: fmt.Sprintf("@%s in (define (%s ...)) is not a parameter", t.text, d.Name), Hint: fmt.Sprintf("add @%s to the signature so callers name the capture", t.text)}
+		}
+	}
+	r.next()
 	return d, nil
 }
 
@@ -157,8 +171,8 @@ func (r *reader) expand(d Define, open token) error {
 	suffix := "_" + strconv.Itoa(r.expanded)
 	var body []token
 	for _, t := range d.Body {
-		if t.kind == tVar {
-			if i := slices.Index(d.Params, t.text); i >= 0 {
+		if t.kind == tVar || t.kind == tCapture {
+			if i := slices.Index(d.Params, sigil(t)); i >= 0 {
 				body = append(body, args[i]...)
 				continue
 			}
@@ -238,3 +252,33 @@ func (rule *Rule) Params() []string {
 }
 
 func Placeholders(message string) [][]string { return placeholder.FindAllStringSubmatch(message, -1) }
+
+func NewRule(id, severity, message, at, related, query string) (*Rule, error) {
+	src := fmt.Sprintf("(rule %s :message %s", id, strconv.Quote(message))
+	if severity != "" {
+		src += " :severity " + severity
+	}
+	if at != "" {
+		src += " :at @" + strings.TrimPrefix(at, "@")
+	}
+	if related != "" {
+		src += " :related @" + strings.TrimPrefix(related, "@")
+	}
+	module, err := ReadModule(src+"\n"+query+"\n)", nil)
+	if err != nil {
+		var pe *Error
+		if errors.As(err, &pe) && pe.Offset >= len(src)+1 {
+			pe.Offset -= len(src) + 1
+			return nil, fmt.Errorf("rule %s query: %s", id, strings.TrimPrefix(pe.Explain(query), "henia query: "))
+		}
+		return nil, fmt.Errorf("rule %s: %w", id, err)
+	}
+	return module.Rules[0], nil
+}
+
+func sigil(t token) string {
+	if t.kind == tCapture {
+		return "@" + t.text
+	}
+	return "?" + t.text
+}

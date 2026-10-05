@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -150,6 +151,9 @@ func (b *builder) block(node ast.Node) *Element {
 		b.inlines(e, v)
 	case *ast.FencedCodeBlock:
 		e.Type, e.Attrs["lang"] = "code", string(v.Language(b.source))
+		if v.Info != nil {
+			e.Attrs["info"] = strings.TrimSpace(string(v.Info.Segment.Value(b.source)))
+		}
 	case *ast.CodeBlock:
 		e.Type = "code"
 	case *ast.List:

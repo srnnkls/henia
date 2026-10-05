@@ -30,7 +30,7 @@ func TestRulesAndPositions(t *testing.T) {
 	root := t.TempDir()
 	paragraph := "These twelve or more words explain how to execute the same repeated workflow safely and consistently."
 	write(t, root, "skills/example/SKILL.md", "---\nname: example\nlast_verified: 2020-01-01\n---\n\n# Repeated\n\n"+paragraph+"\n\n# Repeated\n\n"+paragraph+"\n\n[Guide](missing.md) and `$missing`. Use `legacy-model`.\n")
-	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Outdated: map[string]string{"legacy-model": "current-model"}, MaxLines: 4, Now: time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)})
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Outdated: map[string]string{"legacy-model": "current-model"}, Config: map[string]map[string]any{"large-skill": {"max-lines": 4}}, Now: time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)})
 	if err != nil {
 		t.Fatal(err)
 	}
