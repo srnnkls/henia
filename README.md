@@ -94,9 +94,9 @@ library checks metadata, templates and directives, local links and references,
 outdated names, line budgets, review dates, duplicate headings, content and
 skills, and slots, with optional word-shingle and Model2Vec similarity.
 Projects add modules under `.henia/lint/`, users under `~/.config/henia/lint/`,
-and installed sources under their own `lint/`; modules import the standard
-library's patterns and compose them. `henia.toml` tunes rules and holds one-off
-rules:
+and dependency sources bring theirs from their own `.henia/lint/`; modules
+import the standard library's patterns and compose them. `henia.toml` tunes
+rules and holds one-off rules:
 
 ```toml
 [lint.config.large-skill]

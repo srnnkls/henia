@@ -30,8 +30,8 @@ A project keeps its source in `.henia/`:
   build/  cache/  state/    # ignored
 ```
 
-A source is a set of skills with its own `henia.toml` and, optionally, `lint/`
-modules: a folder holding `skills/`. A project's dependencies are the sources in
+A source is a project used as a dependency: a folder holding `skills/`, with its
+own `henia.toml` and, optionally, lint modules in `.henia/lint/`. A project's dependencies are the sources in
 its `.henia/sources/<source>/`, and theirs in turn, so a project sees every
 skill it depends on transitively. Anything that places a folder can provide
 them: a copy, a symlink, a git submodule, or a deployer such as Phora. Henia
@@ -49,7 +49,7 @@ silently. `<skill>#<section>` addresses a heading anchor.
 
 `henia build` compiles the project's skills together with its dependencies';
 `henia lint` lints the project's own files and resolves references against
-its dependencies, whose `lint/` modules join the rule set.
+its dependencies, whose `.henia/lint/` modules join the rule set.
 
 ## Runtime
 

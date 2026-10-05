@@ -352,3 +352,27 @@ func TestBuildWithoutSourceConfigReadsWorkingDirectoryConfig(t *testing.T) {
 	}
 	assertHarnesses(t, output, "cwd-only")
 }
+
+func TestLintLoadsDependencyModules(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	fixture(t, filepath.Join(project, "skills", "own", "SKILL.md"), "---\nname: own\ndescription: Own skill for tests.\n---\n\n# Own\n\nTODO: finish.\n")
+	fixture(t, filepath.Join(project, ".henia", "sources", "dep", "skills", "dep", "SKILL.md"), "---\nname: dep\ndescription: Dependency skill.\n---\n\n# Dep\n\nTODO: never linted here.\n")
+	fixture(t, filepath.Join(project, ".henia", "sources", "dep", ".henia", "lint", "todo.md"), "## no-todo\n\n```hq\n(rule no-todo :message \"resolve the TODO\" (paragraph :matches /TODO/) @p)\n```\n")
+	cmd := newLintCommand()
+	cmd.SilenceUsage = true
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"skills", "--format", "json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var diagnostics []lint.Diagnostic
+	if err := json.Unmarshal(out.Bytes(), &diagnostics); err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Rule != "no-todo" || !strings.HasSuffix(diagnostics[0].Path, filepath.Join("own", "SKILL.md")) {
+		t.Fatalf("%+v", diagnostics)
+	}
+}

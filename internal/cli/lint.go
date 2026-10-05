@@ -120,7 +120,7 @@ func lintOptions(cmd *cobra.Command) (lint.Options, error) {
 	lib := library.Open(project, nil)
 	for _, source := range lib.Sources {
 		if source.Tier == library.Dependency {
-			options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(source.Root, "lint"), Prefix: source.Name})
+			options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(source.Root, library.ProjectDir, "lint"), Prefix: source.Name})
 		}
 	}
 	for _, entry := range lib.Entries {

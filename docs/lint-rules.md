@@ -65,7 +65,7 @@ the diagnostics, including `related` locations and, for similarity findings,
 Lint loads modules from these layers, in order:
 
 1. the standard library;
-2. `lint/` in each dependency source, named `<source>/<module>`;
+2. `.henia/lint/` in each dependency source, named `<source>/<module>`;
 3. `$XDG_CONFIG_HOME/henia/lint/`;
 4. the project's `.henia/lint/`;
 5. inline rules.
