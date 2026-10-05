@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -29,6 +30,12 @@ type Dependency struct {
 	Rev    string   `toml:"rev,omitempty"`
 	Root   string   `toml:"root,omitempty"`
 	Skills []string `toml:"skills,omitempty"`
+	Link   bool     `toml:"link,omitempty"`
+}
+
+func Local(path string) string {
+	ext := filepath.Ext(path)
+	return strings.TrimSuffix(path, ext) + ".local" + ext
 }
 
 type Scope struct {
@@ -69,6 +76,9 @@ func (d Dependency) validate(key string) error {
 	if d.Path != "" && refs > 0 {
 		return fmt.Errorf("dependency %s: a path dependency has no branch, tag or rev", key)
 	}
+	if d.Link && d.Path == "" {
+		return fmt.Errorf("dependency %s: link deploys a path dependency live; it needs path", key)
+	}
 	return nil
 }
 
@@ -93,10 +103,15 @@ func Read(manifest string) (map[string]Dependency, error) {
 		if err := d.validate(key); err != nil {
 			return nil, fmt.Errorf("%s: %w", manifest, err)
 		}
+		if rest, ok := strings.CutPrefix(d.Path, "~/"); ok {
+			if home, err := os.UserHomeDir(); err == nil {
+				d.Path = filepath.Join(home, rest)
+			}
+		}
 		if d.Path != "" && !filepath.IsAbs(d.Path) {
 			d.Path = filepath.Join(filepath.Dir(manifest), d.Path)
-			file.Dependencies[key] = d
 		}
+		file.Dependencies[key] = d
 	}
 	return file.Dependencies, nil
 }
@@ -121,6 +136,9 @@ func phoraManifest(dependencies map[string]Dependency, scope Scope) ([]byte, err
 				fmt.Fprintf(&b, "%s = %s\n", ref.key, strconv.Quote(ref.value))
 			}
 		}
+		if d.Link {
+			b.WriteString("deploy = \"link\"\n")
+		}
 		if len(d.Skills) > 0 {
 			quoted := []string{strconv.Quote("henia.toml"), strconv.Quote(".henia/")}
 			for _, skill := range d.Skills {
@@ -142,6 +160,10 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
+	overrides, err := Read(Local(scope.Manifest))
+	if err != nil {
+		return Report{}, err
+	}
 	origin := map[string]string{}
 	for key := range declared {
 		origin[key] = scope.Manifest
@@ -150,15 +172,26 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 	if err := os.MkdirAll(scope.State, 0o755); err != nil {
 		return report, err
 	}
-	if err := copyFile(scope.Lock, filepath.Join(scope.State, "phora.lock")); err != nil {
+	state := func(name string) string { return filepath.Join(scope.State, name) }
+	if err := copyFile(scope.Lock, state("phora.lock")); err != nil {
+		return report, err
+	}
+	if err := copyFile(Local(scope.Lock), state("phora.local.lock")); err != nil {
 		return report, err
 	}
 	for {
-		manifest, err := phoraManifest(declared, scope)
-		if err != nil {
+		shared := maps.Clone(declared)
+		for key := range overrides {
+			delete(shared, key)
+		}
+		if err := writeManifest(state("phora.toml"), shared, scope); err != nil {
 			return report, err
 		}
-		if err := os.WriteFile(filepath.Join(scope.State, "phora.toml"), manifest, 0o644); err != nil {
+		if len(overrides) == 0 {
+			if err := os.Remove(state("phora.local.toml")); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return report, err
+			}
+		} else if err := writeManifest(state("phora.local.toml"), overrides, scope); err != nil {
 			return report, err
 		}
 		command := "sync"
@@ -172,7 +205,9 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 		report.Deployed += summary.Deployed
 		report.Removed += summary.Removed
 		added := false
-		for _, key := range slices.Sorted(maps.Keys(declared)) {
+		effective := maps.Clone(declared)
+		maps.Copy(effective, overrides)
+		for _, key := range slices.Sorted(maps.Keys(effective)) {
 			for _, candidate := range []string{filepath.Join(scope.Store, key, "henia.toml"), filepath.Join(scope.Store, key, ".henia", "henia.toml")} {
 				transitive, err := Read(candidate)
 				if err != nil {
@@ -180,7 +215,7 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 				}
 				for child, d := range transitive {
 					if existing, ok := declared[child]; ok {
-						if !equal(existing, d) {
+						if _, overridden := overrides[child]; !overridden && !equal(existing, d) {
 							return report, fmt.Errorf("dependency %s is declared differently by %s and %s", child, origin[child], candidate)
 						}
 						continue
@@ -193,11 +228,78 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 			break
 		}
 	}
-	if err := copyFile(filepath.Join(scope.State, "phora.lock"), scope.Lock); err != nil {
+	if len(overrides) == 0 {
+		if err := copyFile(state("phora.lock"), scope.Lock); err != nil {
+			return report, err
+		}
+	} else if err := mergeLock(state("phora.lock"), scope.Lock, overrides); err != nil {
 		return report, err
 	}
-	report.Packages = slices.Sorted(maps.Keys(declared))
+	if err := copyFile(state("phora.local.lock"), Local(scope.Lock)); err != nil {
+		return report, err
+	}
+	effective := maps.Clone(declared)
+	maps.Copy(effective, overrides)
+	report.Packages = slices.Sorted(maps.Keys(effective))
 	return report, nil
+}
+
+func writeManifest(path string, dependencies map[string]Dependency, scope Scope) error {
+	manifest, err := phoraManifest(dependencies, scope)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, manifest, 0o644)
+}
+
+type lockFile struct {
+	Version int              `toml:"version"`
+	Sources []map[string]any `toml:"sources"`
+}
+
+func mergeLock(fresh, tracked string, overrides map[string]Dependency) error {
+	var next, previous lockFile
+	for _, f := range []struct {
+		path string
+		into *lockFile
+	}{{fresh, &next}, {tracked, &previous}} {
+		data, err := os.ReadFile(f.path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := toml.Unmarshal(data, f.into); err != nil {
+			return fmt.Errorf("%s: %w", f.path, err)
+		}
+	}
+	for _, entry := range previous.Sources {
+		if name, _ := entry["name"].(string); hasKey(overrides, name) {
+			next.Sources = append(next.Sources, entry)
+		}
+	}
+	slices.SortFunc(next.Sources, func(a, b map[string]any) int {
+		x, _ := a["name"].(string)
+		y, _ := b["name"].(string)
+		return strings.Compare(x, y)
+	})
+	if next.Version == 0 {
+		next.Version = previous.Version
+	}
+	if reflect.DeepEqual(next, previous) {
+		return nil
+	}
+	data, err := toml.Marshal(next)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(tracked, data, 0o644)
+}
+
+func hasKey(m map[string]Dependency, key string) bool {
+	_, ok := m[key]
+	return ok
 }
 
 func copyFile(from, to string) error {

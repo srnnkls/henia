@@ -76,6 +76,22 @@ Linux; elsewhere, install Phora or set `HENIA_PHORA`. Phora's lock is kept as
 `henia.lock` next to `henia.toml`; commit it. `build` and `lint` sync first when
 a declared package is missing.
 
+`henia.local.toml`, next to `henia.toml` and kept out of version control, layers
+local settings over it. Its `[dependencies]` entries replace the declared ones
+by name, and `link = true` deploys a `path` dependency live, so edits to the
+checkout show without another sync:
+
+```toml
+# henia.local.toml
+[dependencies.loqui]
+path = "~/projects/loqui"
+link = true
+```
+
+While a local entry is active, its lock goes to `henia.local.lock`, and
+`henia.lock` keeps the declared revision for everyone else. Ignore both local
+files in Git.
+
 Packages land in a store shared by every project, under
 `$XDG_DATA_HOME/henia/packages/<project>/<name>/`. `--global` uses the user
 `henia.toml` in `$XDG_CONFIG_HOME/henia/` and installs into

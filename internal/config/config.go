@@ -106,6 +106,22 @@ func loadLayers(path string, projectData []byte) (*Config, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
+	localData, err := os.ReadFile(deps.Local(path))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if len(localData) > 0 {
+		var project, local map[string]any
+		if err := toml.Unmarshal(projectData, &project); err != nil {
+			return nil, err
+		}
+		if err := toml.Unmarshal(localData, &local); err != nil {
+			return nil, fmt.Errorf("%s: %w", deps.Local(path), err)
+		}
+		if projectData, err = toml.Marshal(vendor.Merge(project, local)); err != nil {
+			return nil, err
+		}
+	}
 	return decodeLayers(projectRoot, userRoot, userData, projectData)
 }
 
