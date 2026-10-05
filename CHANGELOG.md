@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.0-alpha.16](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.15...v0.1.0-alpha.16) (2026-10-05)
+
+
+### Features
+
+* **install:** infer harness homes; enabled = false uninstalls ([67751ba](https://github.com/srnnkls/henia/commit/67751ba57c1b2c41740c9f95e4d90fe4023705e2))
+
+
+### Bug Fixes
+
+* **install:** render the henia skill with the owning package's harness profile ([ad956e0](https://github.com/srnnkls/henia/commit/ad956e0153c95f7aff2b8fe79e0806086a27f031))
+
 ## [0.1.0-alpha.15](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.14...v0.1.0-alpha.15) (2026-10-05)
 
 
