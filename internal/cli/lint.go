@@ -117,6 +117,9 @@ func lintOptions(cmd *cobra.Command) (lint.Options, error) {
 	}
 	options := cfg.Lint
 	project := projectRoot(cmd)
+	if err := ensurePackages(cmd, project); err != nil {
+		return lint.Options{}, err
+	}
 	lib := library.Open(project, nil)
 	for _, source := range lib.Sources {
 		if source.Tier == library.Dependency {

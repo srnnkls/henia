@@ -18,7 +18,10 @@ func packageScope(cmd *cobra.Command, global bool) (deps.Scope, error) {
 		manifest := filepath.Join(library.ConfigDir(), library.ConfigFile)
 		return deps.Scope{Manifest: manifest, Lock: filepath.Join(library.ConfigDir(), library.LockFile), State: library.StateDir("global"), Sources: library.PackagesDir("global")}, nil
 	}
-	project := projectRoot(cmd)
+	return projectScope(projectRoot(cmd))
+}
+
+func projectScope(project string) (deps.Scope, error) {
 	manifest, err := config.Find(project)
 	if errors.Is(err, os.ErrNotExist) {
 		manifest, err = filepath.Join(project, library.ConfigFile), nil
@@ -28,6 +31,28 @@ func packageScope(cmd *cobra.Command, global bool) (deps.Scope, error) {
 	}
 	key := library.ProjectKey(project)
 	return deps.Scope{Manifest: manifest, Lock: filepath.Join(filepath.Dir(manifest), library.LockFile), State: library.StateDir(key), Sources: library.PackagesDir(key)}, nil
+}
+
+func ensurePackages(cmd *cobra.Command, project string) error {
+	scope, err := projectScope(project)
+	if err != nil {
+		return err
+	}
+	declared, err := deps.Read(scope.Manifest)
+	if err != nil {
+		return err
+	}
+	for name := range declared {
+		if _, err := os.Stat(filepath.Join(scope.Sources, name)); err != nil {
+			report, err := deps.Sync(cmd.Context(), scope, false)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "Synced %d package(s): %s\n", len(report.Sources), strings.Join(report.Sources, ", "))
+			return nil
+		}
+	}
+	return nil
 }
 
 func syncPackages(cmd *cobra.Command, scope deps.Scope, update bool) error {

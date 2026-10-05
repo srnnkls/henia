@@ -166,6 +166,9 @@ func ProjectKey(project string) string {
 	if err != nil {
 		absolute = project
 	}
+	if resolved, err := filepath.EvalSymlinks(absolute); err == nil {
+		absolute = resolved
+	}
 	sum := sha256.Sum256([]byte(absolute))
 	return filepath.Base(absolute) + "-" + hex.EncodeToString(sum[:])[:12]
 }
