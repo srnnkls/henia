@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.0-alpha.17](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.16...v0.1.0-alpha.17) (2026-10-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **show:** detect stale hybrid heads without a digest argument
+
+### Features
+
+* **show:** address resources like modules ([8fbb3c0](https://github.com/srnnkls/henia/commit/8fbb3c0f18b3a886b134c43f55927792063d4f93))
+
+
+### Bug Fixes
+
+* **render:** rewrite local links to henia show addresses where files are absent ([c2dfd90](https://github.com/srnnkls/henia/commit/c2dfd90e15860b97ca21294903d8a00e3222c4bf))
+* **show:** detect stale hybrid heads without a digest argument ([050e25c](https://github.com/srnnkls/henia/commit/050e25cf6ed6ce83d3bff1052b373f605910df0c))
+* **slots:** report requested slots without providers and empty context ([aa2d233](https://github.com/srnnkls/henia/commit/aa2d2334690fd3b9de3f768eacf36400cddf98a6))
+
 ## [0.1.0-alpha.16](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.15...v0.1.0-alpha.16) (2026-10-05)
 
 
