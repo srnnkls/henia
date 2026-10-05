@@ -78,4 +78,39 @@ batches:
         claim: bound() ignores score variables in the alternatives-equality check
         reason: pre-existing, outside QAG-003, no trigger shown
     reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b3-*
-deferred: []
+  - batch: 4
+    tasks:
+      - QAG-004
+    reviewers:
+      - claude-opus
+      - peer-gpt6.1-sol
+      - peer-gpt6-astra
+    gates:
+      correctness: pass after fix
+      security: pass
+      performance: pass
+      architecture: pass after fix
+      style: pass
+    admitted:
+      - id: B4-H1
+        found_by:
+          - peer-gpt6-astra
+          - peer-gpt6.1-sol
+          - claude-opus (general)
+          - claude-opus (architecture)
+        mechanism: stub/fallback file :lines read Line/EndLine instead of Body; empty body 1 line
+        status: fixed
+      - id: B4-H2
+        found_by:
+          - peer-gpt6.1-sol
+          - claude-opus (general)
+        mechanism: fallback Body kept undecodable frontmatter
+        status: fixed
+    residual: []
+    reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b4-*
+deferred:
+  - id: B4-D1
+    found_by:
+      - claude-opus (rereview)
+    claim: withoutFrontmatter recognizes LF delimiters only; malformed CRLF frontmatter, or a closing --- at EOF without newline, keeps the whole source in Body
+    reason: re-review observation outside the admitted triggers; cannot open a fix round

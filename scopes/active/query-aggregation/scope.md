@@ -155,4 +155,5 @@ Each task tests behavior its predecessor makes reachable, so batches are serial.
 ## Gotchas & Learnings
 
 - tropos resolves two `limen` skill elements, so per-skill counts group by the `@skill` node, not by `:id`; grouping on `?id` merges them.
+- When a dependency package and a global install provide the same skill id, the corpus attaches both copies' files to the global skill element; the dependency element has no files and counts `:words 0` (gestalt, limen, loqui in tropos).
 - `(from P)` on a skill misses links into its sections and files; inbound counts join on `(link :target ?s)` instead.
