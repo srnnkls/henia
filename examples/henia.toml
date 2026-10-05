@@ -32,16 +32,11 @@ max_age_days = 180
 
 [[lint.rules]]
 id = "instruction-priority"
-select = "directive"
-when = 'node.name == "instruction"'
-assert = 'node.attrs.priority in ["normal", "high", "critical"]'
+query = '(directive :name "instruction" :priority (not /^(normal|high|critical)$/)) @d'
 message = "Instructions need a valid priority."
-severity = "warning"
 
 [[lint.rules]]
 id = "skill-description"
-select = "document"
-when = 'document.kind == "skill"'
-assert = 'len(frontmatter.description ?? "") >= 30'
+query = '(file :kind skill (frontmatter (entry :key description :chars (< 30)))) @f'
 message = "Describe what this skill does and when to use it."
 severity = "error"

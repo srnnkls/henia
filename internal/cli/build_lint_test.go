@@ -176,8 +176,7 @@ func TestLintRulesFromConfig(t *testing.T) {
 	fixture(t, path, "---\nname: example\ndescription: Example\n---\n\n:::instruction\nText.\n:::\n")
 	testConfig(t, `[[lint.rules]]
 id = "instruction-priority"
-select = "directive"
-assert = 'node.attrs.priority == "high"'
+query = '(directive :priority (not "high")) @d'
 message = "Set priority"
 severity = "error"
 `)
