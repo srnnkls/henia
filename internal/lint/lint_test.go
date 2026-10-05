@@ -98,7 +98,7 @@ func TestGitIgnoredPathsAreSkipped(t *testing.T) {
 	}
 	write(t, root, ".gitignore", "vendored/\nnotes.md\n")
 	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\nBody.\n")
-	write(t, root, "vendored/guide/README.md", "[broken](absent.md)\n")
+	write(t, root, "vendored/guide/SKILL.md", "---\nname: guide\ndescription: Vendored guide\n---\n\n[broken](absent.md)\n")
 	write(t, root, "notes.md", "[broken](absent.md)\n")
 	for _, path := range []string{root, filepath.Join(root, "skills")} {
 		diagnostics, err := lint.Run(t.Context(), []string{path}, lint.Options{})
@@ -228,5 +228,30 @@ func TestShownSectionLinks(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestWalkLintsArtifactsAndSkillResources(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\n[broken](absent.md)\n")
+	write(t, root, "skills/one/reference/guide.md", "[broken](absent.md)\n")
+	write(t, root, "commands/run.md", "[broken](absent.md)\n")
+	notes := write(t, root, "docs/notes.md", "[broken](absent.md)\n")
+	write(t, root, "README.md", "[broken](absent.md)\n")
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, d := range diagnostics {
+		if path := strings.TrimPrefix(d.Path, root+string(filepath.Separator)); !slices.Contains(paths, path) {
+			paths = append(paths, path)
+		}
+	}
+	if got := strings.Join(paths, " "); got != filepath.FromSlash("commands/run.md skills/one/SKILL.md skills/one/reference/guide.md") {
+		t.Fatalf("linted %s", got)
+	}
+	if diagnostics, err := lint.Run(t.Context(), []string{notes}, lint.Options{}); err != nil || len(diagnostics) != 1 {
+		t.Fatalf("explicit document: %+v, %v", diagnostics, err)
 	}
 }

@@ -11,6 +11,9 @@ import (
 func paragraphFiles(t *testing.T, texts ...string) string {
 	t.Helper()
 	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "SKILL.md"), []byte("---\nname: paragraphs\ndescription: Paragraph fixtures\n---\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	for i, text := range texts {
 		if err := os.WriteFile(filepath.Join(root, string(rune('a'+i))+".md"), []byte(":::instruction\n"+text+"\n:::\n"), 0644); err != nil {
 			t.Fatal(err)

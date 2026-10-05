@@ -241,7 +241,7 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 		return nil, err
 	}
 	if len(files) == 0 {
-		return nil, fmt.Errorf("no Markdown files found")
+		return nil, fmt.Errorf("no skills, commands, agents or skill resources found")
 	}
 	var docs []library.Document
 	for _, path := range files {

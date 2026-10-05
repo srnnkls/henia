@@ -28,12 +28,14 @@ func newLintCommand() *cobra.Command {
 			if format != "text" && format != "json" {
 				return fmt.Errorf("unknown lint format %q (use text or json)", format)
 			}
-			if len(args) == 0 {
-				args = []string{"."}
-			}
-			options, err := lintOptions(cmd)
+			options, cfg, err := lintOptions(cmd)
 			if err != nil {
 				return err
+			}
+			if len(args) == 0 {
+				if args = packageContents(projectRoot(cmd), cfg); len(args) == 0 {
+					return fmt.Errorf("no package contents to lint: no skills, commands or agents under the project or its .henia; pass the paths to lint")
+				}
 			}
 			options.Disable = append(options.Disable, disabled...)
 			plan, err := lint.Compile(options)
@@ -81,7 +83,7 @@ library, skill packages' .henia/lint/ directories, the user's and the project's.
 A Matches example must make its rule report; a Passes example must not.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			options, err := lintOptions(cmd)
+			options, _, err := lintOptions(cmd)
 			if err != nil {
 				return err
 			}
@@ -105,20 +107,20 @@ A Matches example must make its rule report; a Passes example must not.`,
 	}
 }
 
-func lintOptions(cmd *cobra.Command) (lint.Options, error) {
+func lintOptions(cmd *cobra.Command) (lint.Options, *config.Config, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil && (cmd.Flags().Changed("config") || !errors.Is(err, os.ErrNotExist)) {
-		return lint.Options{}, fmt.Errorf("load config: %w", err)
+		return lint.Options{}, nil, fmt.Errorf("load config: %w", err)
 	}
 	if err != nil {
 		if cfg, err = config.LoadOptional(configPath); err != nil {
-			return lint.Options{}, err
+			return lint.Options{}, nil, err
 		}
 	}
 	options := cfg.Lint
 	project := projectRoot(cmd)
 	if err := ensurePackages(cmd, project); err != nil {
-		return lint.Options{}, err
+		return lint.Options{}, nil, err
 	}
 	lib := library.Open(project, nil)
 	for _, pkg := range lib.Packages {
@@ -138,7 +140,7 @@ func lintOptions(cmd *cobra.Command) (lint.Options, error) {
 		}
 		profile, err := vendor.Load(h.Profile, project, library.ConfigDir())
 		if err != nil {
-			return lint.Options{}, fmt.Errorf("harness %s: %w", name, err)
+			return lint.Options{}, nil, fmt.Errorf("harness %s: %w", name, err)
 		}
 		for _, command := range profile.Commands {
 			options.Builtin = append(options.Builtin, "command:"+command)
@@ -148,5 +150,32 @@ func lintOptions(cmd *cobra.Command) (lint.Options, error) {
 		}
 	}
 	options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(library.ConfigDir(), "lint")}, lint.ModuleDir{Dir: filepath.Join(project, library.ProjectDir, "lint")})
-	return options, nil
+	return options, cfg, nil
+}
+
+func packageContents(project string, cfg *config.Config) []string {
+	types := slices.Clone(cfg.Artifacts)
+	for _, h := range cfg.Harness {
+		types = append(types, h.Artifacts...)
+	}
+	if len(types) == 0 {
+		types = []string{"skills", "commands", "agents"}
+	}
+	var paths []string
+	add := func(path string) {
+		if _, err := os.Stat(path); err == nil && !slices.Contains(paths, path) {
+			paths = append(paths, path)
+		}
+	}
+	for _, root := range []string{project, filepath.Join(project, library.ProjectDir)} {
+		for _, kind := range types {
+			add(filepath.Join(root, kind))
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Harness)) {
+		for _, file := range cfg.Harness[name].Files {
+			add(filepath.Join(project, file.Source))
+		}
+	}
+	return paths
 }

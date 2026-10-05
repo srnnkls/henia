@@ -202,6 +202,7 @@ severity = "error"
 func TestLintSimilarityConfigAndJSON(t *testing.T) {
 	root := t.TempDir()
 	paragraph := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
+	fixture(t, filepath.Join(root, "SKILL.md"), "---\nname: similar\ndescription: Similar paragraphs\n---\n")
 	fixture(t, filepath.Join(root, "a.md"), paragraph+"\n")
 	fixture(t, filepath.Join(root, "b.md"), strings.Replace(paragraph, "every", "each", 1)+"\n")
 	testConfig(t, "[lint.config.similar-content]\nsimilarity = 0.7\n")
@@ -225,6 +226,7 @@ func TestLintSimilarityConfigAndJSON(t *testing.T) {
 
 func TestLintSemanticConfigAndJSON(t *testing.T) {
 	root := t.TempDir()
+	fixture(t, filepath.Join(root, "SKILL.md"), "---\nname: semantic\ndescription: Semantic paragraphs\n---\n")
 	fixture(t, filepath.Join(root, "a.md"), "Repair broken program.\n")
 	fixture(t, filepath.Join(root, "b.md"), "Fix faulty code.\n")
 	modelPath, err := filepath.Abs("../lint/testdata/model")
@@ -377,5 +379,35 @@ func TestLintLoadsDependencyModules(t *testing.T) {
 	}
 	if len(diagnostics) != 1 || diagnostics[0].Rule != "no-todo" || !strings.HasSuffix(diagnostics[0].Path, filepath.Join("own", "SKILL.md")) {
 		t.Fatalf("%+v", diagnostics)
+	}
+}
+
+func TestLintDefaultsToPackageContents(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	fixture(t, filepath.Join(project, "skills", "own", "SKILL.md"), "---\nname: own\ndescription: Own skill for tests.\n---\n\n[broken](absent.md)\n")
+	fixture(t, filepath.Join(project, "instructions", "AGENTS.md"), "[broken](absent.md)\n")
+	fixture(t, filepath.Join(project, "docs", "guide.md"), "[broken](absent.md)\n")
+	testConfig(t, "artifacts = [\"skills\"]\n[harness.claude.files]\n\"CLAUDE.md\" = { source = \"instructions/AGENTS.md\" }\n")
+	cmd := newLintCommand()
+	cmd.SilenceUsage = true
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--format", "json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var diagnostics []lint.Diagnostic
+	if err := json.Unmarshal(out.Bytes(), &diagnostics); err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, d := range diagnostics {
+		paths = append(paths, filepath.Base(d.Path))
+	}
+	if got := strings.Join(paths, " "); got != "AGENTS.md SKILL.md" {
+		t.Fatalf("linted %s", got)
 	}
 }

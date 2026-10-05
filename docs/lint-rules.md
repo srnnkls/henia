@@ -1,6 +1,12 @@
 # Lint rules
 
-`henia lint` runs rules written in [hq](query.md) over every scanned file.
+`henia lint` runs rules written in [hq](query.md) over a package's contents.
+Without paths it scans the project's package: the `skills`, `commands` and
+`agents` directories that `henia.toml` names, at the project root and in
+`.henia/`, plus the sources of its harness `files`. A directory argument yields
+its skills, commands and agents and the resources and references inside skill
+directories; other Markdown is left out. A file argument is always linted.
+
 Rules live in Markdown modules: the standard library ships with Henia and runs
 by default, and projects and users add their own modules, which import the
 standard library's patterns and compose new rules from them.

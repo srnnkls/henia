@@ -83,6 +83,17 @@ func sortDiagnostics(diagnostics []Diagnostic) []Diagnostic {
 
 func collect(ctx context.Context, paths []string) ([]string, error) {
 	seen := make(map[string]bool)
+	skillDirs := make(map[string]bool)
+	var inSkill func(dir string) bool
+	inSkill = func(dir string) bool {
+		if known, ok := skillDirs[dir]; ok {
+			return known
+		}
+		_, err := os.Stat(filepath.Join(dir, artifact.MainFileName(artifact.TypeSkill)))
+		found := err == nil || filepath.Dir(dir) != dir && inSkill(filepath.Dir(dir))
+		skillDirs[dir] = found
+		return found
+	}
 	var files []string
 	for _, root := range paths {
 		ignored, err := gitIgnored(ctx, root)
@@ -112,6 +123,9 @@ func collect(ctx context.Context, paths []string) ([]string, error) {
 			absolute, err := filepath.Abs(path)
 			if err != nil {
 				return err
+			}
+			if path != root && artifactKind(path) == artifact.TypeUnknown && !inSkill(filepath.Dir(absolute)) {
+				return nil
 			}
 			if !seen[absolute] {
 				files = append(files, path)

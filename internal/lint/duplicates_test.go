@@ -12,7 +12,7 @@ func TestDuplicateDirectiveContentAndRelatedLocations(t *testing.T) {
 	paragraph := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
 	first := write(t, root, "a.md", ":::instruction\n"+paragraph+"\n:::\n")
 	second := write(t, root, "b.md", ":::outer\n:::instruction\n"+strings.ToUpper(paragraph)+"\n:::\n:::\n")
-	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{})
+	diagnostics, err := lint.Run(t.Context(), []string{first, second}, lint.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,9 +27,9 @@ func TestDuplicateDirectiveContentAndRelatedLocations(t *testing.T) {
 func TestDuplicateContentRetainsLinkDestinations(t *testing.T) {
 	root := t.TempDir()
 	text := "Read this detailed guide before proceeding with any changes to the project configuration or dependencies."
-	write(t, root, "a.md", "["+text+"](https://example.test/first)\n")
-	write(t, root, "b.md", "["+text+"](https://example.test/second)\n")
-	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{})
+	a := write(t, root, "a.md", "["+text+"](https://example.test/first)\n")
+	b := write(t, root, "b.md", "["+text+"](https://example.test/second)\n")
+	diagnostics, err := lint.Run(t.Context(), []string{a, b}, lint.Options{})
 	if err != nil || len(diagnostics) != 0 {
 		t.Fatalf("distinct links treated as copies: %+v (%v)", diagnostics, err)
 	}
@@ -37,7 +37,7 @@ func TestDuplicateContentRetainsLinkDestinations(t *testing.T) {
 
 func TestDuplicateContentThresholdAndLiteralContexts(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, "a.md", "Run the checks first.\n\nRun  the checks\nfirst.\n\n```md\nRun the checks first.\n```\n\nRun {{.checks}} first.\n\nRun {{.checks}} first.\n")
+	root = write(t, root, "a.md", "Run the checks first.\n\nRun  the checks\nfirst.\n\n```md\nRun the checks first.\n```\n\nRun {{.checks}} first.\n\nRun {{.checks}} first.\n")
 	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{})
 	if err != nil || len(diagnostics) != 0 {
 		t.Fatalf("default threshold: %+v (%v)", diagnostics, err)
