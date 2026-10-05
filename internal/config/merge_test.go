@@ -49,12 +49,12 @@ severty = "error"
 
 func TestSemanticModelPathFollowsDeclaringLayer(t *testing.T) {
 	projectRoot, userRoot := t.TempDir(), t.TempDir()
-	user := []byte("[lint.semantic]\nenabled=true\nmodel_path='models/potion'\nthreshold=0.4\n")
-	cfg, err := decodeLayers(projectRoot, userRoot, user, []byte("[lint.semantic]\nthreshold=0.5\n"))
+	user := []byte("[lint.semantic]\nenabled=true\nmodel_path='models/potion'\n")
+	cfg, err := decodeLayers(projectRoot, userRoot, user, []byte("[lint.config.semantic-content]\nthreshold=0.5\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Lint.Semantic.ModelPath != filepath.Join(userRoot, "models/potion") || cfg.Lint.Semantic.Threshold != 0.5 {
+	if cfg.Lint.Semantic.ModelPath != filepath.Join(userRoot, "models/potion") || cfg.Lint.Config["semantic-content"]["threshold"] != 0.5 {
 		t.Fatalf("%+v", cfg.Lint.Semantic)
 	}
 	cfg, err = decodeLayers(projectRoot, userRoot, user, []byte("[lint.semantic]\nmodel_path='local-model'\nenabled=false\n"))
@@ -63,8 +63,5 @@ func TestSemanticModelPathFollowsDeclaringLayer(t *testing.T) {
 	}
 	if cfg.Lint.Semantic.ModelPath != filepath.Join(projectRoot, "local-model") || cfg.Lint.Semantic.Enabled {
 		t.Fatalf("%+v", cfg.Lint.Semantic)
-	}
-	if _, err := decodeLayers(projectRoot, userRoot, nil, []byte("[lint.semantic]\nenabled=true\nmodel_path='model'\n")); err == nil {
-		t.Fatal("accepted uncalibrated implicit threshold")
 	}
 }

@@ -23,6 +23,7 @@ type mention struct {
 	pos             int
 	scope           *scope
 	binds, optional bool
+	output          bool
 	member          int
 	negated, absent bool
 }
@@ -45,6 +46,9 @@ func (q *Query) check() error {
 		for _, a := range p.Attrs {
 			if a.Var != "" {
 				mentions = append(mentions, mention{name: a.Var, pos: a.Pos, scope: s, binds: !a.Negate && a.Relate == "", optional: optional, member: member, negated: negated, absent: member < 0})
+			}
+			if a.Score != "" {
+				mentions = append(mentions, mention{name: a.Score, pos: a.Pos, scope: s, binds: true, output: true, optional: optional, member: member, negated: negated, absent: member < 0})
 			}
 		}
 		if len(p.Alts) > 1 {
@@ -90,7 +94,7 @@ func (q *Query) check() error {
 		count[m.name]++
 	}
 	for _, m := range mentions {
-		if count[m.name] == 1 {
+		if count[m.name] == 1 && !m.output {
 			return &Error{Offset: m.pos, Message: fmt.Sprintf("?%s appears only once, so it matches anything", m.name), Hint: fmt.Sprintf("use ?%s again to join on it, or drop it", m.name)}
 		}
 	}

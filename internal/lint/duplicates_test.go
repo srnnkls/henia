@@ -50,7 +50,4 @@ func TestDuplicateContentThresholdAndLiteralContexts(t *testing.T) {
 	if err != nil || len(diagnostics) != 0 {
 		t.Fatalf("disabled: %+v (%v)", diagnostics, err)
 	}
-	if err := (lint.Options{DuplicateMinWords: -1}).Validate(); err == nil {
-		t.Fatal("accepted negative threshold")
-	}
 }

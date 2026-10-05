@@ -4,7 +4,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -37,7 +36,8 @@ func TestLexicalParagraphs(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := paragraphFiles(t, test.a, test.b)
-			diagnostics, err := Run(t.Context(), []string{root}, Options{DuplicateSimilarity: test.similarity, DuplicateContainment: test.containment})
+			config := map[string]map[string]any{"similar-content": {"similarity": test.similarity, "containment": test.containment}}
+			diagnostics, err := Run(t.Context(), []string{root}, Options{Config: config})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -51,7 +51,7 @@ func TestLexicalParagraphs(t *testing.T) {
 				t.Fatalf("%+v", diagnostics)
 			}
 			d := diagnostics[0]
-			if d.Rule != "similar-content" || d.Method != test.method || d.Similarity == nil || math.Abs(*d.Similarity-test.want) > 1e-10 || d.Line != 2 || len(d.Related) != 1 || d.Related[0].Path != filepath.Join(root, "a.md") || len(d.SharedPhrases) == 0 {
+			if d.Rule != "similar-content" || d.Method != test.method || d.Similarity == nil || math.Abs(*d.Similarity-test.want) > 1e-10 || d.Line != 2 || len(d.Related) != 1 || d.Related[0].Path != filepath.Join(root, "a.md") || len(d.SharedPhrases) == 0 || !strings.Contains(d.Message, "shared phrases: "+d.SharedPhrases[0]) {
 				t.Fatalf("%+v", d)
 			}
 		})
@@ -61,63 +61,50 @@ func TestLexicalParagraphs(t *testing.T) {
 func TestLexicalThresholdsAndDisabling(t *testing.T) {
 	one := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
 	root := paragraphFiles(t, one, strings.Replace(one, "every", "each", 1))
-	for _, options := range []Options{{}, {DuplicateSimilarity: 1}, {DuplicateSimilarity: 0.7, DuplicateMinWords: 100}, {DuplicateSimilarity: 0.7, Disable: []string{"similar-content"}}} {
-		diagnostics, err := Run(t.Context(), []string{root}, options)
+	for _, config := range []map[string]any{{}, {"similarity": 1}, {"similarity": 0.7, "min-words": 100}} {
+		diagnostics, err := Run(t.Context(), []string{root}, Options{Config: map[string]map[string]any{"similar-content": config}})
 		if err != nil || len(diagnostics) != 0 {
-			t.Fatalf("%+v: %+v (%v)", options, diagnostics, err)
+			t.Fatalf("%+v: %+v (%v)", config, diagnostics, err)
 		}
 	}
-	for _, threshold := range []float64{-0.1, 1.1, math.NaN(), math.Inf(1)} {
-		for _, options := range []Options{{DuplicateSimilarity: threshold}, {DuplicateContainment: threshold}, {Semantic: SemanticOptions{Threshold: threshold}}} {
-			if err := options.Validate(); err == nil {
-				t.Fatalf("accepted %+v", options)
-			}
-		}
-	}
-	if err := (Options{DuplicateShingleWords: -1}).Validate(); err == nil {
-		t.Fatal("accepted negative shingle size")
+	diagnostics, err := Run(t.Context(), []string{root}, Options{Config: map[string]map[string]any{"similar-content": {"similarity": 0.7}}, Disable: []string{"similar-content"}})
+	if err != nil || len(diagnostics) != 0 {
+		t.Fatalf("disabled: %+v (%v)", diagnostics, err)
 	}
 }
 
-func TestShinglesUnicodeAndMultiplicity(t *testing.T) {
-	p := newParagraph("CAFÉ naïve résumé! café naïve résumé", Location{}, 3)
-	if len(p.shingles) != 3 || !p.shingles["café naïve résumé"] {
-		t.Fatalf("%v", p.shingles)
+func TestSemanticLocalModel(t *testing.T) {
+	root := paragraphFiles(t, "Repair broken program.", "Fix faulty code.", "Simmer vegetable soup.", "Repair broken program.")
+	options := Options{
+		Config:   map[string]map[string]any{"duplicate-content": {"min-words": 1}, "semantic-content": {"min-words": 1, "threshold": 0.85}},
+		Semantic: SemanticOptions{Enabled: true, ModelPath: "testdata/model"},
 	}
-	if len(newParagraph("too short", Location{}, 3).shingles) != 0 {
-		t.Fatal("short input must not create a partial shingle")
+	diagnostics, err := Run(t.Context(), []string{root}, options)
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestLexicalClosestMatchAndStableTie(t *testing.T) {
-	c := checker{options: Options{DuplicateSimilarity: 0.5}, shingleIndex: map[string][]int{}}
-	for _, text := range []string{"one two three four x y", "one two three four five x", "one two three four five y"} {
-		p := newParagraph(text, Location{}, 2)
-		for shingle := range p.shingles {
-			c.shingleIndex[shingle] = append(c.shingleIndex[shingle], len(c.similarParagraphs))
-		}
-		c.similarParagraphs = append(c.similarParagraphs, p)
+	if len(diagnostics) != 2 {
+		t.Fatalf("%+v", diagnostics)
 	}
-	p := newParagraph("one two three four five six", Location{}, 2)
-	match, ok := c.closestLexical(p)
-	if !ok || match.index != 1 || math.Abs(match.score-2.0/3) > 1e-10 {
-		t.Fatalf("%+v %v", match, ok)
+	d := diagnostics[0]
+	if d.Rule != "semantic-content" || d.Method != "cosine" || d.Model != "testdata/model" || d.Similarity == nil || math.Abs(*d.Similarity-1) > 1e-9 || len(d.Related) != 1 || d.Related[0].Path != filepath.Join(root, "a.md") || d.Path != filepath.Join(root, "b.md") || d.Line != 2 {
+		t.Fatalf("%+v", d)
 	}
-	phrases := sharedPhrases(p, c.similarParagraphs[match.index])
-	if !slices.IsSorted(phrases) {
-		t.Fatalf("unstable explanation: %v", phrases)
-	}
-	c.options.DuplicateSimilarity = 0.67
-	if _, ok := c.closestLexical(p); ok {
-		t.Fatal("matched below threshold")
+	if diagnostics[1].Rule != "duplicate-content" {
+		t.Fatalf("%+v", diagnostics)
 	}
 }
 
-func TestExactTakesPriorityOverLexical(t *testing.T) {
-	p := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
-	root := paragraphFiles(t, p, strings.ToUpper(p))
-	diagnostics, err := Run(t.Context(), []string{root}, Options{DuplicateSimilarity: 0.5, DuplicateContainment: 0.5})
-	if err != nil || len(diagnostics) != 1 || diagnostics[0].Rule != "duplicate-content" {
-		t.Fatalf("%+v (%v)", diagnostics, err)
+func TestSemanticModelLoading(t *testing.T) {
+	root := paragraphFiles(t, "repair broken program", "fix faulty code")
+	if err := (Options{Semantic: SemanticOptions{Enabled: true}}).Validate(); err == nil {
+		t.Fatal("accepted missing model configuration")
+	}
+	config := map[string]map[string]any{"semantic-content": {"min-words": 1, "threshold": 0.8}}
+	if diagnostics, err := Run(t.Context(), []string{root}, Options{Config: config, Semantic: SemanticOptions{ModelPath: t.TempDir()}}); err != nil || len(diagnostics) != 0 {
+		t.Fatalf("model loaded while semantic checks are off: %+v (%v)", diagnostics, err)
+	}
+	if _, err := Run(t.Context(), []string{root}, Options{Config: config, Semantic: SemanticOptions{Enabled: true, ModelPath: t.TempDir()}}); err == nil || !strings.Contains(err.Error(), "load semantic model") {
+		t.Fatalf("missing model: %v", err)
 	}
 }

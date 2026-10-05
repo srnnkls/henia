@@ -46,6 +46,7 @@ type binding struct {
 type constraint struct {
 	name, value, relate string
 	threshold           float64
+	limit, score        string
 }
 
 type Environment struct {
@@ -199,7 +200,7 @@ func (m *matcher) nearIndex(rows, bindings []binding) (func(binding) []binding, 
 	}
 	name := ""
 	for _, c := range bindings[0].unequal {
-		if _, bound := rows[0].vars[c.name]; bound && c.relate == "near" {
+		if _, bound := rows[0].vars[c.name]; bound && (c.relate == "near" || c.relate == "overlap") {
 			name = c.name
 		}
 	}
@@ -209,7 +210,7 @@ func (m *matcher) nearIndex(rows, bindings []binding) (func(binding) []binding, 
 	postings := map[string][]int{}
 	var loose []binding
 	for i, b := range bindings {
-		at := slices.IndexFunc(b.unequal, func(c constraint) bool { return c.name == name && c.relate == "near" })
+		at := slices.IndexFunc(b.unequal, func(c constraint) bool { return c.name == name && (c.relate == "near" || c.relate == "overlap") })
 		if at < 0 {
 			loose = append(loose, b)
 			continue
@@ -353,7 +354,7 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 		case a.Negate:
 			bound = binding{unequal: []constraint{{name: a.Var, value: value, relate: "not"}}}
 		case a.Relate != "":
-			bound = binding{unequal: []constraint{{name: a.Var, value: value, relate: a.Relate, threshold: a.Threshold}}}
+			bound = binding{unequal: []constraint{{name: a.Var, value: value, relate: a.Relate, threshold: a.Threshold, limit: a.Limit, score: a.Score}}}
 		}
 		if seed, ok = m.unify(seed, bound); !ok {
 			return nil, nil
@@ -697,8 +698,10 @@ func (m *matcher) unify(b, other binding) (binding, bool) {
 	}
 	for _, constraints := range [][]constraint{b.unequal, other.unequal} {
 		for _, c := range constraints {
-			if value, bound := lookup(c.name); bound && !m.satisfies(c, value) {
-				return binding{}, false
+			if value, bound := lookup(c.name); bound {
+				if ok, _ := m.satisfies(c, value); !ok {
+					return binding{}, false
+				}
 			}
 		}
 	}
@@ -713,8 +716,16 @@ func (m *matcher) unify(b, other binding) (binding, bool) {
 		out.vars[name] = value
 	}
 	for _, c := range out.unequal {
-		if value, bound := out.vars[c.name]; bound && !m.satisfies(c, value) {
+		value, bound := out.vars[c.name]
+		if !bound {
+			continue
+		}
+		ok, score := m.satisfies(c, value)
+		if !ok {
 			return binding{}, false
+		}
+		if c.score != "" {
+			out.vars[c.score] = strconv.FormatFloat(score, 'f', -1, 64)
 		}
 	}
 	for name, elements := range other.captures {
@@ -802,23 +813,40 @@ func (m *matcher) test(a Attr, e *markup.Element) bool {
 	return value == a.Value
 }
 
-func (m *matcher) satisfies(c constraint, bound string) bool {
+func (m *matcher) satisfies(c constraint, bound string) (bool, float64) {
 	switch c.relate {
 	case "after":
-		return c.value > bound
+		return c.value > bound, 0
 	case "before":
-		return c.value < bound
+		return c.value < bound, 0
 	case "contains":
-		return strings.Contains(strings.ToLower(c.value), strings.ToLower(bound))
+		return strings.Contains(strings.ToLower(c.value), strings.ToLower(bound)), 0
 	case "covers":
-		return bound == c.value || strings.HasPrefix(bound, c.value+".")
-	case "near":
-		return similarity.Jaccard(m.shingle(c.value), m.shingle(bound)) >= c.threshold
-	case "similar":
-		a, b := m.vector(c.value), m.vector(bound)
-		return a != nil && b != nil && similarity.Cosine(a, b) >= c.threshold
+		return bound == c.value || strings.HasPrefix(bound, c.value+"."), 0
+	case "near", "overlap", "similar":
+		threshold := c.threshold
+		if c.limit != "" {
+			threshold, _ = strconv.ParseFloat(m.env.Params[c.limit], 64)
+		}
+		if threshold <= 0 {
+			return false, 0
+		}
+		var score float64
+		switch c.relate {
+		case "near":
+			score = similarity.Jaccard(m.shingle(c.value), m.shingle(bound))
+		case "overlap":
+			score = similarity.Containment(m.shingle(c.value), m.shingle(bound))
+		default:
+			a, b := m.vector(c.value), m.vector(bound)
+			if a == nil || b == nil {
+				return false, 0
+			}
+			score = similarity.Cosine(a, b)
+		}
+		return score >= threshold, score
 	}
-	return c.value != bound
+	return c.value != bound, 0
 }
 
 func (m *matcher) shingle(text string) map[string]bool {

@@ -16,6 +16,9 @@ type Rule struct {
 	At       []string
 	Related  []string
 	Focus    string
+	Score    string
+	Method   string
+	Shared   []string
 	Query    *Query
 	Offset   int
 }
@@ -34,7 +37,7 @@ type Module struct {
 
 var ruleID = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
-var placeholder = regexp.MustCompile(`\{([@?$])([A-Za-z_][A-Za-z0-9_-]*)(?:\.([A-Za-z_][A-Za-z0-9_.-]*))?\}`)
+var placeholder = regexp.MustCompile(`\{([@?$])([A-Za-z_][A-Za-z0-9_-]*)(?:\.([A-Za-z0-9_][A-Za-z0-9_.-]*))?\}`)
 
 func ReadModule(src string, imported func(name string) (map[string]Define, error)) (*Module, error) {
 	tokens, err := lex(src)
@@ -220,13 +223,28 @@ func (r *reader) rule(open token) (*Rule, error) {
 			} else {
 				rule.At = captures
 			}
-		case "focus":
+		case "focus", "score":
 			if value.kind != tVar {
-				return nil, r.unexpected(value, "a ?variable for :focus")
+				return nil, r.unexpected(value, fmt.Sprintf("a ?variable for :%s", key.text))
 			}
-			rule.Focus = value.text
+			if key.text == "focus" {
+				rule.Focus = value.text
+			} else {
+				rule.Score = value.text
+			}
+		case "method":
+			if value.kind != tSymbol && value.kind != tString {
+				return nil, r.unexpected(value, "a method name for :method")
+			}
+			rule.Method = value.text
+		case "shared":
+			second := r.next()
+			if value.kind != tCapture || second.kind != tCapture {
+				return nil, r.unexpected(value, "two @captures for :shared, as in :shared @copy @original")
+			}
+			rule.Shared = []string{value.text, second.text}
 		default:
-			return nil, &Error{Offset: key.pos, Message: fmt.Sprintf("a rule has no key :%s", key.text), Hint: suggest(key.text, []string{"severity", "message", "at", "related", "focus"})}
+			return nil, &Error{Offset: key.pos, Message: fmt.Sprintf("a rule has no key :%s", key.text), Hint: suggest(key.text, []string{"severity", "message", "at", "related", "focus", "score", "method", "shared"})}
 		}
 	}
 	if rule.Message == "" {
@@ -238,7 +256,7 @@ func (r *reader) rule(open token) (*Rule, error) {
 	}
 	r.next()
 	rule.Query = q
-	for _, capture := range slices.Concat(rule.At, rule.Related) {
+	for _, capture := range slices.Concat(rule.At, rule.Related, rule.Shared) {
 		if capture != "" && !slices.Contains(q.Captures, capture) {
 			return nil, &Error{Offset: open.pos, Message: fmt.Sprintf("rule %s points at @%s, which its query does not capture", rule.ID, capture)}
 		}

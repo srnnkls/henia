@@ -2,13 +2,11 @@
 package lint
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"fmt"
 	"io/fs"
 	"maps"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +16,6 @@ import (
 
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/library"
-	"github.com/srnnkls/henia/internal/markup"
 )
 
 type Diagnostic struct {
@@ -42,37 +39,15 @@ type Location struct {
 }
 
 type Options struct {
-	Rules                 []InlineRule              `toml:"rules,omitempty"`
-	Config                map[string]map[string]any `toml:"config,omitempty"`
-	Modules               []string                  `toml:"-"`
-	Disable               []string                  `toml:"disable,omitempty"`
-	DuplicateMinWords     int                       `toml:"duplicate_min_words,omitempty"`
-	DuplicateSimilarity   float64                   `toml:"duplicate_similarity,omitempty"`
-	DuplicateContainment  float64                   `toml:"duplicate_containment,omitempty"`
-	DuplicateShingleWords int                       `toml:"duplicate_shingle_words,omitempty"`
-	Semantic              SemanticOptions           `toml:"semantic,omitempty"`
-	Now                   time.Time                 `toml:"-"`
+	Rules    []InlineRule              `toml:"rules,omitempty"`
+	Config   map[string]map[string]any `toml:"config,omitempty"`
+	Modules  []string                  `toml:"-"`
+	Disable  []string                  `toml:"disable,omitempty"`
+	Semantic SemanticOptions           `toml:"semantic,omitempty"`
+	Now      time.Time                 `toml:"-"`
 }
 
-var rules = []string{"similar-content", "semantic-content"}
-
-func (o Options) Validate() error {
-	for _, limit := range []struct {
-		name  string
-		value float64
-	}{{"duplicate_similarity", o.DuplicateSimilarity}, {"duplicate_containment", o.DuplicateContainment}} {
-		if math.IsNaN(limit.value) || limit.value < 0 || limit.value > 1 {
-			return fmt.Errorf("%s must be between 0 and 1 (0 disables this measure)", limit.name)
-		}
-	}
-	if err := o.Semantic.validate(); err != nil {
-		return err
-	}
-	if o.DuplicateMinWords < 0 || o.DuplicateShingleWords < 0 {
-		return fmt.Errorf("lint limits must not be negative")
-	}
-	return nil
-}
+func (o Options) Validate() error { return o.Semantic.validate() }
 
 type document struct {
 	path   string
@@ -80,15 +55,6 @@ type document struct {
 	body   []byte
 	offset int
 	art    *artifact.Artifact
-	kind   artifact.Type
-}
-
-type checker struct {
-	options           Options
-	diagnostics       []Diagnostic
-	paragraphs        map[string]Diagnostic
-	similarParagraphs []paragraph
-	shingleIndex      map[string][]int
 }
 
 // Run checks Markdown files and directories recursively. Artifact references are
@@ -96,12 +62,6 @@ type checker struct {
 func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, error) {
 	if err := options.Validate(); err != nil {
 		return nil, err
-	}
-	if options.DuplicateMinWords == 0 {
-		options.DuplicateMinWords = 12
-	}
-	if options.DuplicateShingleWords == 0 {
-		options.DuplicateShingleWords = 3
 	}
 	if options.Now.IsZero() {
 		options.Now = time.Now()
@@ -113,7 +73,6 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no Markdown files found")
 	}
-	c := checker{options: options, diagnostics: []Diagnostic{}, paragraphs: make(map[string]Diagnostic), shingleIndex: make(map[string][]int)}
 	registry, err := loadModules(options.Modules)
 	if err != nil {
 		return nil, err
@@ -122,7 +81,7 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 	if err != nil {
 		return nil, err
 	}
-	known := slices.Clone(rules)
+	var known []string
 	for _, s := range specs {
 		known = append(known, s.id)
 		if err := s.configure(options.Config[s.id]); err != nil {
@@ -134,35 +93,12 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 			return nil, fmt.Errorf("unknown lint rule %q", rule)
 		}
 	}
-	var documents []document
 	var docs []library.Document
 	for _, path := range files {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", path, err)
-		}
-		d := document{path: path, source: data, kind: artifactKind(path)}
-		docs = append(docs, library.Document{Path: path, Kind: string(d.kind)})
-		d.art, err = artifact.Parse(data)
-		if err != nil {
-			continue
-		}
-		d.body = []byte(d.art.Body)
-		d.offset = len(data) - len(d.body)
-		documents = append(documents, d)
-	}
-	for _, d := range documents {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if err := c.check(d); err != nil {
-			return nil, err
-		}
+		docs = append(docs, library.Document{Path: path, Kind: string(artifactKind(path))})
 	}
 	ev := &evaluation{corpus: corpus(docs)}
+	diagnostics := []Diagnostic{}
 	for _, s := range specs {
 		if slices.Contains(options.Disable, s.id) {
 			continue
@@ -170,19 +106,16 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		diagnostics, err := ev.run(s, options)
+		found, err := ev.run(s, options)
 		if err != nil {
 			return nil, err
 		}
-		c.diagnostics = append(c.diagnostics, diagnostics...)
+		diagnostics = append(diagnostics, found...)
 	}
-	if err := c.checkSemantic(ctx); err != nil {
-		return nil, err
-	}
-	slices.SortFunc(c.diagnostics, func(a, b Diagnostic) int {
+	slices.SortFunc(diagnostics, func(a, b Diagnostic) int {
 		return cmp.Or(strings.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column), strings.Compare(a.Rule, b.Rule), strings.Compare(a.Message, b.Message))
 	})
-	return slices.CompactFunc(c.diagnostics, func(a, b Diagnostic) bool {
+	return slices.CompactFunc(diagnostics, func(a, b Diagnostic) bool {
 		return a.Path == b.Path && a.Line == b.Line && a.Column == b.Column && a.Rule == b.Rule && a.Message == b.Message
 	}), nil
 }
@@ -240,28 +173,6 @@ func artifactKind(path string) artifact.Type {
 		}
 	}
 	return artifact.TypeUnknown
-}
-
-func (c *checker) add(d document, offset int, severity, rule, message string) {
-	if slices.Contains(c.options.Disable, rule) {
-		return
-	}
-	offset = min(max(offset, 0), len(d.source))
-	c.diagnostics = append(c.diagnostics, Diagnostic{
-		Path: d.path, Line: bytes.Count(d.source[:offset], []byte{'\n'}) + 1,
-		Column: offset - bytes.LastIndexByte(d.source[:offset], '\n'), Severity: severity, Rule: rule, Message: message,
-	})
-}
-
-func (c *checker) check(d document) error {
-	markupSource := d.body
-	if d.kind != artifact.TypeUnknown {
-		if masked, err := markup.MaskTemplates(d.body); err == nil {
-			markupSource = masked
-		}
-	}
-	c.checkDuplicates(d, markupSource)
-	return nil
 }
 
 // gitIgnored returns the absolute paths Git ignores below root. Ignored

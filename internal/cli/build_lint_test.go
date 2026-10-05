@@ -203,7 +203,7 @@ func TestLintSimilarityConfigAndJSON(t *testing.T) {
 	paragraph := "Inspect every changed function and report concrete failures with enough context to reproduce the problem."
 	fixture(t, filepath.Join(root, "a.md"), paragraph+"\n")
 	fixture(t, filepath.Join(root, "b.md"), strings.Replace(paragraph, "every", "each", 1)+"\n")
-	testConfig(t, "[lint]\nduplicate_similarity = 0.7\nduplicate_min_words = 12\n")
+	testConfig(t, "[lint.config.similar-content]\nsimilarity = 0.7\n")
 	cmd := newLintCommand()
 	cmd.SilenceUsage = true
 	out := &bytes.Buffer{}
@@ -230,7 +230,7 @@ func TestLintSemanticConfigAndJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testConfig(t, "[lint]\nduplicate_min_words=1\n[lint.semantic]\nenabled=true\nthreshold=0.8\nmodel_path='"+filepath.ToSlash(modelPath)+"'\n")
+	testConfig(t, "[lint.semantic]\nenabled=true\nmodel_path='"+filepath.ToSlash(modelPath)+"'\n[lint.config.semantic-content]\nmin-words=1\nthreshold=0.8\n")
 	cmd := newLintCommand()
 	cmd.SilenceUsage = true
 	output := &bytes.Buffer{}

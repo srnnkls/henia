@@ -70,6 +70,8 @@ type Attr struct {
 	Param     string
 	Op        string
 	Number    float64
+	Limit     string
+	Score     string
 }
 
 type Error struct {
@@ -593,23 +595,31 @@ func (r *reader) attr(kind string) (Attr, error) {
 			if value.kind != tVar {
 				return attr, r.unexpected(value, fmt.Sprintf("a ?variable, as in (%s ?x)", form.text))
 			}
-		case "after", "before", "near", "similar":
+		case "after", "before", "near", "overlap", "similar":
 			attr.Relate = form.text
 			value = r.next()
 			if value.kind != tVar {
-				return attr, r.unexpected(value, fmt.Sprintf("a ?variable, as in (%s ?x%s)", form.text, map[string]string{"after": "", "near": " 0.7", "similar": " 0.8"}[form.text]))
+				return attr, r.unexpected(value, fmt.Sprintf("a ?variable, as in (%s ?x%s)", form.text, map[string]string{"after": "", "before": "", "near": " 0.7", "overlap": " 0.9", "similar": " 0.8"}[form.text]))
 			}
-			if form.text == "near" || form.text == "similar" {
+			if form.text == "near" || form.text == "overlap" || form.text == "similar" {
 				threshold := r.next()
-				t, err := strconv.ParseFloat(threshold.text, 64)
-				if threshold.kind != tFloat && threshold.kind != tInt || err != nil || t <= 0 || t > 1 {
-					return attr, &Error{Offset: threshold.pos, Message: fmt.Sprintf("(%s ?x T) takes a threshold above 0 and at most 1", form.text), Hint: fmt.Sprintf("e.g. (%s ?t 0.7)", form.text)}
+				if threshold.kind == tParam {
+					attr.Limit = threshold.text
+					r.params = append(r.params, threshold.text)
+				} else {
+					t, err := strconv.ParseFloat(threshold.text, 64)
+					if threshold.kind != tFloat && threshold.kind != tInt || err != nil || t <= 0 || t > 1 {
+						return attr, &Error{Offset: threshold.pos, Message: fmt.Sprintf("(%s ?x T) takes a threshold above 0 and at most 1", form.text), Hint: fmt.Sprintf("e.g. (%s ?t 0.7)", form.text)}
+					}
+					attr.Threshold = t
 				}
-				attr.Threshold = t
+				if r.peek().kind == tVar {
+					attr.Score = r.next().text
+				}
 				r.semantic = r.semantic || form.text == "similar"
 			}
 		default:
-			return attr, r.unexpected(form, "not, after, before, contains, covers, near, similar, older or a comparison, as in (not ?x), (near ?t 0.7) or (> 500)")
+			return attr, r.unexpected(form, "not, after, before, contains, covers, near, overlap, similar, older or a comparison, as in (not ?x), (near ?t 0.7) or (> 500)")
 		}
 		if c := r.next(); c.kind != tClose {
 			return attr, r.unexpected(c, fmt.Sprintf(") closing (%s", form.text))

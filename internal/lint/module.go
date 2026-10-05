@@ -353,7 +353,7 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 		if at == nil || disabledHere(at, rule.ID) {
 			continue
 		}
-		d := Diagnostic{Severity: rule.Severity, Rule: rule.ID, Message: render(rule.Message, row, s.params)}
+		d := Diagnostic{Severity: rule.Severity, Rule: rule.ID}
 		location := locate(at)
 		if rule.Focus != "" {
 			location = focus(at, location, row.Vars[rule.Focus])
@@ -362,6 +362,21 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 		if related := first(row, rule.Related); related != nil {
 			d.Related = []Location{locate(related)}
 		}
+		if rule.Score != "" {
+			if score, err := strconv.ParseFloat(row.Vars[rule.Score], 64); err == nil {
+				d.Similarity = &score
+			}
+		}
+		d.Method = rule.Method
+		if rule.Query.Semantic {
+			d.Model = options.Semantic.ModelPath
+		}
+		if len(rule.Shared) == 2 {
+			if a, b := capture(row, rule.Shared[0]), capture(row, rule.Shared[1]); a != nil && b != nil {
+				d.SharedPhrases = similarity.Shared(similarity.Shingles(a.Text, 3), similarity.Shingles(b.Text, 3), 5)
+			}
+		}
+		d.Message = strings.ReplaceAll(render(rule.Message, row, s.params), "{shared}", strings.Join(d.SharedPhrases, "; "))
 		out = append(out, d)
 	}
 	return out, nil
@@ -429,9 +444,19 @@ func render(message string, row pattern.Row, params map[string]string) string {
 			value = params[m[2]]
 		case "?":
 			value = row.Vars[m[2]]
+			if n, err := strconv.ParseFloat(value, 64); err == nil && m[3] != "" {
+				if m[3] == "percent" {
+					value = strconv.FormatFloat(n*100, 'f', 1, 64) + "%"
+				} else if digits, err := strconv.Atoi(m[3]); err == nil {
+					value = strconv.FormatFloat(n, 'f', digits, 64)
+				}
+			}
 		case "@":
 			e := capture(row, m[2])
 			if e == nil {
+				break
+			}
+			if m[3] == "shared" {
 				break
 			}
 			switch m[3] {

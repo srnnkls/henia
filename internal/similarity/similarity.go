@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -36,6 +37,30 @@ func Jaccard(a, b map[string]bool) float64 {
 		}
 	}
 	return float64(shared) / float64(len(a)+len(b)-shared)
+}
+
+func Containment(a, b map[string]bool) float64 {
+	if len(a) == 0 || len(b) == 0 {
+		return 0
+	}
+	shared := 0
+	for shingle := range a {
+		if b[shingle] {
+			shared++
+		}
+	}
+	return float64(shared) / float64(min(len(a), len(b)))
+}
+
+func Shared(a, b map[string]bool, limit int) []string {
+	var phrases []string
+	for shingle := range a {
+		if b[shingle] {
+			phrases = append(phrases, shingle)
+		}
+	}
+	slices.Sort(phrases)
+	return phrases[:min(limit, len(phrases))]
 }
 
 func Unit(raw []float32) ([]float64, error) {
