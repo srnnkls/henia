@@ -58,6 +58,10 @@ Check skill metadata, references, duplication and freshness
 
 Usage:
   henia lint [paths...] [flags]
+  henia lint [command]
+
+Available Commands:
+  test        Run the Matches and Passes examples of every lint module
 
 Flags:
       --disable strings   Disable lint rules (comma-separated)
@@ -67,6 +71,8 @@ Flags:
 
 Global Flags:
       --config string   Config file path (default "henia.toml")
+
+Use "henia lint [command] --help" for more information about a command.
 ```
 
 ## Build To Claude (Nested Structure)

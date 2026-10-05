@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 	"github.com/srnnkls/henia/internal/config"
+	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
 )
 
@@ -18,6 +21,7 @@ func newLintCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lint [paths...]",
 		Short: "Check skill metadata, references, duplication and freshness",
+		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if format != "text" && format != "json" {
 				return fmt.Errorf("unknown lint format %q (use text or json)", format)
@@ -25,18 +29,9 @@ func newLintCommand() *cobra.Command {
 			if len(args) == 0 {
 				args = []string{"."}
 			}
-			var options lint.Options
-			cfg, err := config.Load(configPath)
-			if err == nil {
-				options = cfg.Lint
-			} else if cmd.Flags().Changed("config") || !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("load config: %w", err)
-			} else {
-				cfg, err = config.LoadOptional(configPath)
-				if err != nil {
-					return err
-				}
-				options = cfg.Lint
+			options, err := lintOptions(cmd)
+			if err != nil {
+				return err
 			}
 			options.Disable = append(options.Disable, disabled...)
 			diagnostics, err := lint.Run(cmd.Context(), args, options)
@@ -67,5 +62,60 @@ func newLintCommand() *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "text", "Diagnostic output: text or json")
 	cmd.Flags().BoolVar(&strict, "strict", false, "Exit unsuccessfully on warnings as well as errors")
 	cmd.Flags().StringSliceVar(&disabled, "disable", nil, "Disable lint rules (comma-separated)")
+	cmd.AddCommand(newLintTestCommand())
 	return cmd
+}
+
+func newLintTestCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "test",
+		Short: "Run the Matches and Passes examples of every lint module",
+		Long: `Run the Matches and Passes examples of every lint module: the standard
+library, installed sources' lint/ directories, the user's and the project's.
+A Matches example must make its rule report; a Passes example must not.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			options, err := lintOptions(cmd)
+			if err != nil {
+				return err
+			}
+			failures, count, err := lint.TestModules(options.Modules, options.Rules, options)
+			if err != nil {
+				return err
+			}
+			for _, f := range failures {
+				fmt.Fprintln(cmd.OutOrStdout(), f.Error())
+			}
+			if len(failures) > 0 {
+				return fmt.Errorf("%d of %d lint examples failed", len(failures), count)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%d lint examples passed\n", count)
+			return nil
+		},
+	}
+}
+
+func lintOptions(cmd *cobra.Command) (lint.Options, error) {
+	cfg, err := config.Load(configPath)
+	if err != nil && (cmd.Flags().Changed("config") || !errors.Is(err, os.ErrNotExist)) {
+		return lint.Options{}, fmt.Errorf("load config: %w", err)
+	}
+	if err != nil {
+		if cfg, err = config.LoadOptional(configPath); err != nil {
+			return lint.Options{}, err
+		}
+	}
+	options := cfg.Lint
+	project := projectRoot(cmd)
+	seen := map[string]bool{}
+	for _, source := range library.Open(project, nil).Sources {
+		options.Modules = append(options.Modules, filepath.Join(source.Root, "lint"))
+	}
+	options.Modules = append(options.Modules, filepath.Join(library.ConfigDir(), "lint"), filepath.Join(project, library.ProjectDir, "lint"))
+	options.Modules = slices.DeleteFunc(options.Modules, func(dir string) bool {
+		duplicate := seen[dir]
+		seen[dir] = true
+		return duplicate
+	})
+	return options, nil
 }
