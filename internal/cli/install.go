@@ -163,7 +163,7 @@ func uninstall(harness string) (int, error) {
 	if err := json.Unmarshal(data, &record); err != nil {
 		return 0, fmt.Errorf("%s: %w", manifest, err)
 	}
-	_, removed, err := apply(record.Target, map[string]string{}, manifest, false)
+	_, removed, err := apply(record.Target, map[string]string{}, manifest, false, nil)
 	if err != nil {
 		return removed, err
 	}
@@ -266,7 +266,15 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			return err
 		}
 	}
-	written, removed, err := apply(target, files, library.InstallManifest(harness), force)
+	revisions := map[string]string{}
+	for _, e := range library.Open("", nil).Entries {
+		if _, installed := files[filepath.Join("skills", e.Name, "SKILL.md")]; installed && e.Tier == library.Global {
+			if canonical, err := os.ReadFile(e.Path); err == nil {
+				revisions[e.Name] = build.Digest(canonical)
+			}
+		}
+	}
+	written, removed, err := apply(target, files, library.InstallManifest(harness), force, revisions)
 	if err != nil {
 		return err
 	}
@@ -320,8 +328,9 @@ func sameFile(a, b string) bool {
 }
 
 type installRecord struct {
-	Target string            `json:"target"`
-	Files  map[string]string `json:"files"`
+	Target    string            `json:"target"`
+	Files     map[string]string `json:"files"`
+	Revisions map[string]string `json:"revisions,omitempty"`
 }
 
 func hash(data []byte) string {
@@ -329,7 +338,7 @@ func hash(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func apply(target string, files map[string]string, manifest string, force bool) (int, int, error) {
+func apply(target string, files map[string]string, manifest string, force bool, revisions map[string]string) (int, int, error) {
 	var previous installRecord
 	if data, err := os.ReadFile(manifest); err == nil {
 		if err := json.Unmarshal(data, &previous); err != nil {
@@ -365,7 +374,7 @@ func apply(target string, files map[string]string, manifest string, force bool) 
 		shown := conflicts[:min(len(conflicts), 5)]
 		return 0, 0, fmt.Errorf("%d file(s) in %s were not installed by henia or were edited since, among them %s; move them away or pass --force", len(conflicts), target, strings.Join(shown, ", "))
 	}
-	record := installRecord{Target: target, Files: map[string]string{}}
+	record := installRecord{Target: target, Files: map[string]string{}, Revisions: revisions}
 	for _, rel := range slices.Sorted(maps.Keys(files)) {
 		data, err := os.ReadFile(files[rel])
 		if err != nil {

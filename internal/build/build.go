@@ -166,10 +166,7 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 				}
 			}
 			if hybrid {
-				if err := hybridHead(transformed, art, nativePreloads(effective)); err != nil {
-					result.Errors = append(result.Errors, fmt.Errorf("%s: head of %s for %s: %w", art.SourcePath, art.Name, harnessName, err))
-					continue
-				}
+				hybridHead(transformed, art, nativePreloads(effective))
 			}
 			if art.Type == artifact.TypeSkill || art.Type == artifact.TypeCommand {
 				projectPreloads(transformed, effective)

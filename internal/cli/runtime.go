@@ -74,7 +74,6 @@ func newLsCommand() *cobra.Command {
 
 type showMode struct {
 	head, toc bool
-	digest    string
 }
 
 func newShowCommand() *cobra.Command {
@@ -90,8 +89,8 @@ sections instead, each addressable as <skill>#<section>. A full skill ends with
 the list of its resources; <skill>/<path> reads one and <skill>/<dir>/ lists a
 directory. --head prints what a hybrid skill carries upfront: its :::static
 blocks, its contents and the contents of the skills it references; --toc
-prints only its contents. --digest names the revision a harness head was
-built from and reports a library that holds another. Problems print as text;
+prints only its contents, and both report a harness copy that henia install
+wrote from an older revision of the skill. Problems print as text;
 the command always exits successfully so a skill preload never aborts.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -112,7 +111,6 @@ the command always exits successfully so a skill preload never aborts.`,
 	flags.register(cmd)
 	cmd.Flags().BoolVar(&mode.head, "head", false, "Print the skill's :::static blocks, contents and related contents")
 	cmd.Flags().BoolVar(&mode.toc, "toc", false, "Print the skill's contents")
-	cmd.Flags().StringVar(&mode.digest, "digest", "", "Revision a harness head was built from")
 	return cmd
 }
 
@@ -129,13 +127,11 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string, mode 
 		showResource(out, name, filepath.Dir(entry.Path), resource, anchor, sectioned)
 		return
 	}
-	if mode.digest != "" {
-		if canonical, err := os.ReadFile(entry.Path); err == nil && build.Digest(canonical) != mode.digest {
-			fmt.Fprintf(out, "henia: this harness copy of %s was built from revision %s, but the library holds %s; run henia install to update it\n\n", name, mode.digest, build.Digest(canonical))
-		}
-	}
 	body := r.body(entry)
 	if mode.head || mode.toc {
+		if stale(r.harness, entry) {
+			fmt.Fprintf(out, "henia: the %s copy of %s was installed from an older revision of the skill; run henia install to update it\n\n", r.harness, name)
+		}
 		if mode.head {
 			if static := strings.TrimSpace(r.render(entry, true)); static != "" {
 				fmt.Fprint(out, expand(entry, static+"\n\n"))
@@ -355,6 +351,26 @@ func showResource(out io.Writer, name, skillDir, path, anchor string, sectioned 
 		return
 	}
 	fmt.Fprint(out, text)
+}
+
+func stale(harness string, entry library.Entry) bool {
+	if harness == "" {
+		return false
+	}
+	data, err := os.ReadFile(library.InstallManifest(harness))
+	if err != nil {
+		return false
+	}
+	var record installRecord
+	if json.Unmarshal(data, &record) != nil {
+		return false
+	}
+	installed, ok := record.Revisions[entry.Name]
+	if !ok {
+		return false
+	}
+	canonical, err := os.ReadFile(entry.Path)
+	return err == nil && build.Digest(canonical) != installed
 }
 
 func newContextCommand() *cobra.Command {

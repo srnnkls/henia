@@ -313,15 +313,15 @@ The head renders in the library when the skill is used, so it never drifts
 from it:
 
 - In a harness that runs commands when a skill loads, such as Claude Code, the
-  head is a single preload of `henia show <skill> --head --digest <revision>`.
+  head is a single preload of `henia show <skill> --head`.
 - Elsewhere the head holds the rendered `:::static` blocks followed by
   "run first" lines for `henia show <skill> --toc` and `henia context <skill>`.
 
 `henia show <skill> --head` prints the `:::static` blocks, the skill's contents
 as `henia show <skill>#<section>` addresses, its resources and the contents of
-the skills it references. `--toc` prints only the contents. `--digest` names
-the revision the head was built from, and `show` reports when the library holds
-another one. A hybrid skill without `:::static` blocks is a launcher: contents
+the skills it references. `--toc` prints only the contents. Both report a
+harness copy that `henia install` wrote from an older revision of the skill,
+which `henia install` records per harness. A hybrid skill without `:::static` blocks is a launcher: contents
 and related contents only.
 
 ### Catalog

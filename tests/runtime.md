@@ -654,12 +654,11 @@ the blocks and "run first" lines.
 $ H="$T/hybrid"; mk "$H/skills/route/SKILL.md" '---\nname: route\ndescription: Routed work.\n---\n\n# Route\n\n:::static\n## Routes\n\nUse `$checks` first.\n:::\n\n## Detail\n\nReference.\n'
 > printf '[harness.claude]\nprofile = "claude"\nartifacts = ["skills"]\n\n[harness.claude.skills]\ndefault = "dynamic"\nhybrid = ["route"]\n\n[harness.codex]\nprofile = "codex"\nartifacts = ["skills"]\n\n[harness.codex.skills]\ndefault = "dynamic"\nhybrid = ["route"]\n' > "$H/henia.toml"
 > henia build "$H" --output "$T/hybrid-build" > /dev/null
-> digest=$(shasum -a 256 "$H/skills/route/SKILL.md" | cut -c1-12)
-> sed -e '1,/^---$/d' -e "s/$digest/DIGEST/" "$T/hybrid-build/claude/skills/route/SKILL.md"
+> sed -e '1,/^---$/d' "$T/hybrid-build/claude/skills/route/SKILL.md"
 > grep allowed-tools "$T/hybrid-build/claude/skills/route/SKILL.md"
-> sed -e '1,/^---$/d' -e "s/$digest/DIGEST/" "$T/hybrid-build/codex/skills/route/SKILL.md"
+> sed -e '1,/^---$/d' "$T/hybrid-build/codex/skills/route/SKILL.md"
 
-!`henia preload --skill route -- 'henia show route --head --digest DIGEST'`
+!`henia preload --skill route -- 'henia show route --head'`
 allowed-tools: Bash(henia preload *)
 
 ## Routes
@@ -667,18 +666,16 @@ allowed-tools: Bash(henia preload *)
 Use `$checks` first.
 
 
-run first: `henia preload --skill route -- 'henia show route --toc --digest DIGEST'`
+run first: `henia preload --skill route -- 'henia show route --toc'`
 
 run first: `henia preload --skill route -- 'henia context route'`
 ```
 
 `henia show --head` renders the blocks, the skill's contents and the contents
-of the skills it references; a head built from another revision says so.
+of the skills it references.
 
 ```scrut
-$ cp -R "$H" "$L/hybrid" && henia show route --head --digest 000000000000
-henia: this harness copy of route was built from revision 000000000000, but the library holds * (glob)
-
+$ cp -R "$H" "$L/hybrid" && henia show route --head
 ## Routes
 
 Use `henia show checks` first.
