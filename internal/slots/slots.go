@@ -272,7 +272,7 @@ func Applications(body string) []Application {
 	var found []Application
 	root.Walk(func(e *markup.Element) bool {
 		if e.Type == "directive" && e.Attrs["name"] == "slot" && e.Attrs["inline"] == "true" {
-			if match := applicationText.FindStringSubmatch(e.Text); match != nil {
+			if match := applicationText.FindStringSubmatch(e.Text); match != nil && !strings.Contains(match[1], "{{") {
 				found = append(found, Application{Slots: strings.Fields(match[1]), Start: e.Start, End: e.End})
 			}
 		}

@@ -123,7 +123,7 @@ func Open(project string, extra []string) *Library {
 	for _, dir := range []string{PackagesDir("global"), legacyDir()} {
 		if entries, err := os.ReadDir(dir); err == nil {
 			for _, entry := range entries {
-				if entry.IsDir() {
+				if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
 					roots = append(roots, filepath.Join(dir, entry.Name()))
 				}
 			}

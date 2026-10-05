@@ -229,7 +229,7 @@ func (r *Resolution) Rows(requested []string, check bool) []Row {
 }
 
 func (r *Resolution) Select(requested []string) *Resolution {
-	selected := &Resolution{Owners: []Owner{}, Providers: []*Provider{}, Problems: r.Rows(requested, true), declared: r.declared}
+	selected := &Resolution{Owners: []Owner{}, Providers: []*Provider{}, Consumers: []Consumer{}, Problems: r.Rows(requested, true), declared: r.declared}
 	for _, request := range requested {
 		if !r.declares(request) {
 			selected.Problems = append(selected.Problems, Row{Slot: request, Kind: Undeclared, Path: "-"})
