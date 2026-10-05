@@ -59,6 +59,7 @@ A path that does not exist is invalid.
 ```scrut
 $ mk "$G/tpl/SKILL.md" '---\nname: tpl\nhenia:\n  provides:\n    docs.template: {path: missing.md}\n---\n'
 > slots docs.template | grep docs.template
+docs.template none -
 docs.template invalid acme/skills/tpl/SKILL.md
 ```
 

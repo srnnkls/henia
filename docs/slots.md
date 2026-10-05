@@ -112,6 +112,7 @@ rows follow:
 
 | Tier | Meaning | Path |
 |---|---|---|
+| `none` | requested slot that is declared but has no providers | `-` |
 | `invalid` | malformed declaration or offer | declaring or providing skill |
 | `unknown` | provided slot that no declaration covers | providing skill |
 | `undeclared` | requested slot without an owner | `-` |
@@ -119,7 +120,8 @@ rows follow:
 | `conflict` | slot declared with different types | each declaring skill |
 | `conflict` | `unique` slot or key with several providers | `-` |
 
-Without any declaration every slot is known. `--check` prints only problem rows
+A `none` row is informational, not a problem. Without any declaration every
+slot is known. `--check` prints only problem rows
 of every provider and exits 1 when any exist; lookups exit 0.
 
 `--explain` shows where each provider and each override comes from, per

@@ -60,6 +60,7 @@ exit 0
 
 ```scrut
 $ slots "$P" git.nothing
+git.nothing none -
 exit 0
 ```
 
@@ -210,6 +211,7 @@ Criteria:
 ```text
 $ henia slots review.criteria review.lenses
 review.criteria project henia show project:criteria
+review.lenses none -
 ```
 ````
 

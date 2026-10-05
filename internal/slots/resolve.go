@@ -66,6 +66,7 @@ const (
 	Selected   = "selected"
 	Shadowed   = "shadowed"
 	Disabled   = "disabled"
+	None       = "none"
 )
 
 type Owner struct {
@@ -223,6 +224,8 @@ func (r *Resolution) Rows(requested []string, check bool) []Row {
 		for _, request := range requested {
 			if !r.declares(request) {
 				problems = append(problems, Row{Slot: request, Kind: Undeclared, Path: "-"})
+			} else if !slices.ContainsFunc(rows, func(row Row) bool { return related(row.Slot, request) }) {
+				rows = append(rows, Row{Slot: request, Kind: None, Path: "-"})
 			}
 		}
 	}
@@ -317,5 +320,5 @@ func (r Row) Line() string {
 }
 
 func (r Row) Problem() bool {
-	return !slices.Contains(tiers, Tier(r.Kind))
+	return r.Kind != None && !slices.Contains(tiers, Tier(r.Kind))
 }

@@ -377,6 +377,9 @@ preload never aborts.`,
 			}
 			var b strings.Builder
 			related(&b, lib, newRenderer(detectHarness(flags.harness), lib), entry)
+			if b.Len() == 0 {
+				fmt.Fprintf(&b, "%s references no other library skills\n", lib.Reference(entry))
+			}
 			text := b.String()
 			if len(text) > outputBudget {
 				text = text[:strings.LastIndexByte(text[:outputBudget], '\n')+1] + "henia: context truncated at the budget\n"
