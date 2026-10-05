@@ -2,77 +2,67 @@ package lint
 
 import (
 	"bytes"
-	"fmt"
-	"slices"
 	"strings"
 
+	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/slots"
 )
 
-func (c *checker) checkSlots(documents []document) {
-	type declaration struct {
-		document document
-		offset   int
-		slot     slots.Declaration
-	}
-	var declarations []declaration
+func addSlots(root *markup.Element, documents []document) {
+	files := map[string]*markup.Element{}
+	root.Walk(func(e *markup.Element) bool {
+		if e.Type == "file" {
+			files[e.Attrs["file"]] = e
+		}
+		return true
+	})
 	for _, d := range documents {
-		entries, err := slots.Entries(d.art.Frontmatter)
-		if err != nil {
-			c.add(d, 0, "error", "invalid-slot", err.Error())
+		file := files[d.path]
+		if file == nil || len(file.Children) == 0 || file.Children[0].Type != "frontmatter" {
 			continue
 		}
-		for _, entry := range entries.Declared {
-			if strings.Contains(entry, "{{") {
-				continue
-			}
-			offset := entryOffset(d, entry)
-			parsed, err := slots.ParseDeclaration(entry)
-			if err != nil {
-				c.add(d, offset, "error", "invalid-slot", err.Error())
-				continue
-			}
-			declarations = append(declarations, declaration{d, offset, parsed})
+		head := file.Children[0]
+		add := func(attrs map[string]string, offset int) {
+			line := bytes.Count(d.source[:offset], []byte{'\n'}) + 1
+			column := offset - bytes.LastIndexByte(d.source[:offset], '\n')
+			head.Children = append(head.Children, &markup.Element{Type: "slot", Attrs: attrs, Text: attrs["entry"], Line: line, EndLine: line, Column: column, Parent: head, Index: len(head.Children)})
 		}
-		for _, entry := range entries.Provided {
-			if strings.Contains(entry, "{{") {
-				continue
-			}
-			if _, err := slots.ParseDefinition(entry, slots.Normal); err != nil {
-				c.add(d, entryOffset(d, entry), "error", "invalid-slot", err.Error())
-			}
+		entries, err := slots.Entries(d.art.Frontmatter)
+		if err != nil {
+			add(map[string]string{"role": "metadata", "error": err.Error()}, 0)
+			continue
 		}
-		for _, entry := range entries.Applied {
-			if strings.Contains(entry, "{{") {
-				continue
+		for _, group := range []struct {
+			role, cut string
+			entries   []string
+			parse     func(string) error
+		}{
+			{"declare", ":", entries.Declared, func(e string) error { _, err := slots.ParseDeclaration(e); return err }},
+			{"provide", "@", entries.Provided, func(e string) error { _, err := slots.ParseDefinition(e, slots.Normal); return err }},
+			{"apply", "", entries.Applied, func(e string) error { _, err := slots.ParseApplication(e); return err }},
+		} {
+			for _, entry := range group.entries {
+				if strings.Contains(entry, "{{") {
+					continue
+				}
+				attrs := map[string]string{"role": group.role, "entry": entry, "slot": entry}
+				if group.cut != "" {
+					attrs["slot"], _, _ = strings.Cut(entry, group.cut)
+				}
+				if group.role == "declare" {
+					if declared, err := slots.ParseDeclaration(entry); err == nil {
+						attrs["type"] = declared.Type.String()
+					}
+				}
+				if err := group.parse(entry); err != nil {
+					attrs["error"] = err.Error()
+				}
+				offset := 0
+				if index := bytes.Index(d.source[:d.offset], []byte(entry)); index >= 0 {
+					offset = index
+				}
+				add(attrs, offset)
 			}
-			if _, err := slots.ParseApplication(entry); err != nil {
-				c.add(d, entryOffset(d, entry), "error", "invalid-slot", err.Error())
-			}
-		}
-	}
-	types := make(map[string]map[slots.Type]bool)
-	for _, d := range declarations {
-		if types[d.slot.Slot] == nil {
-			types[d.slot.Slot] = make(map[slots.Type]bool)
-		}
-		types[d.slot.Slot][d.slot.Type] = true
-	}
-	for _, d := range declarations {
-		if len(types[d.slot.Slot]) > 1 {
-			var found []string
-			for t := range types[d.slot.Slot] {
-				found = append(found, t.String())
-			}
-			slices.Sort(found)
-			c.add(d.document, d.offset, "error", "invalid-slot", fmt.Sprintf("slot %s is declared with conflicting types %s", d.slot.Slot, strings.Join(found, ", ")))
 		}
 	}
-}
-
-func entryOffset(d document, entry string) int {
-	if index := bytes.Index(d.source[:d.offset], []byte(entry)); index >= 0 {
-		return index
-	}
-	return 0
 }

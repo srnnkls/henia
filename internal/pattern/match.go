@@ -810,6 +810,8 @@ func (m *matcher) satisfies(c constraint, bound string) bool {
 		return c.value < bound
 	case "contains":
 		return strings.Contains(strings.ToLower(c.value), strings.ToLower(bound))
+	case "covers":
+		return bound == c.value || strings.HasPrefix(bound, c.value+".")
 	case "near":
 		return similarity.Jaccard(m.shingle(c.value), m.shingle(bound)) >= c.threshold
 	case "similar":

@@ -516,7 +516,25 @@ func (s *spec) try(ex example, options Options) (int, error) {
 	if err := trial.configure(ex.params); err != nil {
 		return 0, err
 	}
-	ev := &evaluation{corpus: library.Documents([]library.Document{{Path: path, Kind: "skill"}})}
+	ev := &evaluation{corpus: corpus([]library.Document{{Path: path, Kind: "skill"}})}
 	diagnostics, err := ev.run(&trial, options)
 	return len(diagnostics), err
+}
+
+func corpus(docs []library.Document) *library.Corpus {
+	c := library.Documents(docs)
+	var documents []document
+	for _, doc := range docs {
+		data, err := os.ReadFile(doc.Path)
+		if err != nil {
+			continue
+		}
+		art, err := artifact.Parse(data)
+		if err != nil {
+			continue
+		}
+		documents = append(documents, document{path: doc.Path, source: data, art: art, body: []byte(art.Body), offset: len(data) - len(art.Body)})
+	}
+	addSlots(c.Root, documents)
+	return c
 }

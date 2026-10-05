@@ -45,12 +45,7 @@ type Options struct {
 	Rules                 []InlineRule              `toml:"rules,omitempty"`
 	Config                map[string]map[string]any `toml:"config,omitempty"`
 	Modules               []string                  `toml:"-"`
-	Registries            []Registry                `toml:"registries,omitempty"`
 	Disable               []string                  `toml:"disable,omitempty"`
-	Outdated              map[string]string         `toml:"outdated,omitempty"`
-	External              []string                  `toml:"external,omitempty"`
-	MaxLines              int                       `toml:"max_lines,omitempty"`
-	MaxAgeDays            int                       `toml:"max_age_days,omitempty"`
 	DuplicateMinWords     int                       `toml:"duplicate_min_words,omitempty"`
 	DuplicateSimilarity   float64                   `toml:"duplicate_similarity,omitempty"`
 	DuplicateContainment  float64                   `toml:"duplicate_containment,omitempty"`
@@ -59,7 +54,7 @@ type Options struct {
 	Now                   time.Time                 `toml:"-"`
 }
 
-var rules = []string{"similar-content", "semantic-content", "invalid-slot"}
+var rules = []string{"similar-content", "semantic-content"}
 
 func (o Options) Validate() error {
 	for _, limit := range []struct {
@@ -71,13 +66,6 @@ func (o Options) Validate() error {
 		}
 	}
 	if err := o.Semantic.validate(); err != nil {
-		return err
-	}
-	var custom []string
-	for _, rule := range o.Rules {
-		custom = append(custom, rule.ID)
-	}
-	if _, err := compileRegistries(o.Registries, custom); err != nil {
 		return err
 	}
 	if o.DuplicateMinWords < 0 || o.DuplicateShingleWords < 0 {
@@ -96,7 +84,6 @@ type document struct {
 }
 
 type checker struct {
-	registries        []compiledRegistry
 	options           Options
 	diagnostics       []Diagnostic
 	paragraphs        map[string]Diagnostic
@@ -142,21 +129,10 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 			return nil, err
 		}
 	}
-	for _, r := range options.Registries {
-		known = append(known, r.ID)
-	}
 	for _, rule := range slices.Concat(options.Disable, slices.Collect(maps.Keys(options.Config))) {
 		if !slices.Contains(known, rule) {
 			return nil, fmt.Errorf("unknown lint rule %q", rule)
 		}
-	}
-	var custom []string
-	for _, rule := range options.Rules {
-		custom = append(custom, rule.ID)
-	}
-	c.registries, err = compileRegistries(options.Registries, custom)
-	if err != nil {
-		return nil, err
 	}
 	var documents []document
 	var docs []library.Document
@@ -186,7 +162,7 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 			return nil, err
 		}
 	}
-	ev := &evaluation{corpus: library.Documents(docs)}
+	ev := &evaluation{corpus: corpus(docs)}
 	for _, s := range specs {
 		if slices.Contains(options.Disable, s.id) {
 			continue
@@ -200,15 +176,15 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 		}
 		c.diagnostics = append(c.diagnostics, diagnostics...)
 	}
-	c.checkRegistries(documents)
-	c.checkSlots(documents)
 	if err := c.checkSemantic(ctx); err != nil {
 		return nil, err
 	}
 	slices.SortFunc(c.diagnostics, func(a, b Diagnostic) int {
 		return cmp.Or(strings.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column), strings.Compare(a.Rule, b.Rule), strings.Compare(a.Message, b.Message))
 	})
-	return c.diagnostics, nil
+	return slices.CompactFunc(c.diagnostics, func(a, b Diagnostic) bool {
+		return a.Path == b.Path && a.Line == b.Line && a.Column == b.Column && a.Rule == b.Rule && a.Message == b.Message
+	}), nil
 }
 
 func collect(ctx context.Context, paths []string) ([]string, error) {

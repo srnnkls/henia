@@ -111,6 +111,7 @@ var types = map[string][]string{
 	"image":       {"url", "dest", "exists", "valid", "anchored", "problem"},
 	"entry":       {"key", "value", "index", "tag"},
 	"problem":     {"kind", "message"},
+	"slot":        {"role", "slot", "type", "entry", "error"},
 	"directive":   nil,
 	"frontmatter": nil,
 }
@@ -586,11 +587,11 @@ func (r *reader) attr(kind string) (Attr, error) {
 				return attr, r.unexpected(c, fmt.Sprintf(") closing (%s", form.text))
 			}
 			return attr, nil
-		case "contains":
+		case "contains", "covers":
 			attr.Relate = form.text
 			value = r.next()
 			if value.kind != tVar {
-				return attr, r.unexpected(value, "a ?variable, as in (contains ?old)")
+				return attr, r.unexpected(value, fmt.Sprintf("a ?variable, as in (%s ?x)", form.text))
 			}
 		case "after", "before", "near", "similar":
 			attr.Relate = form.text
@@ -608,7 +609,7 @@ func (r *reader) attr(kind string) (Attr, error) {
 				r.semantic = r.semantic || form.text == "similar"
 			}
 		default:
-			return attr, r.unexpected(form, "not, after, before, contains, near, similar, older or a comparison, as in (not ?x), (near ?t 0.7) or (> 500)")
+			return attr, r.unexpected(form, "not, after, before, contains, covers, near, similar, older or a comparison, as in (not ?x), (near ?t 0.7) or (> 500)")
 		}
 		if c := r.next(); c.kind != tClose {
 			return attr, r.unexpected(c, fmt.Sprintf(") closing (%s", form.text))
