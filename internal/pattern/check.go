@@ -110,7 +110,11 @@ func (q *Query) check() error {
 	if err := q.Group.check(q, mentions); err != nil {
 		return err
 	}
+	if err := q.checkSorts(mentions); err != nil {
+		return err
+	}
 	uses := q.Group.uses()
+	q.sortUses(uses)
 	count := map[string]int{}
 	for _, m := range mentions {
 		count[m.name]++

@@ -28,6 +28,7 @@ func newQueryCommand() *cobra.Command {
 	var output queryOutput
 	var grammar, canonical bool
 	var model string
+	var sort string
 	cmd := &cobra.Command{
 		Use:     "query '<pattern>...'",
 		Aliases: []string{"q"},
@@ -44,7 +45,7 @@ a skill preload never aborts.`,
 				fmt.Fprint(out, henia.QueryGuide)
 				return nil
 			}
-			q, err := pattern.Read(args[0])
+			q, err := pattern.Read(args[0], sortKeys(sort)...)
 			if err != nil {
 				fmt.Fprint(out, explain(args[0], err))
 				return nil
@@ -91,8 +92,16 @@ a skill preload never aborts.`,
 	cmd.Flags().BoolVar(&output.text, "text", false, "Print whole nodes")
 	cmd.Flags().BoolVar(&output.json, "json", false, "Print rows as JSON objects keyed by capture")
 	cmd.Flags().BoolVar(&output.count, "count", false, "Print the number of rows")
+	cmd.Flags().StringVar(&sort, "sort", "", "Order rows by ?var or @capture.key, descending with a leading -")
 	cmd.Flags().IntVar(&output.limit, "limit", 0, "Print at most N rows")
 	return cmd
+}
+
+func sortKeys(key string) []string {
+	if key == "" {
+		return nil
+	}
+	return []string{key}
 }
 
 func explain(query string, err error) string {
@@ -190,7 +199,14 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 				continue
 			}
 			if cell.Collected && !o.text {
-				fmt.Fprintf(&block, "%s%d nodes\n", label, len(cell.Elements))
+				one, many := "node", "nodes"
+				if cell.Name == "" {
+					one, many = "match", "matches"
+				}
+				if len(cell.Elements) != 1 {
+					one = many
+				}
+				fmt.Fprintf(&block, "%s%d %s\n", label, len(cell.Elements), one)
 				continue
 			}
 			for _, e := range cell.Elements {
