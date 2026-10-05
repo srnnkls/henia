@@ -16,11 +16,20 @@ tasks:
       green: go test ./... ok; go vet + go build ok
   - id: QAG-002
     content: "Optional-binding check errors only without a required binding in the same or an enclosing scope (FR-2)"
-    status: pending
+    status: completed
     active_form: "Relaxing the optional-binding check"
     depends_on:
       - QAG-001
-    files: [internal/pattern/check.go, internal/pattern/check_test.go]
+    files: [internal/pattern/check.go, internal/pattern/check_test.go, internal/pattern/pattern_test.go]
+    evidence:
+      tests:
+        - TestOptionalBindingJoinsRequiredBinder
+        - TestOptionalBindingWithoutRequiredBinderFails
+        - TestOptionalBindingAfterRequiredSiblingParses
+        - TestReadErrors (restored case)
+      red: reader rejected (skill :id ?s (link :target ?s)? @l) @t
+      green: go test ./... -count=1 ok; go vet + go build ok
+      fix_round: B2-H1 narrowed FR-2 to binders evaluated before the optional; targeted re-review fixed
   - id: QAG-003
     content: "Top-level P? as left join after required members; * and + still rejected at top level (FR-3, TR-1)"
     status: pending
@@ -54,7 +63,7 @@ tasks:
 meta:
   created: 2026-10-05
   last_updated: "2026-10-05"
-  progress: 1/7
+  progress: 2/7
 phases:
   - id: zero-groups
     tasks: [QAG-001, QAG-002, QAG-003]

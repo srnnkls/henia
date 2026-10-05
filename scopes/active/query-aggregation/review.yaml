@@ -12,4 +12,39 @@ batches:
         claim: "Optional fallback rows bypass maxBindings; (heading (link)? @l) @h over 100001 headings no longer returns ErrTooMany."
         reason: "No wrong outcome: maxBindings bounds join combinations; a fallback keeps at most one row per enclosing row and multiplies nothing, as uncounted single-pattern rows like (heading) @h already do."
     reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b1-review-*
+  - batch: 2
+    tasks:
+      - QAG-002
+    reviewers:
+      - claude-opus
+      - peer-gpt6.1-sol
+      - peer-gpt6-astra
+    roles:
+      - general
+      - architecture
+      - compliance
+    gates:
+      correctness: pass after fix
+      security: pass
+      performance: pass
+      architecture: pass after fix
+      style: pass
+    admitted:
+      - id: B2-H1
+        severity: high
+        found_by:
+          - peer-gpt6-astra
+          - claude-opus (general)
+          - claude-opus (architecture)
+        mechanism: check accepted optional binders whose required binder the matcher evaluates later (ancestor attrs, later siblings, relations, other members); rows dropped
+        decision: 'user: narrow the check (FR-2 updated)'
+        status: fixed
+        rereview: 'claude-opus: all four triggers rejected; control case unchanged'
+    residual:
+      - id: B2-R1
+        found_by:
+          - claude-opus (rereview)
+        claim: trigger 2 not covered by check_test.go
+        reason: covered by restored TestReadErrors case at offset 24
+    reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b2-*
 deferred: []
