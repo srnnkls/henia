@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"text/template"
 	"unicode/utf8"
 
 	"github.com/srnnkls/henia/internal/artifact"
@@ -29,6 +28,7 @@ type Corpus struct {
 	lib       *Library
 	skills    map[string]*markup.Element
 	rendering *Rendering
+	anchors   map[string]map[string]bool
 }
 
 type Rendering struct {
@@ -45,7 +45,7 @@ func (l *Library) Corpus(rendering *Rendering) *Corpus {
 	c := newCorpus()
 	c.lib, c.rendering = l, rendering
 	for _, e := range l.Entries {
-		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": e.Name, "name": e.Name, "source": e.Source, "ref": l.Reference(e)}}
+		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": e.Name, "name": e.Name, "source": e.Source, "ref": l.Reference(e), "dir": filepath.Dir(e.Path)}}
 		c.adopt(c.Root, skill)
 		c.skills[e.ID] = skill
 	}
@@ -74,7 +74,7 @@ func Documents(docs []Document) *Corpus {
 			continue
 		}
 		id := filepath.Base(filepath.Dir(d.Path))
-		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": id, "name": id, "ref": id}}
+		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": id, "name": id, "ref": id, "dir": filepath.Dir(d.Path)}}
 		if data, err := os.ReadFile(d.Path); err == nil {
 			if art, err := artifact.Parse(data); err == nil {
 				if name, ok := art.Frontmatter["name"].(string); ok && name != "" {
@@ -110,7 +110,7 @@ func Documents(docs []Document) *Corpus {
 }
 
 func newCorpus() *Corpus {
-	return &Corpus{Root: &markup.Element{Type: "corpus", Attrs: map[string]string{}}, skills: map[string]*markup.Element{}}
+	return &Corpus{Root: &markup.Element{Type: "corpus", Attrs: map[string]string{}}, skills: map[string]*markup.Element{}, anchors: map[string]map[string]bool{}}
 }
 
 func (c *Corpus) Skill(ref string) *markup.Element {
@@ -157,17 +157,23 @@ func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render
 		body, syntax = render()
 		shift = 0
 	}
-	file, err := markup.Tree([]byte(body), c.references(body, syntax)...)
+	file, _ := markup.Tree([]byte(body), c.references(body, syntax)...)
 	var problems []*markup.Element
-	if location, ok := errors.AsType[*markup.Error](err); ok {
-		problems = append(problems, problem("markup", location.Message, location.Line, location.Column))
-	} else if err != nil {
-		problems = append(problems, problem("markup", err.Error(), 1, 1))
-	}
-	if typed && strings.Contains(body, "{{") {
-		if _, err := template.New("skill").Parse(body); err != nil {
+	directives := []byte(body)
+	if typed {
+		masked, err := markup.MaskTemplates(directives)
+		if err != nil {
 			problems = append(problems, problem("template", err.Error(), 1, 1))
+		} else {
+			directives = masked
 		}
+	}
+	if _, err := markup.Render(string(directives), "directives"); err != nil {
+		line, column := 1, 1
+		if location, ok := errors.AsType[*markup.Error](err); ok {
+			line, column = location.Line, location.Column
+		}
+		problems = append(problems, problem("markup", err.Error(), line, column))
 	}
 	for k, v := range attrs {
 		file.Attrs[k] = v
@@ -233,7 +239,7 @@ func frontmatter(values map[string]any, header []byte, lines int) *markup.Elemen
 					walk(key, i, item, item.Line+1, item.Column)
 				}
 			default:
-				entry := &markup.Element{Type: "entry", Attrs: map[string]string{"key": key, "value": node.Value}, Text: node.Value, Line: line, EndLine: line, Column: column}
+				entry := &markup.Element{Type: "entry", Attrs: map[string]string{"key": key, "value": node.Value, "tag": node.ShortTag()}, Text: node.Value, Line: line, EndLine: line, Column: column}
 				if index >= 0 {
 					entry.Attrs["index"] = strconv.Itoa(index)
 				}
@@ -254,19 +260,28 @@ func (c *Corpus) references(body string, syntax *regexp.Regexp) []*markup.Elemen
 	for _, ref := range reference.Parse(body) {
 		switch ref.Type {
 		case reference.TypeSkill:
-			add(ref.Start, ref.End, c.skillLink(ref))
+			attrs := c.skillLink(ref)
+			attrs["ref"], attrs["name"], attrs["artifact"] = "skill", ref.Name, "skill:"+ref.Name
+			add(ref.Start, ref.End, attrs)
 		case reference.TypeCommand, reference.TypeAgent:
-			add(ref.Start, ref.End, map[string]string{"ref": string(ref.Type), "artifact": string(ref.Type) + ":" + ref.Name})
+			add(ref.Start, ref.End, map[string]string{"ref": string(ref.Type), "name": ref.Name, "artifact": string(ref.Type) + ":" + ref.Name, "dest": ref.Raw})
 		case reference.TypeFile:
-			add(ref.Start, ref.End, map[string]string{"ref": "file", "url": ref.Name})
+			add(ref.Start, ref.End, map[string]string{"ref": "file", "url": ref.Name, "dest": ref.Name})
 		}
 	}
 	for _, ref := range reference.Shown(body) {
-		add(ref.Start, ref.End+1, c.skillLink(ref))
+		attrs := c.skillLink(ref)
+		attrs["ref"] = "show"
+		if skill := c.Skill(ref.Name); skill != nil && skill.Attrs["dir"] != "" && attrs["path"] != "" {
+			c.inspect(attrs, filepath.Join(skill.Attrs["dir"], filepath.FromSlash(attrs["path"])), ref.Anchor)
+		}
+		add(ref.Start, ref.End+1, attrs)
 	}
 	if syntax != nil {
 		for _, m := range syntax.FindAllStringSubmatchIndex(body, -1) {
-			add(m[0], m[1], c.skillLink(reference.Reference{Name: body[m[2]:m[3]]}))
+			attrs := c.skillLink(reference.Reference{Name: body[m[2]:m[3]], Raw: body[m[0]+1 : m[1]-1]})
+			attrs["ref"] = "skill"
+			add(m[0], m[1], attrs)
 		}
 	}
 	return links
@@ -280,7 +295,7 @@ func (c *Corpus) skillLink(ref reference.Reference) map[string]string {
 	if skill := c.Skill(ref.Name); skill != nil {
 		target = skill.Attrs["id"]
 	}
-	attrs := map[string]string{"ref": "skill", "target": target, "artifact": "skill:" + target}
+	attrs := map[string]string{"target": target, "dest": ref.Raw}
 	if ref.Resource != "" || ref.Anchor != "" {
 		attrs["path"] = cmp.Or(ref.Resource, "SKILL.md")
 	}
@@ -290,12 +305,64 @@ func (c *Corpus) skillLink(ref reference.Reference) map[string]string {
 	return attrs
 }
 
+func (c *Corpus) inspect(attrs map[string]string, local, anchor string) {
+	_, err := os.Stat(local)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		attrs["exists"] = "false"
+		return
+	case err != nil:
+		attrs["problem"] = fmt.Sprintf("inspect local reference %s: %v", attrs["dest"], err)
+		return
+	}
+	attrs["exists"] = "true"
+	if anchor == "" || !strings.EqualFold(filepath.Ext(local), ".md") {
+		return
+	}
+	anchors, err := c.headingAnchors(local)
+	if err != nil {
+		attrs["problem"] = err.Error()
+		return
+	}
+	if anchors != nil {
+		attrs["anchored"] = fmt.Sprint(anchors[anchor])
+	}
+}
+
+func (c *Corpus) headingAnchors(path string) (map[string]bool, error) {
+	if anchors, ok := c.anchors[path]; ok {
+		return anchors, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read reference %s: %w", path, err)
+	}
+	art, err := artifact.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse reference %s: %w", path, err)
+	}
+	if strings.Contains(art.Body, "{{") || strings.Contains(art.Body, "id=") || strings.Contains(art.Body, "name=") {
+		c.anchors[path] = nil
+		return nil, nil
+	}
+	sections, err := markup.Sections([]byte(art.Body))
+	if err != nil {
+		return nil, err
+	}
+	anchors := map[string]bool{}
+	for _, section := range sections {
+		anchors[section.Anchor] = true
+	}
+	c.anchors[path] = anchors
+	return anchors, nil
+}
+
 func (c *Corpus) resolveLinks(file *markup.Element, self, rel, physical string) {
 	file.Walk(func(e *markup.Element) bool {
-		destination, anchor, _ := strings.Cut(e.Attrs["url"], "#")
-		if e.Type != "link" || e.Attrs["url"] == "" || strings.Contains(e.Attrs["url"], "{{") {
+		if e.Type != "link" && e.Type != "image" || e.Attrs["url"] == "" || strings.Contains(e.Attrs["url"], "{{") {
 			return true
 		}
+		e.Attrs["dest"] = e.Attrs["url"]
 		u, err := url.Parse(e.Attrs["url"])
 		if err != nil {
 			e.Attrs["valid"] = "false"
@@ -308,11 +375,11 @@ func (c *Corpus) resolveLinks(file *markup.Element, self, rel, physical string) 
 		if u.Path != "" {
 			local = filepath.Join(filepath.Dir(physical), filepath.FromSlash(u.Path))
 		}
-		_, err = os.Stat(local)
-		e.Attrs["exists"] = fmt.Sprint(err == nil)
-		if self == "" {
+		c.inspect(e.Attrs, local, u.Fragment)
+		if self == "" || e.Type == "image" {
 			return true
 		}
+		destination, anchor, _ := strings.Cut(e.Attrs["url"], "#")
 		target, inside := self, rel
 		if destination != "" {
 			inside = path.Clean(path.Join(path.Dir(rel), destination))

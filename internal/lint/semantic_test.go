@@ -15,7 +15,7 @@ import (
 
 func TestSemanticLocalModel(t *testing.T) {
 	root := paragraphFiles(t, "Repair broken program.", "Fix faulty code.", "Simmer vegetable soup.", "Repair broken program.")
-	options := Options{DuplicateMinWords: 1, DuplicateSimilarity: 0.7, Semantic: SemanticOptions{Enabled: true, ModelPath: "testdata/model", Threshold: 0.85}}
+	options := Options{Config: map[string]map[string]any{"duplicate-content": {"min-words": 1}}, DuplicateMinWords: 1, DuplicateSimilarity: 0.7, Semantic: SemanticOptions{Enabled: true, ModelPath: "testdata/model", Threshold: 0.85}}
 	diagnostics, err := Run(t.Context(), []string{root}, options)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func TestSemanticDoesNotLoadWhenUnneeded(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := paragraphFiles(t, test.texts...)
-			diagnostics, err := Run(t.Context(), []string{root}, Options{DuplicateMinWords: 1, DuplicateSimilarity: test.lexical, Disable: test.disabled, Semantic: SemanticOptions{Enabled: test.enabled, Threshold: 0.8, ModelPath: filepath.Join(t.TempDir(), "missing")}})
+			diagnostics, err := Run(t.Context(), []string{root}, Options{Config: map[string]map[string]any{"duplicate-content": {"min-words": 1}}, DuplicateMinWords: 1, DuplicateSimilarity: test.lexical, Disable: test.disabled, Semantic: SemanticOptions{Enabled: test.enabled, Threshold: 0.8, ModelPath: filepath.Join(t.TempDir(), "missing")}})
 			if err != nil || len(diagnostics) != test.want {
 				t.Fatalf("%+v (%v)", diagnostics, err)
 			}
@@ -62,7 +62,7 @@ func TestSemanticModelErrors(t *testing.T) {
 	if err := (Options{Semantic: SemanticOptions{Enabled: true}}).Validate(); err == nil {
 		t.Fatal("accepted missing model configuration")
 	}
-	_, err := Run(t.Context(), []string{root}, Options{DuplicateMinWords: 1, Semantic: SemanticOptions{Enabled: true, Threshold: 0.8, ModelPath: t.TempDir()}})
+	_, err := Run(t.Context(), []string{root}, Options{Config: map[string]map[string]any{"duplicate-content": {"min-words": 1}}, DuplicateMinWords: 1, Semantic: SemanticOptions{Enabled: true, Threshold: 0.8, ModelPath: t.TempDir()}})
 	if err == nil || !strings.Contains(err.Error(), "load semantic model") {
 		t.Fatalf("missing model: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestSemanticModelErrors(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(modelDir, "tokenizer.json"), []byte("broken json"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	_, err = Run(t.Context(), []string{root}, Options{DuplicateMinWords: 1, Semantic: SemanticOptions{Enabled: true, Threshold: 0.8, ModelPath: modelDir}})
+	_, err = Run(t.Context(), []string{root}, Options{Config: map[string]map[string]any{"duplicate-content": {"min-words": 1}}, DuplicateMinWords: 1, Semantic: SemanticOptions{Enabled: true, Threshold: 0.8, ModelPath: modelDir}})
 	if err == nil {
 		t.Fatal("accepted malformed local model")
 	}
@@ -78,7 +78,7 @@ func TestSemanticModelErrors(t *testing.T) {
 
 func TestSemanticZeroVectorAndCancellation(t *testing.T) {
 	root := paragraphFiles(t, "repair broken program", "zzzzzzzzzzzzzzzz")
-	diagnostics, err := Run(t.Context(), []string{root}, Options{DuplicateMinWords: 1, Semantic: SemanticOptions{Enabled: true, ModelPath: "testdata/model", Threshold: 0.8}})
+	diagnostics, err := Run(t.Context(), []string{root}, Options{Config: map[string]map[string]any{"duplicate-content": {"min-words": 1}}, DuplicateMinWords: 1, Semantic: SemanticOptions{Enabled: true, ModelPath: "testdata/model", Threshold: 0.8}})
 	if err != nil || len(diagnostics) != 1 || diagnostics[0].Similarity != nil || !strings.Contains(diagnostics[0].Message, "zero embedding") {
 		t.Fatalf("%+v (%v)", diagnostics, err)
 	}

@@ -25,7 +25,7 @@ func (c *checker) addDuplicate(d document, offset int, rule, message string, fir
 func (c *checker) checkDuplicates(d document, markupSource []byte) {
 	similarity := (c.options.DuplicateSimilarity > 0 || c.options.DuplicateContainment > 0) && !slices.Contains(c.options.Disable, "similar-content")
 	semantic := c.options.Semantic.Enabled && !slices.Contains(c.options.Disable, "semantic-content")
-	if slices.Contains(c.options.Disable, "duplicate-content") && !similarity && !semantic {
+	if !similarity && !semantic {
 		return
 	}
 	nodes, err := markup.Inspect(markupSource)
@@ -42,11 +42,9 @@ func (c *checker) checkDuplicates(d document, markupSource []byte) {
 		}
 		// Keep Markdown syntax in the identity: equal link labels with different
 		// destinations or different inline directive attributes are not copies.
-		key := normalize(source)
+		key := strings.ToLower(strings.Join(strings.Fields(source), " "))
 		offset := d.offset + node.Start
-		if first, ok := c.paragraphs[key]; ok {
-			c.addDuplicate(d, offset, "duplicate-content", fmt.Sprintf("paragraph duplicates %s:%d", first.Path, first.Line), Location{Path: first.Path, Line: first.Line, Column: first.Column})
-		} else {
+		if _, ok := c.paragraphs[key]; !ok {
 			location := sourceLocation(d, offset)
 			c.paragraphs[key] = Diagnostic{Path: location.Path, Line: location.Line, Column: location.Column}
 			if similarity || semantic {

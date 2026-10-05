@@ -5,12 +5,10 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
 	"math"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,10 +19,6 @@ import (
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
-	"github.com/srnnkls/henia/internal/reference"
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/text"
 )
 
 type Diagnostic struct {
@@ -65,7 +59,7 @@ type Options struct {
 	Now                   time.Time                 `toml:"-"`
 }
 
-var rules = []string{"metadata", "invalid-template", "invalid-markup", "broken-link", "missing-reference", "duplicate-content", "similar-content", "semantic-content", "duplicate-skill", "outdated-reference", "stale-review", "invalid-slot"}
+var rules = []string{"similar-content", "semantic-content", "invalid-slot"}
 
 func (o Options) Validate() error {
 	for _, limit := range []struct {
@@ -86,13 +80,8 @@ func (o Options) Validate() error {
 	if _, err := compileRegistries(o.Registries, custom); err != nil {
 		return err
 	}
-	if o.MaxLines < 0 || o.MaxAgeDays < 0 || o.DuplicateMinWords < 0 || o.DuplicateShingleWords < 0 {
+	if o.DuplicateMinWords < 0 || o.DuplicateShingleWords < 0 {
 		return fmt.Errorf("lint limits must not be negative")
-	}
-	for old := range o.Outdated {
-		if strings.TrimSpace(old) == "" {
-			return fmt.Errorf("outdated reference must not be empty")
-		}
 	}
 	return nil
 }
@@ -110,11 +99,9 @@ type checker struct {
 	registries        []compiledRegistry
 	options           Options
 	diagnostics       []Diagnostic
-	names             map[string]Location
 	paragraphs        map[string]Diagnostic
 	similarParagraphs []paragraph
 	shingleIndex      map[string][]int
-	anchors           map[string]map[string]bool
 }
 
 // Run checks Markdown files and directories recursively. Artifact references are
@@ -122,12 +109,6 @@ type checker struct {
 func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, error) {
 	if err := options.Validate(); err != nil {
 		return nil, err
-	}
-	if options.MaxLines == 0 {
-		options.MaxLines = 500
-	}
-	if options.MaxAgeDays == 0 {
-		options.MaxAgeDays = 180
 	}
 	if options.DuplicateMinWords == 0 {
 		options.DuplicateMinWords = 12
@@ -145,7 +126,7 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no Markdown files found")
 	}
-	c := checker{options: options, diagnostics: []Diagnostic{}, names: make(map[string]Location), paragraphs: make(map[string]Diagnostic), anchors: make(map[string]map[string]bool), shingleIndex: make(map[string][]int)}
+	c := checker{options: options, diagnostics: []Diagnostic{}, paragraphs: make(map[string]Diagnostic), shingleIndex: make(map[string][]int)}
 	registry, err := loadModules(options.Modules)
 	if err != nil {
 		return nil, err
@@ -156,8 +137,8 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 	}
 	known := slices.Clone(rules)
 	for _, s := range specs {
-		known = append(known, s.rule.ID)
-		if err := s.configure(options.Config[s.rule.ID]); err != nil {
+		known = append(known, s.id)
+		if err := s.configure(options.Config[s.id]); err != nil {
 			return nil, err
 		}
 	}
@@ -178,6 +159,7 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 		return nil, err
 	}
 	var documents []document
+	var docs []library.Document
 	for _, path := range files {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -187,28 +169,13 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 			return nil, fmt.Errorf("read %s: %w", path, err)
 		}
 		d := document{path: path, source: data, kind: artifactKind(path)}
+		docs = append(docs, library.Document{Path: path, Kind: string(d.kind)})
 		d.art, err = artifact.Parse(data)
 		if err != nil {
-			c.add(d, 0, "error", "metadata", err.Error())
 			continue
 		}
 		d.body = []byte(d.art.Body)
 		d.offset = len(data) - len(d.body)
-		if d.kind != artifact.TypeUnknown {
-			name, _ := d.art.Frontmatter["name"].(string)
-			if name == "" {
-				name = strings.TrimSuffix(filepath.Base(path), ".md")
-				if filepath.Base(path) == artifact.MainFileName(d.kind) {
-					name = filepath.Base(filepath.Dir(path))
-				}
-			}
-			key := string(d.kind) + ":" + name
-			if first, ok := c.names[key]; ok {
-				c.addDuplicate(d, 0, "duplicate-skill", fmt.Sprintf("duplicate %s name %q; first defined in %s", d.kind, name, first.Path), first)
-			} else {
-				c.names[key] = Location{Path: path, Line: 1, Column: 1}
-			}
-		}
 		documents = append(documents, d)
 	}
 	for _, d := range documents {
@@ -219,13 +186,9 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 			return nil, err
 		}
 	}
-	var docs []library.Document
-	for _, d := range documents {
-		docs = append(docs, library.Document{Path: d.path, Kind: string(d.kind)})
-	}
 	ev := &evaluation{corpus: library.Documents(docs)}
 	for _, s := range specs {
-		if slices.Contains(options.Disable, s.rule.ID) {
+		if slices.Contains(options.Disable, s.id) {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
@@ -315,202 +278,14 @@ func (c *checker) add(d document, offset int, severity, rule, message string) {
 }
 
 func (c *checker) check(d document) error {
-	if d.kind != artifact.TypeUnknown {
-		for _, key := range []string{"name", "description"} {
-			value, _ := d.art.Frontmatter[key].(string)
-			if strings.TrimSpace(value) == "" {
-				c.add(d, 0, "warning", "metadata", "frontmatter requires a nonempty string "+key)
-			}
-		}
-	}
-	if value, ok := d.art.Frontmatter["last_verified"]; ok {
-		var date time.Time
-		switch v := value.(type) {
-		case time.Time:
-			date = v
-		case string:
-			date, _ = time.Parse("2006-01-02", v)
-		}
-		if date.IsZero() {
-			c.add(d, 0, "warning", "metadata", "last_verified must be a YYYY-MM-DD date")
-		} else if c.options.Now.Sub(date) > time.Duration(c.options.MaxAgeDays)*24*time.Hour {
-			c.add(d, 0, "warning", "stale-review", fmt.Sprintf("last verified %s; review references older than %d days", date.Format("2006-01-02"), c.options.MaxAgeDays))
-		}
-	}
 	markupSource := d.body
 	if d.kind != artifact.TypeUnknown {
-		var templateErr error
-		markupSource, templateErr = templateMask(d.body)
-		if templateErr != nil {
-			c.add(d, d.offset, "error", "invalid-template", templateErr.Error())
+		if masked, err := markup.MaskTemplates(d.body); err == nil {
+			markupSource = masked
 		}
-	}
-	if _, err := markup.Render(string(markupSource), "directives"); err != nil {
-		offset := d.offset
-		if location, ok := errors.AsType[*markup.Error](err); ok {
-			for range location.Line - 1 {
-				next := bytes.IndexByte(d.source[offset:], '\n')
-				if next < 0 {
-					break
-				}
-				offset += next + 1
-			}
-			offset += location.Column - 1
-		}
-		c.add(d, offset, "error", "invalid-markup", err.Error())
 	}
 	c.checkDuplicates(d, markupSource)
-	root := goldmark.New().Parser().Parse(text.NewReader(d.body))
-	// Plain Goldmark retains canonical directive text, which lets lint inspect
-	// references in directive content without rewriting diagnostic positions.
-	return ast.Walk(root, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-		switch n := node.(type) {
-		case *ast.FencedCodeBlock, *ast.CodeBlock, *ast.HTMLBlock:
-			return ast.WalkSkipChildren, nil
-		case *ast.CodeSpan:
-			value := string(n.Text(d.body))
-			offset := d.offset + nodeOffset(n)
-			c.checkShown(d, offset, value)
-			for _, ref := range reference.Parse("`" + value + "`") {
-				if ref.Type == reference.TypeTool {
-					continue
-				}
-				if ref.Type == reference.TypeFile {
-					c.checkLink(d, offset, ref.Name)
-					continue
-				}
-				key := ref.Type.String() + ":" + ref.Name
-				if _, ok := c.names[key]; !ok && !slices.Contains(c.options.External, key) {
-					c.add(d, offset, "warning", "missing-reference", fmt.Sprintf("%s reference %q is absent from scanned artifacts", ref.Type, ref.Name))
-				}
-			}
-			c.checkOutdated(d, offset, value)
-			return ast.WalkSkipChildren, nil
-		case *ast.Link:
-			c.checkLink(d, d.offset+nodeOffset(n), string(n.Destination))
-			c.checkOutdated(d, d.offset+nodeOffset(n), string(n.Destination))
-		case *ast.Image:
-			c.checkLink(d, d.offset+nodeOffset(n), string(n.Destination))
-		case *ast.Text:
-			c.checkOutdated(d, d.offset+n.Segment.Start, string(n.Segment.Value(d.body)))
-		}
-		return ast.WalkContinue, nil
-	})
-}
-
-func nodeOffset(node ast.Node) int {
-	if n, ok := node.(*ast.Text); ok {
-		return n.Segment.Start
-	}
-	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
-		if offset := nodeOffset(child); offset > 0 {
-			return offset
-		}
-	}
-	return 0
-}
-
-func normalize(value string) string { return strings.ToLower(strings.Join(strings.Fields(value), " ")) }
-
-func (c *checker) checkLink(d document, offset int, destination string) {
-	if destination == "" || strings.Contains(destination, "{{") {
-		return
-	}
-	u, err := url.Parse(destination)
-	if err != nil {
-		c.add(d, offset, "warning", "broken-link", "invalid link "+destination)
-		return
-	}
-	if u.IsAbs() || u.Host != "" || strings.HasPrefix(u.Path, "~") || filepath.IsAbs(u.Path) {
-		return
-	}
-	path := d.path
-	if u.Path != "" {
-		path = filepath.Join(filepath.Dir(d.path), filepath.FromSlash(u.Path))
-	}
-	c.checkTarget(d, offset, path, u.Fragment, destination)
-}
-
-func (c *checker) checkShown(d document, offset int, value string) {
-	for _, ref := range reference.Skills("`" + value + "`") {
-		if ref.Resource == "" && ref.Anchor == "" {
-			continue
-		}
-		_, name, qualified := strings.Cut(ref.Name, ":")
-		if !qualified {
-			name = ref.Name
-		}
-		skill, ok := c.names[string(artifact.TypeSkill)+":"+name]
-		if !ok {
-			continue
-		}
-		path := skill.Path
-		if ref.Resource != "" {
-			path = filepath.Join(filepath.Dir(skill.Path), filepath.FromSlash(ref.Resource))
-		}
-		c.checkTarget(d, offset, path, ref.Anchor, ref.Raw)
-	}
-}
-
-func (c *checker) checkTarget(d document, offset int, path, fragment, destination string) {
-	if _, err := os.Stat(path); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			c.add(d, offset, "warning", "broken-link", "local reference does not exist: "+destination)
-		} else {
-			c.add(d, offset, "error", "broken-link", fmt.Sprintf("inspect local reference %s: %v", destination, err))
-		}
-		return
-	}
-	if fragment != "" && strings.EqualFold(filepath.Ext(path), ".md") {
-		anchors, err := c.headingAnchors(path)
-		if err != nil {
-			c.add(d, offset, "error", "broken-link", err.Error())
-			return
-		}
-		if anchors != nil && !anchors[fragment] {
-			c.add(d, offset, "warning", "broken-link", "Markdown heading anchor does not exist: "+destination)
-		}
-	}
-}
-
-func (c *checker) headingAnchors(path string) (map[string]bool, error) {
-	if anchors, ok := c.anchors[path]; ok {
-		return anchors, nil
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read reference %s: %w", path, err)
-	}
-	art, err := artifact.Parse(data)
-	if err != nil {
-		return nil, fmt.Errorf("parse reference %s: %w", path, err)
-	}
-	// Dynamic headings and explicit HTML anchors need the rendered harness output.
-	if strings.Contains(art.Body, "{{") || strings.Contains(art.Body, "id=") || strings.Contains(art.Body, "name=") {
-		c.anchors[path] = nil
-		return nil, nil
-	}
-	sections, err := markup.Sections([]byte(art.Body))
-	if err != nil {
-		return nil, err
-	}
-	anchors := make(map[string]bool)
-	for _, section := range sections {
-		anchors[section.Anchor] = true
-	}
-	c.anchors[path] = anchors
-	return anchors, nil
-}
-
-func (c *checker) checkOutdated(d document, offset int, value string) {
-	for old, replacement := range c.options.Outdated {
-		if index := strings.Index(value, old); index >= 0 {
-			c.add(d, offset+index, "warning", "outdated-reference", fmt.Sprintf("%q is marked outdated; use %q", old, replacement))
-		}
-	}
+	return nil
 }
 
 // gitIgnored returns the absolute paths Git ignores below root. Ignored

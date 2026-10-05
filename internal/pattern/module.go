@@ -13,8 +13,9 @@ type Rule struct {
 	ID       string
 	Severity string
 	Message  string
-	At       string
-	Related  string
+	At       []string
+	Related  []string
+	Focus    string
 	Query    *Query
 	Offset   int
 }
@@ -210,13 +211,22 @@ func (r *reader) rule(open token) (*Rule, error) {
 			if value.kind != tCapture {
 				return nil, r.unexpected(value, fmt.Sprintf("a @capture for :%s", key.text))
 			}
-			if key.text == "at" {
-				rule.At = value.text
-			} else {
-				rule.Related = value.text
+			captures := []string{value.text}
+			for r.peek().kind == tCapture {
+				captures = append(captures, r.next().text)
 			}
+			if key.text == "related" {
+				rule.Related = captures
+			} else {
+				rule.At = captures
+			}
+		case "focus":
+			if value.kind != tVar {
+				return nil, r.unexpected(value, "a ?variable for :focus")
+			}
+			rule.Focus = value.text
 		default:
-			return nil, &Error{Offset: key.pos, Message: fmt.Sprintf("a rule has no key :%s", key.text), Hint: suggest(key.text, []string{"severity", "message", "at", "related"})}
+			return nil, &Error{Offset: key.pos, Message: fmt.Sprintf("a rule has no key :%s", key.text), Hint: suggest(key.text, []string{"severity", "message", "at", "related", "focus"})}
 		}
 	}
 	if rule.Message == "" {
@@ -228,7 +238,7 @@ func (r *reader) rule(open token) (*Rule, error) {
 	}
 	r.next()
 	rule.Query = q
-	for _, capture := range []string{rule.At, rule.Related} {
+	for _, capture := range slices.Concat(rule.At, rule.Related) {
 		if capture != "" && !slices.Contains(q.Captures, capture) {
 			return nil, &Error{Offset: open.pos, Message: fmt.Sprintf("rule %s points at @%s, which its query does not capture", rule.ID, capture)}
 		}
@@ -258,11 +268,14 @@ func NewRule(id, severity, message, at, related, query string) (*Rule, error) {
 	if severity != "" {
 		src += " :severity " + severity
 	}
-	if at != "" {
-		src += " :at @" + strings.TrimPrefix(at, "@")
+	for _, capture := range strings.Fields(at) {
+		src += " :at @" + strings.TrimPrefix(capture, "@")
 	}
-	if related != "" {
-		src += " :related @" + strings.TrimPrefix(related, "@")
+	for i, capture := range strings.Fields(related) {
+		if i == 0 {
+			src += " :related"
+		}
+		src += " @" + strings.TrimPrefix(capture, "@")
 	}
 	module, err := ReadModule(src+"\n"+query+"\n)", nil)
 	if err != nil {

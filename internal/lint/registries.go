@@ -44,7 +44,7 @@ func compileRegistries(definitions []Registry, custom []string) ([]compiledRegis
 	seen := make(map[string]bool)
 	var result []compiledRegistry
 	for _, registry := range definitions {
-		if !ruleID.MatchString(registry.ID) || seen[registry.ID] || slices.Contains(rules, registry.ID) || slices.Contains(custom, registry.ID) {
+		if !ruleID.MatchString(registry.ID) || seen[registry.ID] || slices.Contains(reserved(), registry.ID) || slices.Contains(custom, registry.ID) {
 			return nil, fmt.Errorf("invalid, duplicate or reserved lint registry id %q", registry.ID)
 		}
 		seen[registry.ID] = true
@@ -128,4 +128,16 @@ func (c *checker) checkRegistries(documents []document) {
 			}
 		}
 	}
+}
+
+func reserved() []string {
+	ids := slices.Clone(rules)
+	if registry, err := loadModules(nil); err == nil {
+		if specs, err := registry.specs(nil); err == nil {
+			for _, s := range specs {
+				ids = append(ids, s.id)
+			}
+		}
+	}
+	return ids
 }

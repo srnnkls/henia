@@ -42,11 +42,11 @@ func TestDuplicateContentThresholdAndLiteralContexts(t *testing.T) {
 	if err != nil || len(diagnostics) != 0 {
 		t.Fatalf("default threshold: %+v (%v)", diagnostics, err)
 	}
-	diagnostics, err = lint.Run(t.Context(), []string{root}, lint.Options{DuplicateMinWords: 4})
+	diagnostics, err = lint.Run(t.Context(), []string{root}, lint.Options{Config: map[string]map[string]any{"duplicate-content": {"min-words": 4}}})
 	if err != nil || len(diagnostics) != 1 || diagnostics[0].Line != 3 {
 		t.Fatalf("configured threshold: %+v (%v)", diagnostics, err)
 	}
-	diagnostics, err = lint.Run(t.Context(), []string{root}, lint.Options{DuplicateMinWords: 4, Disable: []string{"duplicate-content"}})
+	diagnostics, err = lint.Run(t.Context(), []string{root}, lint.Options{Config: map[string]map[string]any{"duplicate-content": {"min-words": 4}}, Disable: []string{"duplicate-content"}})
 	if err != nil || len(diagnostics) != 0 {
 		t.Fatalf("disabled: %+v (%v)", diagnostics, err)
 	}

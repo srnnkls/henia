@@ -35,7 +35,8 @@ type InlineRule struct {
 }
 
 type spec struct {
-	rule     *pattern.Rule
+	id       string
+	rules    []*pattern.Rule
 	module   string
 	params   map[string]string
 	data     map[string]any
@@ -108,10 +109,10 @@ func (r *registry) specs(inline []InlineRule) ([]*spec, error) {
 	var out []*spec
 	byID := map[string]*spec{}
 	add := func(s *spec) error {
-		if first, taken := byID[s.rule.ID]; taken {
-			return fmt.Errorf("lint rule %s is defined in %s and %s; rule ids are unique, so disable one or rename it", s.rule.ID, first.module, s.module)
+		if first, taken := byID[s.id]; taken {
+			return fmt.Errorf("lint rule %s is defined in %s and %s; rule ids are unique, so disable one or rename it", s.id, first.module, s.module)
 		}
-		byID[s.rule.ID] = s
+		byID[s.id] = s
 		out = append(out, s)
 		return nil
 	}
@@ -131,7 +132,7 @@ func (r *registry) specs(inline []InlineRule) ([]*spec, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := add(&spec{rule: rule, module: "henia.toml", params: scalars(in.Params), data: in.Data}); err != nil {
+		if err := add(&spec{id: rule.ID, rules: []*pattern.Rule{rule}, module: "henia.toml", params: scalars(in.Params), data: in.Data}); err != nil {
 			return nil, err
 		}
 	}
@@ -191,9 +192,20 @@ func (r *registry) parse(file moduleFile) ([]*spec, map[string]pattern.Define, e
 				id := heading.Parent.Attrs["title"]
 				params := map[string]any{}
 				for _, field := range strings.Fields(e.Attrs["info"])[1:] {
-					if key, value, ok := strings.Cut(field, "="); ok {
-						params[key] = value
+					key, value, ok := strings.Cut(field, "=")
+					if !ok {
+						continue
 					}
+					if table, row, nested := strings.Cut(key, "."); nested {
+						rows, _ := params[table].(map[string]any)
+						if rows == nil {
+							rows = map[string]any{}
+						}
+						rows[row] = value
+						params[table] = rows
+						continue
+					}
+					params[key] = value
 				}
 				examples[id] = append(examples[id], example{kind == "matches", e.Text, e.Line + 1 + shift, params})
 			}
@@ -217,8 +229,14 @@ func (r *registry) parse(file moduleFile) ([]*spec, map[string]pattern.Define, e
 	params, _ := art.Frontmatter["params"].(map[string]any)
 	data, _ := art.Frontmatter["data"].(map[string]any)
 	var specs []*spec
+	byID := map[string]*spec{}
 	for _, rule := range module.Rules {
-		specs = append(specs, &spec{rule: rule, module: file.name, params: scalars(params), data: data, examples: examples[rule.ID]})
+		if s, ok := byID[rule.ID]; ok {
+			s.rules = append(s.rules, rule)
+			continue
+		}
+		byID[rule.ID] = &spec{id: rule.ID, rules: []*pattern.Rule{rule}, module: file.name, params: scalars(params), data: data, examples: examples[rule.ID]}
+		specs = append(specs, byID[rule.ID])
 	}
 	return specs, module.Defines, nil
 }
@@ -247,11 +265,15 @@ func (s *spec) configure(config map[string]any) error {
 		default:
 			if key == "severity" {
 				if v != "warning" && v != "error" {
-					return fmt.Errorf("lint.config.%s.severity must be warning or error", s.rule.ID)
+					return fmt.Errorf("lint.config.%s.severity must be warning or error", s.id)
 				}
-				rule := *s.rule
-				rule.Severity = v.(string)
-				s.rule = &rule
+				rules := make([]*pattern.Rule, len(s.rules))
+				for i, rule := range s.rules {
+					copied := *rule
+					copied.Severity = v.(string)
+					rules[i] = &copied
+				}
+				s.rules = rules
 				continue
 			}
 			params[key] = fmt.Sprint(v)
@@ -296,8 +318,20 @@ type evaluation struct {
 }
 
 func (ev *evaluation) run(s *spec, options Options) ([]Diagnostic, error) {
+	var out []Diagnostic
+	for _, rule := range s.rules {
+		diagnostics, err := ev.clause(s, rule, options)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, diagnostics...)
+	}
+	return out, nil
+}
+
+func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Diagnostic, error) {
 	env := pattern.Environment{Resolve: ev.corpus, Params: s.params, Data: dataRoot(s.data), Now: options.Now}
-	if s.rule.Query.Semantic {
+	if rule.Query.Semantic {
 		if !options.Semantic.Enabled {
 			return nil, nil
 		}
@@ -309,27 +343,52 @@ func (ev *evaluation) run(s *spec, options Options) ([]Diagnostic, error) {
 		}
 		env.Embed = ev.embed
 	}
-	rows, err := s.rule.Query.Run(ev.corpus.Root, env)
+	rows, err := rule.Query.Run(ev.corpus.Root, env)
 	if err != nil {
-		return nil, fmt.Errorf("lint rule %s: %w", s.rule.ID, err)
+		return nil, fmt.Errorf("lint rule %s: %w", rule.ID, err)
 	}
 	var out []Diagnostic
 	for _, row := range rows {
-		at := capture(row, s.rule.At)
-		if at == nil || disabledHere(at, s.rule.ID) {
+		at := first(row, append(slices.Clone(rule.At), ""))
+		if at == nil || disabledHere(at, rule.ID) {
 			continue
 		}
-		d := Diagnostic{Severity: s.rule.Severity, Rule: s.rule.ID, Message: render(s.rule.Message, row, s.params)}
+		d := Diagnostic{Severity: rule.Severity, Rule: rule.ID, Message: render(rule.Message, row, s.params)}
 		location := locate(at)
+		if rule.Focus != "" {
+			location = focus(at, location, row.Vars[rule.Focus])
+		}
 		d.Path, d.Line, d.Column = location.Path, location.Line, location.Column
-		if s.rule.Related != "" {
-			if related := capture(row, s.rule.Related); related != nil {
-				d.Related = []Location{locate(related)}
-			}
+		if related := first(row, rule.Related); related != nil {
+			d.Related = []Location{locate(related)}
 		}
 		out = append(out, d)
 	}
 	return out, nil
+}
+
+func focus(e *markup.Element, at Location, value string) Location {
+	index := strings.Index(e.Text, value)
+	if value == "" || index < 0 {
+		return at
+	}
+	before := e.Text[:index]
+	if newlines := strings.Count(before, "\n"); newlines > 0 {
+		at.Line += newlines
+		at.Column = index - strings.LastIndexByte(before, '\n')
+	} else {
+		at.Column += index
+	}
+	return at
+}
+
+func first(row pattern.Row, names []string) *markup.Element {
+	for _, name := range names {
+		if e := capture(row, name); e != nil {
+			return e
+		}
+	}
+	return nil
 }
 
 func capture(row pattern.Row, name string) *markup.Element {
@@ -433,7 +492,7 @@ func TestModules(dirs []string, inline []InlineRule, options Options) ([]Example
 				return nil, 0, err
 			}
 			if ex.matches != (found > 0) {
-				failures = append(failures, ExampleFailure{s.rule.ID, registry.files[s.module].path, ex.line, ex.matches, found})
+				failures = append(failures, ExampleFailure{s.id, registry.files[s.module].path, ex.line, ex.matches, found})
 			}
 		}
 	}

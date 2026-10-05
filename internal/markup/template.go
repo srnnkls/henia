@@ -1,14 +1,14 @@
-package lint
+package markup
 
 import (
 	"bytes"
 	"text/template"
-	"text/template/parse"
+	templateparse "text/template/parse"
 )
 
-// templateMask uses Go's parse trees to retain literal Markdown and replace
+// MaskTemplates uses Go's parse trees to retain literal Markdown and replace
 // unevaluated actions with scalar placeholders. Coordinates remain unchanged.
-func templateMask(source []byte) ([]byte, error) {
+func MaskTemplates(source []byte) ([]byte, error) {
 	if !bytes.Contains(source, []byte("{{")) {
 		return source, nil
 	}
@@ -17,26 +17,26 @@ func templateMask(source []byte) ([]byte, error) {
 		return nil, err
 	}
 	literal := make([]bool, len(source))
-	var visit func(parse.Node)
-	visit = func(node parse.Node) {
+	var visit func(templateparse.Node)
+	visit = func(node templateparse.Node) {
 		switch n := node.(type) {
-		case *parse.TextNode:
+		case *templateparse.TextNode:
 			for i := int(n.Pos); i < int(n.Pos)+len(n.Text) && i < len(literal); i++ {
 				literal[i] = true
 			}
-		case *parse.ListNode:
+		case *templateparse.ListNode:
 			if n != nil {
 				for _, child := range n.Nodes {
 					visit(child)
 				}
 			}
-		case *parse.IfNode:
+		case *templateparse.IfNode:
 			visit(n.List)
 			visit(n.ElseList)
-		case *parse.RangeNode:
+		case *templateparse.RangeNode:
 			visit(n.List)
 			visit(n.ElseList)
-		case *parse.WithNode:
+		case *templateparse.WithNode:
 			visit(n.List)
 			visit(n.ElseList)
 		}

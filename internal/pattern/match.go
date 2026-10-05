@@ -740,6 +740,12 @@ func (a Attr) value(e *markup.Element) (string, bool) {
 		return strings.ToLower(strings.Join(strings.Fields(e.Text), " ")), true
 	case "node":
 		return fmt.Sprintf("%09d", e.Order), true
+	case "position":
+		file := e.Enclosing("file")
+		if file == nil {
+			return "", false
+		}
+		return fmt.Sprintf("%s\x00%09d", file.Attrs["file"], e.Start), true
 	}
 	value, ok := e.Attrs[a.Key]
 	return value, ok

@@ -30,7 +30,7 @@ func TestRulesAndPositions(t *testing.T) {
 	root := t.TempDir()
 	paragraph := "These twelve or more words explain how to execute the same repeated workflow safely and consistently."
 	write(t, root, "skills/example/SKILL.md", "---\nname: example\nlast_verified: 2020-01-01\n---\n\n# Repeated\n\n"+paragraph+"\n\n# Repeated\n\n"+paragraph+"\n\n[Guide](missing.md) and `$missing`. Use `legacy-model`.\n")
-	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Outdated: map[string]string{"legacy-model": "current-model"}, Config: map[string]map[string]any{"large-skill": {"max-lines": 4}}, Now: time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)})
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Config: map[string]map[string]any{"large-skill": {"max-lines": 4}, "outdated-reference": {"outdated": map[string]any{"legacy-model": "current-model"}}}, Now: time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestRulesAndPositions(t *testing.T) {
 func TestExternalReferencesResolve(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\nUse `$vendored`, `/plan` and `$absent`.\n")
-	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{External: []string{"skill:vendored", "command:plan"}})
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Config: map[string]map[string]any{"missing-reference": {"external": []any{"skill:vendored", "command:plan"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestReferencesResolveAndExamplesAreIgnored(t *testing.T) {
 	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\n:::note\nSee `$two`, [Guide](reference/guide.md), `#reference/guide.md`.\n:::\n\n```md\n:x[bad\n[broken](absent.md) `$absent` legacy-model\n```\n")
 	write(t, root, "skills/one/reference/guide.md", "# Guide\n\nWorking guide.\n")
 	write(t, root, "skills/two/SKILL.md", "---\nname: two\ndescription: Second skill\n---\n\nA second skill.\n")
-	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Outdated: map[string]string{"legacy-model": "current-model"}})
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Config: map[string]map[string]any{"outdated-reference": {"outdated": map[string]any{"legacy-model": "current-model"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

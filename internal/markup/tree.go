@@ -219,6 +219,8 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 		switch v := n.(type) {
 		case *ast.Link:
 			e.Type, e.Attrs["url"] = "link", string(v.Destination)
+		case *ast.Image:
+			e.Type, e.Attrs["url"] = "image", string(v.Destination)
 		case *ast.AutoLink:
 			e.Type, e.Attrs["url"] = "link", string(v.URL(b.source))
 		case *inlineNode:

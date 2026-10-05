@@ -107,14 +107,15 @@ var types = map[string][]string{
 	"table":       nil,
 	"code":        {"lang"},
 	"row":         {"table", "key", "value", "index"},
-	"link":        {"target", "path", "anchor", "url", "ref", "artifact", "exists", "valid"},
-	"entry":       {"key", "value", "index"},
+	"link":        {"target", "path", "anchor", "url", "ref", "name", "artifact", "dest", "exists", "valid", "anchored", "problem"},
+	"image":       {"url", "dest", "exists", "valid", "anchored", "problem"},
+	"entry":       {"key", "value", "index", "tag"},
 	"problem":     {"kind", "message"},
 	"directive":   nil,
 	"frontmatter": nil,
 }
 
-var textKeys = []string{"text", "contains", "matches", "words", "node", "lines", "chars", "norm", "dynamic"}
+var textKeys = []string{"text", "contains", "matches", "words", "node", "position", "lines", "chars", "norm", "dynamic"}
 
 var numericKeys = []string{"level", "words", "lines", "chars"}
 
