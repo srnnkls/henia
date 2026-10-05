@@ -102,20 +102,27 @@ and `~/.local/state` on Linux, `~/Library/Application Support` on macOS.
 ## Installing
 
 `henia install` writes the global packages into harness directories: static
-skills, hybrid heads, the catalog skill, agents and harness files, each rendered
-by the package that configures that harness, with the other global packages as
-its dependencies. The user `henia.toml` names the directories:
+skills, hybrid heads, agents and harness files, each rendered by the package
+that configures that harness, with the other global packages as its
+dependencies. It installs every harness an installed package configures whose
+home exists on this machine:
+
+| Harness | Home |
+|---|---|
+| `claude` | `$CLAUDE_CONFIG_DIR`, else `~/.claude` |
+| `codex` | `$CODEX_HOME`, else `~/.codex` |
+| `pi` | `~/.pi/agent` |
+| `omp` | `~/.omp/agent` |
+
+The user `henia.toml` overrides a home, adds a harness Henia knows no home for,
+or turns one off, which removes what Henia installed there:
 
 ```toml
-[dependencies.tropos]
-git = "https://github.com/srnnkls/tropos.git"
-branch = "main"
-
-[install.claude]
-path = "~/.claude"
-
 [install.codex]
-path = "~/.codex"
+path = "~/work/codex"
+
+[install.omp]
+enabled = false
 ```
 
 Every harness also gets Henia's own `henia` skill: how to read the library

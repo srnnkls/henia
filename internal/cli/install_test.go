@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/srnnkls/henia/internal/config"
 )
 
 func TestApplyOwnsOnlyWhatItInstalled(t *testing.T) {
@@ -55,5 +58,32 @@ func TestApplyOwnsOnlyWhatItInstalled(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(target, "skills", "mine", "SKILL.md")); err != nil {
 		t.Fatalf("foreign skill removed: %v", err)
+	}
+}
+
+func TestInstallTargets(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	off := false
+	env := map[string]string{"CODEX_HOME": "/srv/codex"}
+	present := map[string]bool{filepath.Join(home, ".claude"): true, "/srv/codex": true}
+	targets, err := installTargets(
+		map[string]config.InstallTarget{"omp": {Enabled: &off}, "custom": {Path: "~/agents/custom"}},
+		map[string]bool{"claude": true, "codex": true, "pi": true, "omp": true, "gemini": true},
+		func(key string) string { return env[key] },
+		func(path string) bool { return present[path] },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, target := range targets {
+		got = append(got, fmt.Sprintf("%s=%s %v", target.harness, target.path, target.explicit))
+	}
+	want := []string{"claude=" + filepath.Join(home, ".claude") + " false", "codex=/srv/codex false", "custom=" + filepath.Join(home, "agents/custom") + " true"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("targets:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if _, err := installTargets(map[string]config.InstallTarget{"gemini": {}}, nil, func(string) string { return "" }, func(string) bool { return true }); err == nil {
+		t.Fatal("a listed harness without a known home needs a path")
 	}
 }

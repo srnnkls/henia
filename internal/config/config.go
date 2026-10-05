@@ -33,7 +33,8 @@ type Config struct {
 }
 
 type InstallTarget struct {
-	Path string `toml:"path"`
+	Path    string `toml:"path,omitempty"`
+	Enabled *bool  `toml:"enabled,omitempty"`
 }
 
 func (c *Config) HeniaSkill() bool { return c.InstallHeniaSkill == nil || *c.InstallHeniaSkill }

@@ -45,32 +45,134 @@ unless they were edited since. henia sync --global installs afterwards.`,
 }
 
 func install(cmd *cobra.Command, selected []string, force, explicit bool) error {
-	manifest := filepath.Join(library.ConfigDir(), library.ConfigFile)
-	cfg, err := config.LoadOptional(manifest)
+	cfg, err := config.LoadOptional(filepath.Join(library.ConfigDir(), library.ConfigFile))
 	if err != nil {
 		return err
 	}
-	if len(cfg.Install) == 0 {
-		if explicit {
-			fmt.Fprintf(cmd.OutOrStdout(), "Nothing to install: %s has no [install.<harness>] path\n", manifest)
-		}
-		return nil
-	}
 	var globals []library.Package
+	configured := map[string]bool{}
 	for _, pkg := range library.Open("", nil).Packages {
-		if pkg.Tier == library.Global {
-			globals = append(globals, pkg)
-		}
-	}
-	for _, harness := range slices.Sorted(maps.Keys(cfg.Install)) {
-		if len(selected) > 0 && !slices.Contains(selected, harness) {
+		if pkg.Tier != library.Global {
 			continue
 		}
-		if err := installHarness(cmd, cfg, harness, expandHome(cfg.Install[harness].Path), globals, force); err != nil {
-			return fmt.Errorf("install %s: %w", harness, err)
+		globals = append(globals, pkg)
+		if pkg.Config == "" {
+			continue
+		}
+		if pkgCfg, err := config.LoadOptional(pkg.Config); err == nil {
+			for name := range pkgCfg.Harness {
+				configured[name] = true
+			}
+		}
+	}
+	targets, err := installTargets(cfg.Install, configured, os.Getenv, exists)
+	if err != nil {
+		return err
+	}
+	for name, override := range cfg.Install {
+		if override.Enabled != nil && !*override.Enabled {
+			if removed, err := uninstall(name); err != nil {
+				return fmt.Errorf("uninstall %s: %w", name, err)
+			} else if removed > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "Removed %d file(s) henia installed for %s\n", removed, name)
+			}
+		}
+	}
+	if len(targets) == 0 && explicit {
+		fmt.Fprintln(cmd.OutOrStdout(), "Nothing to install: no installed package configures a harness found on this machine")
+	}
+	for _, t := range targets {
+		if len(selected) > 0 && !slices.Contains(selected, t.harness) {
+			continue
+		}
+		if err := installHarness(cmd, cfg, t.harness, t.path, globals, force); err != nil {
+			if explicit || t.explicit {
+				return fmt.Errorf("install %s: %w", t.harness, err)
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "henia: %s not installed: %v\n", t.harness, err)
 		}
 	}
 	return nil
+}
+
+type installTarget struct {
+	harness, path string
+	explicit      bool
+}
+
+func harnessHome(harness string, getenv func(string) string) (string, bool) {
+	env, home := map[string][2]string{
+		"claude": {"CLAUDE_CONFIG_DIR", "~/.claude"},
+		"codex":  {"CODEX_HOME", "~/.codex"},
+		"pi":     {"", "~/.pi/agent"},
+		"omp":    {"", "~/.omp/agent"},
+	}[harness], ""
+	if env[1] == "" {
+		return "", false
+	}
+	if env[0] != "" {
+		home = getenv(env[0])
+	}
+	if home == "" {
+		home = env[1]
+	}
+	return expandHome(home), true
+}
+
+func installTargets(overrides map[string]config.InstallTarget, configured map[string]bool, getenv func(string) string, exists func(string) bool) ([]installTarget, error) {
+	names := map[string]bool{}
+	maps.Copy(names, configured)
+	for name := range overrides {
+		names[name] = true
+	}
+	var targets []installTarget
+	for _, name := range slices.Sorted(maps.Keys(names)) {
+		override, listed := overrides[name]
+		if override.Enabled != nil && !*override.Enabled {
+			continue
+		}
+		if override.Path != "" {
+			targets = append(targets, installTarget{name, expandHome(override.Path), true})
+			continue
+		}
+		home, known := harnessHome(name, getenv)
+		switch {
+		case !known && listed:
+			return nil, fmt.Errorf("install.%s: henia knows no home for this harness; set its path", name)
+		case !known:
+			continue
+		case listed:
+			targets = append(targets, installTarget{name, home, true})
+		case exists(home):
+			targets = append(targets, installTarget{name, home, false})
+		}
+	}
+	return targets, nil
+}
+
+func uninstall(harness string) (int, error) {
+	manifest := library.InstallManifest(harness)
+	data, err := os.ReadFile(manifest)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	var record installRecord
+	if err := json.Unmarshal(data, &record); err != nil {
+		return 0, fmt.Errorf("%s: %w", manifest, err)
+	}
+	_, removed, err := apply(record.Target, map[string]string{}, manifest, false)
+	if err != nil {
+		return removed, err
+	}
+	return removed, os.Remove(manifest)
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func expandHome(path string) string {
