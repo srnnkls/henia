@@ -108,6 +108,49 @@ batches:
         status: fixed
     residual: []
     reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b4-*
+  - batch: 5
+    tasks:
+      - QAG-005
+    reviewers:
+      - claude-opus
+      - peer-gpt6.1-sol
+      - peer-gpt6-astra
+    gates:
+      correctness: pass after fix
+      security: pass
+      performance: pass
+      architecture: pass
+      style: pass
+    admitted:
+      - id: B5-H1
+        found_by:
+          - peer-gpt6-astra
+          - peer-gpt6.1-sol
+          - claude-opus (general)
+        mechanism: ?var group keys included the implicit capture
+        status: fixed
+      - id: B5-H2
+        found_by:
+          - peer-gpt6-astra
+          - peer-gpt6.1-sol
+        mechanism: JSON iterated Row.Shown, not Row.Vars
+        status: fixed
+      - id: B5-H3
+        found_by:
+          - peer-gpt6-astra
+        mechanism: NaN/Inf operands broke JSON encoding
+        status: fixed
+      - id: B5-O1
+        found_by:
+          - orchestrator (tropos)
+        mechanism: grouped text listed every collected node; AC-1 showed 1 of 17 rows
+        decision: 'AD-6 updated: non-key captures print one N-nodes line'
+        status: fixed
+    residual:
+      - id: B5-R1
+        claim: unnamed collected cell prints a bare N nodes line; 1 nodes wording
+        reason: folded into QAG-006 printer edit
+    reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b5-*
 deferred:
   - id: B4-D1
     found_by:

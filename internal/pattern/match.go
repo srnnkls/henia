@@ -28,13 +28,16 @@ type Resolver interface {
 }
 
 type Cell struct {
-	Name     string
-	Elements []*markup.Element
+	Name      string
+	Elements  []*markup.Element
+	Collected bool
 }
 
 type Row struct {
-	Cells []Cell
-	Vars  map[string]string
+	Cells      []Cell
+	Vars       map[string]string
+	Shown      []string
+	Aggregates map[string]bool
 }
 
 type binding struct {
@@ -122,6 +125,9 @@ func (q *Query) Run(root *markup.Element, env Environment) ([]Row, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if q.Group != nil {
+		return q.Group.rows(q, bindings, env.Params), nil
 	}
 	for _, b := range bindings {
 		row, key := q.row(b)

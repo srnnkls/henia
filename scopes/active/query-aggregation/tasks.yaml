@@ -66,10 +66,20 @@ tasks:
       fix_round: B4-H1 file :lines from Body; B4-H2 fallback strips frontmatter; re-review fixed
   - id: QAG-005
     content: "(group key* aggregate*) clause over bindings before capture dedup: reader (fresh outputs, comparisons), checks, evaluation incl. empty/keyless/unbound-key groups, grouped Row output in text and --json, --count counts groups (FR-5, FR-7, TR-1)"
-    status: pending
+    status: completed
     active_form: "Implementing the group clause"
     depends_on: [QAG-004]
     files: [internal/pattern/read.go, internal/pattern/check.go, internal/pattern/match.go, internal/pattern/group.go, internal/pattern/group_test.go, internal/cli/query.go, internal/cli/cli_test.go]
+    evidence:
+      tests:
+        - TestGroupReader
+        - TestGroupEvaluation
+        - TestGroupSkipsNonFiniteOperands
+        - TestQueryGroupOutput
+      red: reader rejected (group ...) as unknown type
+      green: go test ./... -count=1 ok; go vet + go build ok
+      tropos: 17 language groups (elisp 304, bash 251, ...); bash per skill 29 groups; inbound peer ?n=29; cobol ?n=0
+      fix_round: B5-H1 var keys ignore implicit capture; B5-H2 JSON emits all Vars; B5-H3 non-finite operands skipped; B5-O1 collected captures summarized; re-review fixed
   - id: QAG-006
     content: "--sort ?var | @capture.key: leading - descends, first node of multi-node cells, missing last, numeric when all present values parse, stable; names count as used (FR-6, TR-1)"
     status: pending
@@ -85,7 +95,7 @@ tasks:
 meta:
   created: 2026-10-05
   last_updated: "2026-10-05"
-  progress: 4/7
+  progress: 5/7
 phases:
   - id: zero-groups
     tasks: [QAG-001, QAG-002, QAG-003]

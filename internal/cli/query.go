@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -149,6 +150,13 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 					record[name] = nodes
 				}
 			}
+			for name, value := range row.Vars {
+				if n, err := strconv.ParseFloat(value, 64); err == nil && row.Aggregates[name] {
+					record["?"+name] = n
+				} else {
+					record["?"+name] = value
+				}
+			}
 			records = append(records, record)
 		}
 		encoder := json.NewEncoder(out)
@@ -160,8 +168,17 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 	shown := 0
 	for _, row := range rows {
 		var block strings.Builder
-		if shown > 0 && len(row.Cells) > 1 && !o.text {
+		var vars []string
+		for _, name := range row.Shown {
+			if value, ok := row.Vars[name]; ok {
+				vars = append(vars, "?"+name+"="+value)
+			}
+		}
+		if shown > 0 && (len(row.Cells) > 1 || len(vars) > 0) && !o.text {
 			block.WriteString("\n")
+		}
+		if len(vars) > 0 {
+			block.WriteString(strings.Join(vars, "  ") + "\n")
 		}
 		for _, cell := range row.Cells {
 			label := ""
@@ -170,6 +187,11 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 			}
 			if len(cell.Elements) == 0 {
 				fmt.Fprintf(&block, "%s-\n", label)
+				continue
+			}
+			if cell.Collected && !o.text {
+				fmt.Fprintf(&block, "%s%d nodes\n", label, len(cell.Elements))
+				continue
 			}
 			for _, e := range cell.Elements {
 				fmt.Fprintf(&block, "%s%s\n", label, describe(e))
