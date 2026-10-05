@@ -10,6 +10,7 @@ import (
 
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/canonical"
+	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
 	"github.com/srnnkls/henia/internal/slots"
@@ -283,7 +284,8 @@ func (t *Transformer) renderLinks(body, skill string) string {
 		command := "`henia show " + target + "`"
 		text := strings.Trim(link.Text, "`*_~")
 		replacement := link.Text + " (" + command + ")"
-		if text == link.Dest || text == strings.SplitN(link.Dest, "#", 2)[0] || text == target || text == strings.SplitN(target, "#", 2)[0] {
+		file := strings.SplitN(link.Dest, "#", 2)[0]
+		if text == link.Dest || text == file || text == strings.TrimPrefix(path.Clean(file), "../") || text == strings.SplitN(target, "#", 2)[0] {
 			replacement = command
 		}
 		body = body[:link.Start] + replacement + body[link.End:]
@@ -315,6 +317,9 @@ func (t *Transformer) libraryTarget(skill, dest string) (string, bool) {
 	}
 	if rest == "" || rest == "SKILL.md" {
 		return owner + suffix, true
+	}
+	if module, ok := library.Module(rest); ok {
+		return owner + "." + module + suffix, true
 	}
 	return owner + "/" + rest + suffix, true
 }

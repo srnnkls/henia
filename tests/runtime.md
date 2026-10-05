@@ -46,7 +46,9 @@ $ sed -n '/^# Henia/,$p' "$T/build/claude/skills/henia/SKILL.md"
 
 Henia serves skills from a library. Read them through Henia, never as files:
 
-- `henia show <skill>` prints a skill rendered for this harness; `<skill>#<section>` reads one section, `<skill>/<path>` one of its resources, and `--toc` lists its sections.
+- `henia show <skill>` prints a skill rendered for this harness and lists its resources; `--toc` lists its sections.
+- Resources are addressed like modules: `henia show git.reference.worktree` reads `reference/worktree.md` of the `git` skill, and `henia show git.reference` lists that folder. These are library addresses, not file paths.
+- `#<section>` reads one section of a skill or resource, as in `henia show git.reference.worktree#steps`.
 - `henia ls` lists every skill in the library, including other packages'.
 - `henia query '<pattern>'` finds headings, paragraphs, code and links across skills and their resources; `henia query --grammar` prints the language.
 
@@ -252,15 +254,15 @@ See the reference.
 
 ## Resources
 
-Read one with `henia show res/<path>`:
+Read one with `henia show <address>`:
 
-- `reference/config.md`: Configuration keys and defaults.
-- `reference/flow.md`: Task flow
-- `scripts/run.sh`
+- `res.reference.config`: Configuration keys and defaults.
+- `res.reference.flow`: Task flow
+- `res/scripts/run.sh`
 ```
 
 ```scrut
-$ henia show res/reference/config.md; echo ---; henia show res/reference/config.md#keys; echo ---; henia show res/reference/
+$ henia show res.reference.config; echo ---; henia show res.reference.config#keys; echo ---; henia show res.reference
 # Configuration
 
 ## Keys
@@ -274,10 +276,21 @@ One key.
 
 ## Resources
 
-Read one with `henia show res/<path>`:
+Read one with `henia show <address>`:
 
-- `reference/config.md`: Configuration keys and defaults.
-- `reference/flow.md`: Task flow
+- `res.reference.config`: Configuration keys and defaults.
+- `res.reference.flow`: Task flow
+```
+
+Resources read like modules: directories are namespaces and Markdown files
+modules, without the extension. Files that are not modules, and the path form
+generally, are addressed by path.
+
+```scrut
+$ henia show res/reference/config.md | head -n 1; henia show res.nope; mkdir -p "$R/reference/config"; henia show res.reference.config; rmdir "$R/reference/config"
+# Configuration
+henia: res.nope: no module nope; henia show the skill to list its resources
+henia: res.reference.config: reference.config names both reference/config.md and reference/config/; address one by path
 ```
 
 ```scrut

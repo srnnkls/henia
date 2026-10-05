@@ -80,14 +80,15 @@ func newShowCommand() *cobra.Command {
 	var flags runtimeFlags
 	var mode showMode
 	cmd := &cobra.Command{
-		Use:   "show <skill>[/<resource>][#section]",
+		Use:   "show <skill>[.<module>…][#section]",
 		Short: "Print a library skill or one of its sections, rendered for the caller",
 		Long: `Print a library skill or one of its sections, rendered for the caller.
 
 A skill is <name> or <package>:<name>. Output longer than the budget prints the
 sections instead, each addressable as <skill>#<section>. A full skill ends with
-the list of its resources; <skill>/<path> reads one and <skill>/<dir>/ lists a
-directory. --head prints what a hybrid skill carries upfront: its :::static
+the list of its resources, addressed like modules: <skill>.<dir>.<file> reads
+<dir>/<file>.md and <skill>.<dir> lists <dir>/. Other files are read by path,
+<skill>/<path>. --head prints what a hybrid skill carries upfront: its :::static
 blocks, its contents and the contents of the skills it references; --toc
 prints only its contents, and both report a harness copy that henia install
 wrote from an older revision of the skill. Problems print as text;
@@ -116,15 +117,22 @@ the command always exits successfully so a skill preload never aborts.`,
 
 func show(out io.Writer, lib *library.Library, r *renderer, target string, mode showMode, expand func(library.Entry, string) string, disclose func(library.Entry) bool) {
 	ref, anchor, sectioned := strings.Cut(target, "#")
-	ref, resource, isResource := strings.Cut(ref, "/")
+	ref, modules, resource, isResource := library.SplitAddress(ref)
 	entry, err := lib.Resolve(ref)
 	if err != nil {
 		fmt.Fprintf(out, "henia: %v\n", err)
 		return
 	}
+	if len(modules) > 0 {
+		if resource, err = library.ModulePath(filepath.Dir(entry.Path), modules); err != nil {
+			fmt.Fprintf(out, "henia: %s.%s: %v\n", lib.Reference(entry), strings.Join(modules, "."), err)
+			return
+		}
+		isResource = true
+	}
 	name := lib.Reference(entry)
 	if isResource {
-		showResource(out, name, filepath.Dir(entry.Path), resource, anchor, sectioned)
+		showResource(out, name, filepath.Dir(entry.Path), resource, anchor, sectioned, mode.toc)
 		return
 	}
 	body := r.body(entry)
@@ -303,9 +311,9 @@ func resourceList(out io.Writer, name, skillDir, sub string) {
 	if len(resources) == 0 {
 		return
 	}
-	fmt.Fprintf(out, "\n## Resources\n\nRead one with `henia show %s/<path>`:\n\n", name)
+	fmt.Fprintf(out, "\n## Resources\n\nRead one with `henia show <address>`:\n\n")
 	for _, r := range resources {
-		line := "- `" + r.Path + "`"
+		line := "- `" + library.Address(name, r.Path) + "`"
 		if r.Files > 0 {
 			line += fmt.Sprintf(" (%d files)", r.Files)
 		}
@@ -316,7 +324,7 @@ func resourceList(out io.Writer, name, skillDir, sub string) {
 	}
 }
 
-func showResource(out io.Writer, name, skillDir, path, anchor string, sectioned bool) {
+func showResource(out io.Writer, name, skillDir, path, anchor string, sectioned, toc bool) {
 	full, err := library.ResourcePath(skillDir, path)
 	if err != nil {
 		fmt.Fprintf(out, "henia: %s/%s: %v\n", name, path, err)
@@ -335,7 +343,12 @@ func showResource(out io.Writer, name, skillDir, path, anchor string, sectioned 
 		fmt.Fprintf(out, "henia: %s/%s: %v\n", name, path, err)
 		return
 	}
-	address := name + "/" + path
+	address := library.Address(name, path)
+	if toc {
+		fmt.Fprintf(out, "Read the sections of %s as the task needs them:\n\n", address)
+		contents(out, address, text)
+		return
+	}
 	if sectioned {
 		_, section, ok := library.Section(text, anchor)
 		if !ok {

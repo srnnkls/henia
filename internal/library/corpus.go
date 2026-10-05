@@ -304,6 +304,14 @@ func (c *Corpus) references(body string, syntax *regexp.Regexp) []*markup.Elemen
 	for _, ref := range reference.Shown(body) {
 		attrs := c.skillLink(ref)
 		attrs["ref"] = "show"
+		if skill := c.Skill(ref.Name); skill != nil && skill.Attrs["dir"] != "" && ref.Module != "" {
+			modules := strings.Split(ref.Module, ".")
+			path, err := ModulePath(skill.Attrs["dir"], modules)
+			if err != nil {
+				path = strings.Join(modules, "/") + ".md"
+			}
+			attrs["path"] = path
+		}
 		if skill := c.Skill(ref.Name); skill != nil && skill.Attrs["dir"] != "" && attrs["path"] != "" {
 			c.inspect(attrs, filepath.Join(skill.Attrs["dir"], filepath.FromSlash(attrs["path"])), ref.Anchor)
 		}

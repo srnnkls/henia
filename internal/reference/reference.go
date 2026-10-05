@@ -30,6 +30,7 @@ type Reference struct {
 	Name     string
 	Raw      string
 	Resource string
+	Module   string
 	Anchor   string
 	// Start and End delimit the reference's single-backtick span in source bytes.
 	Start int
@@ -120,6 +121,14 @@ func Shown(body string) []Reference {
 		ref := Reference{Type: TypeSkill, Name: body[m[2]:m[3]], Raw: body[m[0]+1 : m[1]], Start: m[0], End: m[1]}
 		if m[4] >= 0 {
 			ref.Resource = body[m[4]:m[5]]
+		} else {
+			prefix, name := "", ref.Name
+			if pkg, rest, qualified := strings.Cut(name, ":"); qualified {
+				prefix, name = pkg+":", rest
+			}
+			if skill, module, dotted := strings.Cut(name, "."); dotted {
+				ref.Name, ref.Module = prefix+skill, module
+			}
 		}
 		if m[6] >= 0 {
 			ref.Anchor = body[m[6]:m[7]]

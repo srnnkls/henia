@@ -7,7 +7,9 @@ description: Skills served by Henia beyond those installed here, read on demand 
 
 Henia serves skills from a library. Read them through Henia, never as files:
 
-- `henia show <skill>` prints a skill rendered for this harness; `<skill>#<section>` reads one section, `<skill>/<path>` one of its resources, and `--toc` lists its sections.
+- `henia show <skill>` prints a skill rendered for this harness and lists its resources; `--toc` lists its sections.
+- Resources are addressed like modules: `henia show git.reference.worktree` reads `reference/worktree.md` of the `git` skill, and `henia show git.reference` lists that folder. These are library addresses, not file paths.
+- `#<section>` reads one section of a skill or resource, as in `henia show git.reference.worktree#steps`.
 - `henia ls` lists every skill in the library, including other packages'.
 - `henia query '<pattern>'` finds headings, paragraphs, code and links across skills and their resources; `henia query --grammar` prints the language.
 {{if .}}

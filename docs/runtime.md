@@ -145,7 +145,7 @@ produce.
 
 ```
 henia ls [--json]
-henia show <skill>[/<resource>][#section] [--harness NAME]
+henia show <skill>[.<module>…][#section] [--harness NAME]
 henia query '<pattern>...' [--text | --json | --count] [--limit N] [--canonical]
 henia context <skill> [--global DIR]...
 henia preload --skill <skill> -- <command>
@@ -177,9 +177,22 @@ henia preload --skill <skill> -- <command>
 Files next to a skill's `SKILL.md` are its resources. A Markdown resource may
 carry frontmatter with a `description` (else its first heading describes it).
 `henia show <skill>` ends with a list of the skill's resources and their
-descriptions, and `henia show <skill>/<path>` reads one, without frontmatter;
-`<skill>/<dir>/` lists a directory. Large skills list directories with file
-counts, each readable the same way.
+descriptions. Resources are addressed like modules in a programming language:
+the skill is the root, directories are namespaces and Markdown files are
+modules, without the extension.
+
+| Address | Reads |
+|---|---|
+| `git` | the skill |
+| `git.reference` | the list of `reference/` |
+| `git.reference.worktree` | `reference/worktree.md`, without frontmatter |
+| `git.reference.worktree#steps` | one section of it |
+| `tropos:git.reference.worktree` | the same, from the `tropos` package |
+
+A name that is both a file and a directory, such as `reference.md` beside
+`reference/`, is ambiguous and reported. Files that are not modules, such as
+scripts or names with dots, are addressed by path: `henia show pr/scripts/pr-context`.
+Large skills list directories with file counts, each readable the same way.
 
 Turn the list off with `resources.disclosure = false`, under `[resources]` in a
 user or project `henia.toml`, or for one skill under `henia:` in its frontmatter.
