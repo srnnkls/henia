@@ -12,13 +12,14 @@ henia query '(section :id "usage" (code :lang "bash") @c)'
 henia query '(skill (link :target "gestalt")) @s'
 henia query '(skill :id "gestalt" (reaches (skill) @t))'
 henia query '(skill (not (inbound (skill)))) @orphan'
-henia query '(join (skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a)))))'
-henia query '(join (skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.6)) @b))'
-henia query '(join (paragraph :node ?n :text ?t) @a (paragraph :node (after ?n) :text (similar ?t 0.85)) @b)'
+henia query '(link :anchor /./ (not (to (section)))) @broken'
+henia query '(section :id "map-vs-analyze" (from (link) @l))'
+henia query '(skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.6)) @b)'
+henia query '(paragraph :node ?n :text ?t) @a (paragraph :node (after ?n) :text (similar ?t 0.85)) @b'
 henia query '(file :path /\.md$/ (paragraph :words 100..) @p)'
 henia query '(skill :id "gestalt" > (file :main true (heading :level 1..2) @h))'
 henia query '(section > (heading) @title (code :lang "bash") @c)'
-henia query '(skill :id "gestalt" (link :url /^https:/) @l)'
+henia query '[(code :lang "toml") (code :lang "yaml")] @c'
 ```
 
 ## Types
@@ -61,8 +62,7 @@ paragraphs.
 ## Grammar
 
 ```
-query    := (pattern | join)+                ; rows of every term, united
-join     := "(" "join" (pattern | "(" "not" pattern ")")+ ")"
+query    := (pattern | "(" "not" pattern ")")+  ; patterns join on shared variables
 pattern  := "(" type item* ")" quant? capture?
           | "[" pattern+ "]" quant? capture?  ; alternatives
 value    := "string" | word | number | range | /regexp/ | ?variable
@@ -70,7 +70,7 @@ value    := "string" | word | number | range | /regexp/ | ?variable
           | "(" ("near" | "similar") ?variable threshold ")"
 item     := :key value | capture | pattern | ">" pattern | "."
           | "(" "not" (pattern | relation) ")" | relation
-relation := "(" ("reaches" | "inbound") pattern ")"
+relation := "(" ("reaches" | "inbound" | "to" | "from") pattern ")"
 quant    := "?" | "*" | "+"
 capture  := "@" name
 comment  := ";" to the end of the line
@@ -83,17 +83,27 @@ comment  := ";" to the end of the line
   or after the last it pins the first or last child. Unanchored nested patterns
   match in document order.
 - `?`, `*` and `+` make a sibling optional or repeated.
-- `(not P)` rejects a node with a descendant matching P; `(not (reaches P))`
-  and `(not (inbound P))` reject a skill with such a related skill.
+- `[P1 P2]` matches either; every alternative binds the same variables.
+- `(not P)` rejects a node with a descendant matching P, or with a related node
+  for `(not (to P))` and the like.
 - `(reaches P)` inside a `skill` matches the skills its links reach,
   transitively; `(inbound P)` matches the skills whose links reach it.
-- `(join P...)` returns the rows of its patterns that agree on shared
-  variables; a `(not P)` member drops rows for which P matches with the same
-  variables. A join prints its captures only.
-- A variable inside `(not P)` within a pattern refers to the same variable
-  outside it, so `(not P)` rejects only matches that agree.
-- A capture names a result column; a query without captures prints the matched
-  node.
+- `(to P)` inside a `link` matches what it names: the section of an `:anchor`,
+  else the file of a `:path`, else the skill. A dangling link matches nothing.
+  `(from P)` matches the links that name the node.
+
+Patterns side by side match together, joined on the variables they share, and
+print their captures. A top-level `(not P)` drops the rows for which P matches
+with the same variables. A variable inside `(not P)` that is bound outside it
+joins; one bound only inside stays local. The reader rejects:
+
+- a variable that appears once, since it would match anything;
+- a variable that is compared but never bound, or bound only in an optional
+  pattern and used again;
+- top-level patterns that share no variable, since every combination would
+  match, and a top-level `(not P)` that shares none, since it would drop every
+  row or none;
+- alternatives that bind different variables, and captures inside `(not ...)`.
 
 ## Output
 

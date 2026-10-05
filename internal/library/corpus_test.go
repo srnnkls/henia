@@ -32,7 +32,7 @@ func TestCorpus(t *testing.T) {
 	if got := strings.Join(files, " "); got != "SKILL.md:true ops/run.md:false run.sh:false" {
 		t.Errorf("files = %s", got)
 	}
-	if got := strings.Join(targets, " "); got != "b/SKILL.md# c/SKILL.md#x b/SKILL.md# a/SKILL.md#run a/ops/run.md#top" {
+	if got := strings.Join(targets, " "); got != "b/# c/SKILL.md#x b/SKILL.md# a/SKILL.md#run a/ops/run.md#top" {
 		t.Errorf("targets = %q", got)
 	}
 	main := a.Children[0]

@@ -41,9 +41,9 @@ func newCorpus(t *testing.T, skills map[string]map[string]string, links map[stri
 		}
 		for _, spec := range links[name] {
 			target, anchor, _ := strings.Cut(spec, "#")
-			attrs := map[string]string{"target": target, "path": "SKILL.md"}
+			attrs := map[string]string{"target": target}
 			if anchor != "" {
-				attrs["anchor"] = anchor
+				attrs["path"], attrs["anchor"] = "SKILL.md", anchor
 			}
 			main := skill.Children[0]
 			main.Children = append(main.Children, &markup.Element{Type: "link", Attrs: attrs, Text: spec, Parent: main, Index: len(main.Children)})
@@ -113,11 +113,15 @@ func TestRun(t *testing.T) {
 		{"direct children only", `(section :id "usage" > (code :lang "bash") @c)`, []string{"c=echo top\n"}},
 		{"cross-skill links", `(skill @s (link :target "a"))`, []string{"s=" + c.skills["b"].Text}},
 		{"inbound", `(skill :id "c" (inbound (skill) @from))`, []string{"from=", "from="}},
-		{"join on shared text across skills", `(join (skill :id ?x (heading :text ?t) @h1) (skill :id (not ?x) (heading :text ?t) @h2))`, []string{"h1=Usage h2=Usage", "h1=Usage h2=Usage"}},
-		{"anti-join finds broken anchors", `(join (skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a)))))`, []string{"l=c#nope"}},
+		{"join on shared text across skills", `(skill :id ?x (heading :text ?t) @h1) (skill :id (not ?x) (heading :text ?t) @h2)`, []string{"h1=Usage h2=Usage", "h1=Usage h2=Usage"}},
+		{"anti-join finds broken anchors", `(skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a))))`, []string{"l=c#nope"}},
 		{"correlated negation", `(skill :id "a" (code :lang ?l) @c (not (section :id "usage" > (code :lang ?l))))`, []string{"c=func x() {}\n"}},
 		{"word counts with an open range", `(paragraph :words 4..)`, []string{"=Second has Term here.", "=Term leads this section.", "=Resource para with term.", "=Second has Term here too."}},
-		{"near duplicates across skills, each pair once", `(join (skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.6)) @b))`, []string{"a=Second has Term here. b=Second has Term here too."}},
+		{"near duplicates across skills, each pair once", `(skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.6)) @b)`, []string{"a=Second has Term here. b=Second has Term here too."}},
+		{"to resolves a section", `(link (to (section) @s)) @l`, []string{"s=## Usage\n\nC usage. l=c#usage"}},
+		{"to resolves a whole skill", `(link :target "c" (to (skill) @s)) @l`, []string{"s= l=c"}},
+		{"dangling links resolve to nothing", `(link :anchor /./ (not (to (section)))) @l`, []string{"l=c#nope"}},
+		{"from finds the links into a section", `(section :id "usage" (from (link) @l)) @s`, []string{"l=c#usage s=## Usage\n\nC usage."}},
 		{"literal inequality", `(section :level 2 :title (not "Usage") > (heading) @h)`, []string{"h=Other"}},
 		{"orphans", `(skill (not (inbound (skill)))) @s`, []string{}},
 		{"skills reaching nothing", `(skill (not (reaches (skill)))) @s`, []string{"s="}},
@@ -163,14 +167,21 @@ func TestReadErrors(t *testing.T) {
 		{`(skill :id 'x')`, `unexpected '\''`, `quote strings with "`, 11},
 		{`(heading :level two)`, ":level takes a number or a range", ":level 2", 16},
 		{`(paragraph :matches "(")`, "invalid regular expression", "", 20},
-		{`(not (code))`, "(not ...) belongs inside a pattern", "", 1},
+		{`(not (code))`, "a query needs a pattern outside (not ...)", "", 0},
 		{`(heading)?`, "quantifiers apply to patterns nested", "", 9},
 		{`(section . )`, "anchor . needs a pattern after it", "", 11},
 		{`(link :url /^https)`, "unterminated /regexp/", "", 11},
-		{`(join (heading :text ?t) (skill))`, "a join prints its captures", "", 0},
+		{`(heading :text ?t) (skill)`, "a query of several patterns prints its captures", "", 0},
 		{`(paragraph :text (near ?t 2))`, "(near ?x T) takes a threshold above 0 and at most 1", "e.g. (near ?t 0.7)", 26},
 		{`(paragraph :text (near "x" 0.5))`, "expected a ?variable", "", 23},
 		{`(paragraph :text (twin ?t))`, "expected not, after, near or similar", "", 18},
+		{`(skill :id ?x)`, "?x appears only once", "use ?x again", 11},
+		{`(skill :id "a" (heading :text (not ?t)) @h) (skill :id "b" (heading :text (not ?t)))`, "?t is only compared, never bound", "bind it with :key ?t", 35},
+		{`(skill (paragraph :text ?t)? @p (heading :text ?t)) @s`, "?t is bound in an optional pattern", "", 24},
+		{`(skill :id ?s (not (section :id ?a @x)) (link :anchor ?a :target ?s)) @k`, "@x is inside (not ...), so it never prints", "", 19},
+		{`(skill (heading :text ?t)) @a (skill (heading :text ?t)) @b (code) @c`, "shares no variable with the first", "share a ?variable", 60},
+		{`(skill :id ?s (link :target ?s) @l) (not (section :id ?a (heading :text ?a)))`, "(not ...) shares no variable", "", 41},
+		{`(skill [(heading :text ?t) (code :lang ?l)] (paragraph :text ?t)) @s`, "alternatives bind different variables: ?t and ?l", "", 27},
 		{`(heading :contains ?t)`, ":contains takes a string, not a variable", "bind the text with :text ?x", 19},
 	}
 	for _, tc := range cases {
@@ -198,7 +209,7 @@ func TestExplainPointsAtOffset(t *testing.T) {
 
 func TestSimilar(t *testing.T) {
 	c := fixture(t)
-	q, err := Read(`(join (skill :id "a" (paragraph :text ?t) @a) (skill :id "b" (paragraph :text (similar ?t 0.9)) @b))`)
+	q, err := Read(`(skill :id "a" (paragraph :text ?t) @a) (skill :id "b" (paragraph :text (similar ?t 0.9)) @b)`)
 	if err != nil {
 		t.Fatal(err)
 	}

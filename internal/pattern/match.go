@@ -57,6 +57,7 @@ type matcher struct {
 	memo     map[memoKey][]binding
 	reached  map[relationKey][]*markup.Element
 	linkers  map[*markup.Element][]*markup.Element
+	incoming map[*markup.Element][]*markup.Element
 	root     *markup.Element
 	produced int
 }
@@ -84,26 +85,24 @@ func (q *Query) Run(root *markup.Element, env Environment) ([]Row, error) {
 	})
 	seen := map[string]bool{}
 	var rows []Row
-	for _, term := range q.Terms {
-		var bindings []binding
-		var err error
-		if term.Join != nil {
-			bindings, err = m.join(term.Join)
-		} else {
-			bindings, err = m.everywhere(term.Pattern, q.Captures[0] == "")
-		}
-		if err == nil {
-			err = m.failure
-		}
-		if err != nil {
-			return nil, err
-		}
-		for _, b := range bindings {
-			row, key := q.row(b)
-			if !seen[key] {
-				seen[key] = true
-				rows = append(rows, row)
-			}
+	var bindings []binding
+	var err error
+	if len(q.Members) == 1 && len(q.Absent) == 0 {
+		bindings, err = m.everywhere(q.Members[0], q.Captures[0] == "")
+	} else {
+		bindings, err = m.join(q.Members, q.Absent)
+	}
+	if err == nil {
+		err = m.failure
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range bindings {
+		row, key := q.row(b)
+		if !seen[key] {
+			seen[key] = true
+			rows = append(rows, row)
 		}
 	}
 	return rows, nil
@@ -129,9 +128,9 @@ func (m *matcher) everywhere(p *Pattern, implicit bool) ([]binding, error) {
 	return out, failure
 }
 
-func (m *matcher) join(j *Join) ([]binding, error) {
+func (m *matcher) join(members, absent []*Pattern) ([]binding, error) {
 	rows := []binding{{}}
-	for _, member := range j.Members {
+	for _, member := range members {
 		bindings, err := m.everywhere(member, false)
 		if err != nil {
 			return nil, err
@@ -156,7 +155,7 @@ func (m *matcher) join(j *Join) ([]binding, error) {
 		}
 		rows = next
 	}
-	for _, absent := range j.Absent {
+	for _, absent := range absent {
 		bindings, err := m.everywhere(absent, false)
 		if err != nil {
 			return nil, err
@@ -367,9 +366,6 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 		results = next
 	}
 	for _, relation := range p.Relations {
-		if e.Type != "skill" {
-			return nil, nil
-		}
 		var targets []binding
 		for _, s := range m.related(relation.Kind, e) {
 			bindings, err := m.at(relation.Target, s)
@@ -531,6 +527,15 @@ func (m *matcher) take(p *Pattern, siblings []*markup.Element, i, step int) ([]*
 }
 
 func (m *matcher) related(kind string, skill *markup.Element) []*markup.Element {
+	switch kind {
+	case "to":
+		if target := m.dereference(skill); target != nil {
+			return []*markup.Element{target}
+		}
+		return nil
+	case "from":
+		return m.referrers()[skill]
+	}
 	if skill.Type != "skill" || m.resolve == nil {
 		return nil
 	}
@@ -559,6 +564,46 @@ func (m *matcher) related(kind string, skill *markup.Element) []*markup.Element 
 	slices.SortFunc(out, func(a, b *markup.Element) int { return a.Order - b.Order })
 	m.reached[key] = out
 	return out
+}
+
+func (m *matcher) dereference(link *markup.Element) *markup.Element {
+	if link.Type != "link" || link.Attrs["target"] == "" || m.resolve == nil {
+		return nil
+	}
+	target := m.resolve.Skill(link.Attrs["target"])
+	path, anchor := link.Attrs["path"], link.Attrs["anchor"]
+	if target == nil || path == "" && anchor == "" {
+		return target
+	}
+	at := slices.IndexFunc(target.Children, func(f *markup.Element) bool { return f.Type == "file" && f.Attrs["path"] == path })
+	if at < 0 {
+		return nil
+	}
+	file := target.Children[at]
+	if anchor == "" {
+		return file
+	}
+	var section *markup.Element
+	file.Walk(func(e *markup.Element) bool {
+		if e.Type == "section" && e.Attrs["id"] == anchor {
+			section = e
+		}
+		return section == nil
+	})
+	return section
+}
+
+func (m *matcher) referrers() map[*markup.Element][]*markup.Element {
+	if m.incoming == nil {
+		m.incoming = map[*markup.Element][]*markup.Element{}
+		m.root.Walk(func(e *markup.Element) bool {
+			if target := m.dereference(e); target != nil {
+				m.incoming[target] = append(m.incoming[target], e)
+			}
+			return true
+		})
+	}
+	return m.incoming
 }
 
 func (m *matcher) targets(skill *markup.Element) []*markup.Element {

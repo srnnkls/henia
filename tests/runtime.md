@@ -596,20 +596,31 @@ $ henia query '(skill :id "code" (reaches (skill) @t))'
 @t  style-guide  skill
 ```
 
-Variables join patterns: a `(not P)` member of a join drops the rows for which
-P matches, here links whose section does not exist.
+`(to P)` follows a link to the section, file or skill it names; a dangling link
+matches nothing.
 
 ```scrut
 $ mk "$L/tropos/skills/linker/SKILL.md" '---\nname: linker\ndescription: Links.\n---\n\n# Linker\n\nSee `henia show style-guide#go` and `henia show style-guide#rust`.\n'
-> henia query '(join (skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a)))))'
+> henia query '(link :anchor /./ (not (to (section)))) @broken'
+@broken  linker#linker  L3  link  `henia show style-guide#rust
+```
+
+Patterns side by side join on shared variables; a top-level `(not P)` drops the
+rows P matches, and patterns that share no variable are rejected.
+
+```scrut
+$ henia query '(skill (link :target ?s :path ?p :anchor ?a) @l) (not (skill :id ?s (file :path ?p (section :id ?a))))'; henia query '(skill (heading)) @a (code) @c' | head -n 3
 @l  linker#linker  L3  link  `henia show style-guide#rust
+henia query: this pattern shares no variable with the first, so every combination would match: a cartesian product between disconnected patterns
+  (skill (heading)) @a (code) @c
+                       ^
 ```
 
 `near` compares text by shared word shingles, and `after` lists each pair once.
 
 ```scrut
 $ mk "$L/tropos/skills/echo/SKILL.md" '---\nname: echo\ndescription: Echo.\n---\n\n# Echo\n\nRun gofmt. Canary: CANARY-GO again.\n'
-> henia query '(join (skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.5)) @b))'
+> henia query '(skill :id ?x (paragraph :text ?t) @a) (skill :id (after ?x) (paragraph :text (near ?t 0.5)) @b)'
 @a  echo#echo  L3  paragraph  Run gofmt. Canary: CANARY-GO again.
 @b  style-guide#go  L7  paragraph  Run gofmt. Canary: CANARY-GO.
 ```

@@ -124,9 +124,9 @@ func (c *Corpus) references(body string, syntax *regexp.Regexp) []*markup.Elemen
 		if e, err := c.lib.Resolve(ref.Name); err == nil {
 			target = e.Name
 		}
-		attrs := map[string]string{"target": target, "path": "SKILL.md"}
-		if ref.Resource != "" {
-			attrs["path"] = ref.Resource
+		attrs := map[string]string{"target": target}
+		if ref.Resource != "" || ref.Anchor != "" {
+			attrs["path"] = cmp.Or(ref.Resource, "SKILL.md")
 		}
 		if ref.Anchor != "" {
 			attrs["anchor"] = ref.Anchor

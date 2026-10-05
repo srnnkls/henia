@@ -11,19 +11,10 @@ import (
 )
 
 type Query struct {
-	Terms    []Term
+	Members  []*Pattern
+	Absent   []*Pattern
 	Captures []string
 	Semantic bool
-}
-
-type Term struct {
-	Pattern *Pattern
-	Join    *Join
-}
-
-type Join struct {
-	Members []*Pattern
-	Absent  []*Pattern
 }
 
 type Pattern struct {
@@ -53,7 +44,7 @@ type Negation struct {
 	Relation *Relation
 }
 
-var relations = []string{"reaches", "inbound"}
+var relations = []string{"reaches", "inbound", "to", "from"}
 
 func isForm(t token) bool {
 	return t.kind == tSymbol && (t.text == "not" || slices.Contains(relations, t.text))
@@ -74,6 +65,7 @@ type Attr struct {
 	Negate    bool
 	Relate    string
 	Threshold float64
+	Pos       int
 }
 
 type Error struct {
@@ -296,45 +288,9 @@ func Read(src string) (*Query, error) {
 	}
 	r := &reader{tokens: tokens}
 	q := &Query{}
-	joins := false
 	for r.peek().kind != tEOF {
-		if head := r.tokens[r.at+1]; r.peek().kind == tOpen && head.kind == tSymbol && head.text == "join" {
-			join, err := r.join()
-			if err != nil {
-				return nil, err
-			}
-			q.Terms = append(q.Terms, Term{Join: join})
-			joins = true
-			continue
-		}
-		p, err := r.pattern(true)
-		if err != nil {
-			return nil, err
-		}
-		q.Terms = append(q.Terms, Term{Pattern: p})
-	}
-	if len(q.Terms) == 0 {
-		return nil, &Error{Offset: 0, Message: "empty query", Hint: `try (skill :id "NAME" (heading) @h)`}
-	}
-	q.Captures, q.Semantic = r.captures, r.semantic
-	if len(q.Captures) == 0 {
-		if joins {
-			return nil, &Error{Offset: 0, Message: "a join prints its captures; name one with @", Hint: `e.g. (join (link :target ?s) @l (skill :id ?s))`}
-		}
-		q.Captures = []string{""}
-	}
-	return q, nil
-}
-
-func (r *reader) join() (*Join, error) {
-	open := r.next()
-	r.next()
-	join := &Join{}
-	for r.peek().kind != tClose {
-		switch t := r.peek(); {
-		case t.kind == tEOF:
-			return nil, &Error{Offset: open.pos, Message: "unclosed (join", Hint: "add the matching )"}
-		case t.kind == tOpen && r.tokens[r.at+1].kind == tSymbol && r.tokens[r.at+1].text == "not":
+		head := r.tokens[r.at+1]
+		if r.peek().kind == tOpen && head.kind == tSymbol && head.text == "not" {
 			r.at += 2
 			p, err := r.pattern(true)
 			if err != nil {
@@ -343,20 +299,29 @@ func (r *reader) join() (*Join, error) {
 			if c := r.next(); c.kind != tClose {
 				return nil, r.unexpected(c, ") closing (not")
 			}
-			join.Absent = append(join.Absent, p)
-		default:
-			p, err := r.pattern(true)
-			if err != nil {
-				return nil, err
-			}
-			join.Members = append(join.Members, p)
+			q.Absent = append(q.Absent, p)
+			continue
 		}
+		p, err := r.pattern(true)
+		if err != nil {
+			return nil, err
+		}
+		q.Members = append(q.Members, p)
 	}
-	r.next()
-	if len(join.Members) == 0 {
-		return nil, &Error{Offset: open.pos, Message: "a join needs a pattern", Hint: `e.g. (join (link :target ?s) @l (skill :id ?s))`}
+	if len(q.Members) == 0 {
+		return nil, &Error{Offset: 0, Message: "a query needs a pattern outside (not ...)", Hint: `try (skill :id "NAME" (heading) @h)`}
 	}
-	return join, nil
+	q.Captures, q.Semantic = r.captures, r.semantic
+	if len(q.Captures) == 0 {
+		if len(q.Members) > 1 || len(q.Absent) > 0 {
+			return nil, &Error{Offset: 0, Message: "a query of several patterns prints its captures; name one with @", Hint: `e.g. (link :target ?s) @l (skill :id ?s)`}
+		}
+		q.Captures = []string{""}
+	}
+	if err := q.check(); err != nil {
+		return nil, err
+	}
+	return q, nil
 }
 
 func (r *reader) peek() token { return r.tokens[r.at] }
@@ -578,7 +543,7 @@ func (r *reader) attr(kind string) (Attr, error) {
 		if key.text == "contains" || key.text == "matches" {
 			return attr, &Error{Offset: value.pos, Message: fmt.Sprintf(":%s takes a string, not a variable", key.text), Hint: "bind the text with :text ?x"}
 		}
-		attr.Var = value.text
+		attr.Var, attr.Pos = value.text, value.pos
 		return attr, nil
 	}
 	switch value.kind {
