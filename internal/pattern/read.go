@@ -15,6 +15,7 @@ type Query struct {
 	Absent   []*Pattern
 	Captures []string
 	Semantic bool
+	params   []string
 }
 
 type Pattern struct {
@@ -66,6 +67,9 @@ type Attr struct {
 	Relate    string
 	Threshold float64
 	Pos       int
+	Param     string
+	Op        string
+	Number    float64
 }
 
 type Error struct {
@@ -102,14 +106,15 @@ var types = map[string][]string{
 	"quote":       nil,
 	"table":       nil,
 	"code":        {"lang"},
+	"row":         {"table", "key", "value", "index"},
 	"link":        {"target", "path", "anchor", "url"},
 	"directive":   nil,
 	"frontmatter": nil,
 }
 
-var textKeys = []string{"text", "contains", "matches", "words", "node"}
+var textKeys = []string{"text", "contains", "matches", "words", "node", "lines", "chars", "norm"}
 
-var numericKeys = []string{"level", "words"}
+var numericKeys = []string{"level", "words", "lines", "chars"}
 
 func openKeys(kind string) bool { return kind == "_" || kind == "directive" || kind == "frontmatter" }
 
@@ -133,6 +138,7 @@ const (
 	tRegex
 	tVar
 	tFloat
+	tParam
 )
 
 type token struct {
@@ -157,6 +163,20 @@ func lex(src string) ([]token, error) {
 			for i < len(src) && src[i] != '\n' {
 				i++
 			}
+		case c == '$' && i+1 < len(src) && isName(src[i+1], true):
+			j := i + 1
+			for j < len(src) && isName(src[j], j == i+1) {
+				j++
+			}
+			tokens = append(tokens, token{kind: tParam, text: src[i+1 : j], pos: i})
+			i = j
+		case c == '<' || c == '>' && i+1 < len(src) && src[i+1] == '=':
+			j := i + 1
+			if j < len(src) && src[j] == '=' {
+				j++
+			}
+			tokens = append(tokens, token{kind: tSymbol, text: src[i:j], pos: i})
+			i = j
 		case c == '?' && i+1 < len(src) && isName(src[i+1], true):
 			j := i + 1
 			for j < len(src) && isName(src[j], j == i+1) {
@@ -279,6 +299,7 @@ type reader struct {
 	at       int
 	captures []string
 	semantic bool
+	params   []string
 }
 
 func Read(src string) (*Query, error) {
@@ -311,7 +332,7 @@ func Read(src string) (*Query, error) {
 	if len(q.Members) == 0 {
 		return nil, &Error{Offset: 0, Message: "a query needs a pattern outside (not ...)", Hint: `try (skill :id "NAME" (heading) @h)`}
 	}
-	q.Captures, q.Semantic = r.captures, r.semantic
+	q.Captures, q.Semantic, q.params = r.captures, r.semantic, r.params
 	if len(q.Captures) == 0 {
 		if len(q.Members) > 1 || len(q.Absent) > 0 {
 			return nil, &Error{Offset: 0, Message: "a query of several patterns prints its captures; name one with @", Hint: `e.g. (link :target ?s) @l (skill :id ?s)`}
@@ -513,17 +534,42 @@ func (r *reader) attr(kind string) (Attr, error) {
 	}
 	if value.kind == tOpen {
 		form := r.next()
+		if form.kind == tDirect {
+			form.text = ">"
+		}
 		switch form.text {
 		case "not":
 			attr.Negate = true
 			value = r.next()
-		case "after", "near", "similar":
+		case ">", ">=", "<", "<=", "older":
+			attr.Op = form.text
+			operand := r.next()
+			switch operand.kind {
+			case tParam:
+				attr.Param = operand.text
+				r.params = append(r.params, operand.text)
+			case tInt, tFloat:
+				attr.Number, _ = strconv.ParseFloat(operand.text, 64)
+			default:
+				return attr, r.unexpected(operand, fmt.Sprintf("a number or $param, as in (%s 500)", form.text))
+			}
+			if c := r.next(); c.kind != tClose {
+				return attr, r.unexpected(c, fmt.Sprintf(") closing (%s", form.text))
+			}
+			return attr, nil
+		case "contains":
+			attr.Relate = form.text
+			value = r.next()
+			if value.kind != tVar {
+				return attr, r.unexpected(value, "a ?variable, as in (contains ?old)")
+			}
+		case "after", "before", "near", "similar":
 			attr.Relate = form.text
 			value = r.next()
 			if value.kind != tVar {
 				return attr, r.unexpected(value, fmt.Sprintf("a ?variable, as in (%s ?x%s)", form.text, map[string]string{"after": "", "near": " 0.7", "similar": " 0.8"}[form.text]))
 			}
-			if form.text != "after" {
+			if form.text == "near" || form.text == "similar" {
 				threshold := r.next()
 				t, err := strconv.ParseFloat(threshold.text, 64)
 				if threshold.kind != tFloat && threshold.kind != tInt || err != nil || t <= 0 || t > 1 {
@@ -533,7 +579,7 @@ func (r *reader) attr(kind string) (Attr, error) {
 				r.semantic = r.semantic || form.text == "similar"
 			}
 		default:
-			return attr, r.unexpected(form, "not, after, near or similar, as in (not ?x) or (near ?t 0.7)")
+			return attr, r.unexpected(form, "not, after, before, contains, near, similar, older or a comparison, as in (not ?x), (near ?t 0.7) or (> 500)")
 		}
 		if c := r.next(); c.kind != tClose {
 			return attr, r.unexpected(c, fmt.Sprintf(") closing (%s", form.text))
@@ -547,6 +593,13 @@ func (r *reader) attr(kind string) (Attr, error) {
 		return attr, nil
 	}
 	switch value.kind {
+	case tParam:
+		if key.text == "matches" {
+			return attr, &Error{Offset: value.pos, Message: ":matches takes a /regexp/ or string, not a $param"}
+		}
+		attr.Param = value.text
+		r.params = append(r.params, value.text)
+		return attr, nil
 	case tString, tSymbol, tInt:
 		attr.Value = value.text
 		attr.Lo, attr.Hi = value.lo, value.hi

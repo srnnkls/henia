@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/srnnkls/henia/internal/markup"
 )
@@ -174,7 +175,7 @@ func TestReadErrors(t *testing.T) {
 		{`(heading :text ?t) (skill)`, "a query of several patterns prints its captures", "", 0},
 		{`(paragraph :text (near ?t 2))`, "(near ?x T) takes a threshold above 0 and at most 1", "e.g. (near ?t 0.7)", 26},
 		{`(paragraph :text (near "x" 0.5))`, "expected a ?variable", "", 23},
-		{`(paragraph :text (twin ?t))`, "expected not, after, near or similar", "", 18},
+		{`(paragraph :text (twin ?t))`, "expected not, after, before, contains", "", 18},
 		{`(skill :id ?x)`, "?x appears only once", "use ?x again", 11},
 		{`(skill :id "a" (heading :text (not ?t)) @h) (skill :id "b" (heading :text (not ?t)))`, "?t is only compared, never bound", "bind it with :key ?t", 35},
 		{`(skill (paragraph :text ?t)? @p (heading :text ?t)) @s`, "?t is bound in an optional pattern", "", 24},
@@ -233,5 +234,39 @@ func TestSimilar(t *testing.T) {
 	}
 	if got := texts(rows); strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestEnvironment(t *testing.T) {
+	c := fixture(t)
+	data := &markup.Element{Type: "data", Attrs: map[string]string{}}
+	for _, row := range []map[string]string{{"table": "outdated", "key": "Term", "value": "Concept"}, {"table": "dates", "value": "2020-01-01"}, {"table": "dates", "value": "2026-09-30"}} {
+		data.Children = append(data.Children, &markup.Element{Type: "row", Attrs: row, Parent: data})
+	}
+	env := Environment{Resolve: c, Params: map[string]string{"max": "10", "days": "30"}, Data: data, Now: time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)}
+	cases := []struct{ name, query, want string }{
+		{"param comparison", `(file :lines (> $max)) @f`, "f="},
+		{"first occurrence", `(heading :norm ?t :node ?n) @dup (heading :norm ?t :node (before ?n)) @first`, "dup=Usage first=Usage"},
+		{"data rows joined by contains", `(row :table "outdated" :key ?old) @r (paragraph :text (contains ?old)) @p`, "r= p=Second has Term here.|r= p=Term leads this section.|r= p=Resource para with term.|r= p=Second has Term here too."},
+		{"older dates", `(row :table "dates" :value (older $days)) @r`, "r="},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			q, err := Read(tc.query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rows, err := q.Run(c.root, env)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(texts(rows), "|"); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+	q, _ := Read(`(file :lines (> $missing)) @f`)
+	if _, err := q.Run(c.root, Environment{Resolve: c}); err == nil || !strings.Contains(err.Error(), "$missing has no value") {
+		t.Errorf("missing param: %v", err)
 	}
 }

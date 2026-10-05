@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/similarity"
@@ -46,9 +48,13 @@ type constraint struct {
 type Environment struct {
 	Resolve Resolver
 	Embed   func(string) []float32
+	Params  map[string]string
+	Data    *markup.Element
+	Now     time.Time
 }
 
 type matcher struct {
+	env      Environment
 	resolve  Resolver
 	embed    func(string) []float32
 	shingles map[string]map[string]bool
@@ -76,7 +82,18 @@ func (q *Query) Run(root *markup.Element, env Environment) ([]Row, error) {
 	if q.Semantic && env.Embed == nil {
 		return nil, ErrNoModel
 	}
-	m := &matcher{resolve: env.Resolve, embed: env.Embed, memo: map[memoKey][]binding{}, reached: map[relationKey][]*markup.Element{}, root: root, shingles: map[string]map[string]bool{}, vectors: map[string][]float64{}}
+	for _, name := range q.params {
+		if _, ok := env.Params[name]; !ok {
+			return nil, fmt.Errorf("$%s has no value; set it in the module frontmatter or [lint.config]", name)
+		}
+	}
+	if env.Data != nil {
+		root = &markup.Element{Type: "corpus", Attrs: map[string]string{}, Children: append(slices.Clip(root.Children), env.Data)}
+	}
+	if env.Now.IsZero() {
+		env.Now = time.Now()
+	}
+	m := &matcher{env: env, resolve: env.Resolve, embed: env.Embed, memo: map[memoKey][]binding{}, reached: map[relationKey][]*markup.Element{}, root: root, shingles: map[string]map[string]bool{}, vectors: map[string][]float64{}}
 	order := 0
 	root.Walk(func(e *markup.Element) bool {
 		e.Order = order
@@ -319,7 +336,7 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 	seed := binding{}
 	for _, a := range p.Attrs {
 		if a.Var == "" {
-			if a.test(e) == a.Negate {
+			if m.test(a, e) == a.Negate {
 				return nil, nil
 			}
 			continue
@@ -712,6 +729,12 @@ func (a Attr) value(e *markup.Element) (string, bool) {
 		return strings.TrimSpace(e.Text), true
 	case "words":
 		return strconv.Itoa(len(similarity.Words(e.Text))), true
+	case "lines":
+		return strconv.Itoa(e.EndLine - e.Line + 1), true
+	case "chars":
+		return strconv.Itoa(utf8.RuneCountInString(e.Text)), true
+	case "norm":
+		return strings.ToLower(strings.Join(strings.Fields(e.Text), " ")), true
 	case "node":
 		return fmt.Sprintf("%09d", e.Order), true
 	}
@@ -719,16 +742,46 @@ func (a Attr) value(e *markup.Element) (string, bool) {
 	return value, ok
 }
 
-func (a Attr) test(e *markup.Element) bool {
+func (m *matcher) test(a Attr, e *markup.Element) bool {
 	switch a.Key {
 	case "contains":
-		return strings.Contains(strings.ToLower(e.Text), strings.ToLower(a.Value))
+		needle := a.Value
+		if a.Param != "" {
+			needle = m.env.Params[a.Param]
+		}
+		return strings.Contains(strings.ToLower(e.Text), strings.ToLower(needle))
 	case "matches":
 		return a.Re.MatchString(e.Text)
 	}
 	value, ok := a.value(e)
 	if !ok {
 		return false
+	}
+	if a.Op != "" {
+		limit := a.Number
+		if a.Param != "" {
+			limit, _ = strconv.ParseFloat(m.env.Params[a.Param], 64)
+		}
+		if a.Op == "older" {
+			date, err := time.Parse("2006-01-02", value)
+			return err == nil && m.env.Now.Sub(date) > time.Duration(limit*24)*time.Hour
+		}
+		n, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return false
+		}
+		switch a.Op {
+		case ">":
+			return n > limit
+		case ">=":
+			return n >= limit
+		case "<":
+			return n < limit
+		}
+		return n <= limit
+	}
+	if a.Param != "" {
+		return value == m.env.Params[a.Param]
 	}
 	if a.Re != nil {
 		return a.Re.MatchString(value)
@@ -744,6 +797,10 @@ func (m *matcher) satisfies(c constraint, bound string) bool {
 	switch c.relate {
 	case "after":
 		return c.value > bound
+	case "before":
+		return c.value < bound
+	case "contains":
+		return strings.Contains(strings.ToLower(c.value), strings.ToLower(bound))
 	case "near":
 		return similarity.Jaccard(m.shingle(c.value), m.shingle(bound)) >= c.threshold
 	case "similar":
