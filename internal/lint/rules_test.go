@@ -104,3 +104,16 @@ func writeFile(t *testing.T, root, name, content string) {
 		t.Fatal(err)
 	}
 }
+
+func TestSkillDisablesRule(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "skills/guide/SKILL.md", "---\nname: guide\ndescription: A guide skill for tests.\nhenia:\n  lint:\n    disable: [duplicate-heading]\n---\n\n# Guide\n\n## Usage\n\n## Usage\n")
+	writeFile(t, root, "skills/other/SKILL.md", "---\nname: other\ndescription: Another skill for tests.\n---\n\n# Other\n\n## Usage\n\n## Usage\n")
+	diagnostics, err := Run(t.Context(), []string{root}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Rule != "duplicate-heading" || !strings.Contains(diagnostics[0].Path, "other") {
+		t.Fatalf("%+v", diagnostics)
+	}
+}

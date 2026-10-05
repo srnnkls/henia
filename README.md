@@ -89,42 +89,35 @@ currently deferred. Literal code and escaped syntax remain unchanged.
 
 ## Lint rules
 
-Built-in rules check metadata, template/directive syntax, local links, artifact
-references, duplicate headings/content/skills, optional word-shingle overlap and
-containment, local semantic similarity, known outdated references, line budgets
-and review dates. Exact paragraph checks run by default. Enable lexical measures
-with `[lint] duplicate_similarity = 0.7` and `duplicate_containment = 0.9`;
-`duplicate_min_words` defaults to 12. Semantic checks use in-process Model2Vec
-with local weights and an explicit threshold in `[lint.semantic]`. Findings include
-the matching location, method, score and shared phrases where applicable.
-Lint skips Git-ignored files and directories below each path it scans; a path
-named on the command line is always linted. See [configuration and model setup](docs/lint-rules.md).
-Add your own rules in `henia.toml`:
+Lint rules are [hq](docs/query.md) queries in Markdown modules. The standard
+library checks metadata, templates and directives, local links and references,
+outdated names, line budgets, review dates, duplicate headings, content and
+skills, and slots, with optional word-shingle and Model2Vec similarity.
+Projects add modules under `.henia/lint/`, users under `~/.config/henia/lint/`,
+and installed sources under their own `lint/`; modules import the standard
+library's patterns and compose them. `henia.toml` tunes rules and holds one-off
+rules:
 
 ```toml
+[lint.config.large-skill]
+max-lines = 600
+
 [[lint.rules]]
 id = "instruction-priority"
-select = "directive"
-when = 'node.name == "instruction"'
-assert = 'node.attrs.priority in ["normal", "high", "critical"]'
+query = '(directive :name "instruction" :priority (not /^(normal|high|critical)$/)) @d'
 message = "Instructions need a valid priority."
-severity = "warning"
 ```
-
-`select` chooses nodes, `when` filters them, and `assert` must hold for each match.
-Conditions use [Expr](https://expr-lang.org/docs/language-definition).
-Failures report the rule ID and source location. Invalid expressions and runtime
-errors are errors, never successful checks. See the [lint DSL reference](docs/lint-rules.md).
 
 ```bash
 henia lint skills --strict
 henia lint skills --format json
 henia lint skills --disable duplicate-heading,instruction-priority
+henia lint test
 ```
 
-The linter does not execute templates or fetch URLs. Dynamic nodes are skipped by
-custom rules by default; lint compiled output to check expanded values. Errors
-fail lint; `--strict` also fails on warnings. JSON output is an array of diagnostics.
+The linter does not execute templates or fetch URLs, and skips Git-ignored
+files below each path it scans. Errors fail lint; `--strict` also fails on
+warnings. See [lint rules](docs/lint-rules.md).
 
 ## Slots
 

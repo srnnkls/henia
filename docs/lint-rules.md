@@ -1,282 +1,199 @@
-# Lint rule DSL
+# Lint rules
 
-## Duplicate and similar content
+`henia lint` runs rules written in [hq](query.md) over every scanned file.
+Rules live in Markdown modules: the standard library ships with Henia and runs
+by default, and projects and users add their own modules, which import the
+standard library's patterns and compose new rules from them.
 
-Collection-wide checks run alongside the per-node Expr rules:
+## Standard library
 
-- `duplicate-skill`: duplicate artifact names across scanned files.
-- `duplicate-heading`: repeated headings within a document.
-- `duplicate-content`: exact repeated paragraphs within or across files, including
-  paragraphs inside directives and list items.
-- `similar-content`: optional lexical overlap using word shingles and containment.
-- `semantic-content`: optional semantic candidates using in-process Model2Vec
-  embeddings and cosine similarity.
-
-### Exact and lexical checks
-
-```toml
-[lint]
-duplicate_min_words = 12
-duplicate_shingle_words = 3
-duplicate_similarity = 0.7
-duplicate_containment = 0.9
-```
-
-Exact comparisons ignore case and whitespace but retain Markdown syntax, link
-destinations and inline directive attributes. Code blocks and paragraphs containing
-template actions are excluded from all three checks. The minimum length defaults
-to 12 words; lower it to catch short repeated instructions.
-
-Lexical checks tokenize paragraph Markdown into lowercase Unicode words and
-numbers, splitting at punctuation. Each distinct sequence of three consecutive
-words is a *shingle*. `duplicate_shingle_words` changes that size. Paragraphs with
-fewer tokens than the shingle size have no lexical candidates.
-
-For shingle sets A and B:
-
-- Jaccard: `|A ∩ B| / |A ∪ B|`. `duplicate_similarity` sets its threshold.
-  Shared sequences survive sentence reordering except at changed boundaries.
-- Containment: `|A ∩ B| / min(|A|, |B|)`. `duplicate_containment` sets its
-  threshold. This catches a shorter passage copied into a longer paragraph,
-  regardless of which one occurs first. It measures coverage of the smaller
-  shingle set, not proof of a contiguous substring.
-
-Both thresholds default to `0` (off) and otherwise range up to `1`. The example
-values are starting points to calibrate against your own skills. A score of `1`
-means equal shingle sets or complete containment; it does not require identical
-Markdown. Punctuation, negation, numbers and tool constraints still need review.
-
-The previous paragraph edit-distance implementation has been removed.
-`duplicate_similarity` now means Jaccard overlap; recalibrate existing values.
-
-### Local semantic checks
-
-```toml
-[lint.semantic]
-enabled = true
-model_path = "models/potion-retrieval-32M"
-threshold = 0.35 # illustrative; calibrate against accepted/rejected examples
-```
-
-`model_path` points to a local Model2Vec directory containing `tokenizer.json`,
-`config.json`, and `model.safetensors`. Relative paths resolve against the
-configuration file that declares them, including user configuration. Absolute
-paths can point directly to an existing Hugging Face cache snapshot, such as the
-Potion models used by Anax and Memex. Lint does not download models, call servers,
-run subprocesses, or alter model files. No API key, Python, GPU, or native inference
-runtime is needed. Model weights are loaded only when semantic comparisons remain
-after exact and lexical checks.
-
-Inference uses the pure Go [aikit Model2Vec implementation](https://github.com/townsendmerino/aikit/tree/v1.16.0/embed):
-tokenize the paragraph, pool its learned token vectors, normalize, then compare
-cosine similarity. Henia loads the model once per lint run and encodes each unique
-eligible paragraph once. The model files stay outside the Henia binary.
-
-Semantic checking defaults to disabled. Enabling it requires both `model_path`
-and an explicit `threshold` greater than `0` and at most `1`; there is no universal
-model-independent cutoff. Model load failures fail lint. Paragraphs with zero
-embeddings emit a warning explaining that comparison is unavailable.
-
-[Model2Vec](https://github.com/MinishLab/model2vec) provides fast static embeddings,
-which can identify related wording with little lexical overlap, but lose token
-order and do not establish equivalent instructions. Changed negation may score
-higher than a valid paraphrase. These findings request review; they never rewrite
-or remove content. See [the evaluation notes](paragraph-similarity.md) for measured
-examples, model revision and test reproduction.
-
-### Diagnostics and cost
-
-For each paragraph, exact duplicates take precedence. Otherwise Henia reports the
-highest qualifying Jaccard score; if none qualifies, it reports the highest
-qualifying containment score. Semantic checks report the highest qualifying cosine
-score only for paragraphs without an exact or lexical finding. A paragraph already
-reported can still serve as a comparison for a later paragraph. Ties favor the
-first occurrence in sorted scan order.
-
-Findings include the matching location in `related`. Lexical and semantic JSON
-findings include `similarity` and `method` (`jaccard`, `containment`, or `cosine`).
-Lexical output includes up to five sorted normalized `shared_phrases`. Semantic
-output includes the configured model path in `model`. Scores are measures, not
-probabilities. Neither lexical nor semantic findings prove duplication.
-
-`--disable similar-content` disables both lexical measures; `--disable
-semantic-content` prevents model loading and inference. Exact matching remains
-independently controlled by `duplicate-content`. Warnings fail only with
-`--strict`, consistent with the other lint rules.
-
-These checks maintain collection indexes in Go; Expr predicates operate on
-individual nodes. A shingle index excludes lexically unrelated pairs. Worst-case
-lexical work remains quadratic when many paragraphs share shingles. Semantic
-comparison is exhaustive, requiring O(P² × D) comparisons and O(P × D) stored
-vectors for P unique paragraphs and D embedding dimensions, plus model memory.
-Cancellation is checked between encodes and during the comparison loop; it does
-not interrupt an individual model load or encode.
-
-## References
-
-`broken-link` flags local links and `` `henia show skill[/path]#section` ``
-spans whose file or heading anchor does not exist. A `henia show` reference is
-checked when its skill is among the scanned artifacts; targets with template
-actions or HTML anchors are skipped, since their anchors exist only once
-rendered.
-
-`missing-reference` flags a `$skill`, `/command` or `@agent` span whose name no
-scanned artifact defines. Names are lowercase letters, digits, `.`, `_` and `-`,
-so `$HOME` or `/etc/hosts` are not references. Declare artifacts that live
-outside the scanned tree, such as harness built-ins or Git-ignored deployments,
-as `type:name`:
-
-```toml
-[lint]
-external = ["skill:gestalt", "command:plan"]
-```
-
-## Custom rule declarations
-
-Declare `[[lint.rules]]` entries in project or user `henia.toml`. Rules augment the
-built-in linter and run on parsed canonical Markdown. Conditions use
-[Expr syntax](https://expr-lang.org/docs/language-definition), not Go templates.
-
-```toml
-[[lint.rules]]
-id = "instruction-priority"
-select = "directive"
-when = 'node.name == "instruction"'
-assert = 'node.attrs.priority in ["normal", "high", "critical"]'
-message = "Instructions need a valid priority."
-severity = "warning"
-```
-
-## Evaluation
-
-1. `select` picks candidates of one kind, or the rows of a
-   [query pattern](query.md).
-2. `when` (default `true`) chooses candidates to check.
-3. A false `assert` emits `message` at the selected candidate's location.
-
-`id`, `select`, `assert` and `message` are required. IDs start with a lowercase
-letter and contain lowercase letters, digits and hyphens. IDs must be unique and
-cannot shadow built-in rules. `severity` is `warning` (default) or `error`.
-Messages are literal strings. All expressions compile before scanning files;
-unknown fields, invalid syntax and non-boolean predicates reject configuration.
-Evaluation failures emit error diagnostics containing the rule ID and Expr error.
-
-Use `--disable <id>` or `[lint].disable` for either built-in or custom rules.
-Normal lint fails on errors; `--strict` also fails on warnings. Output supports
-plain text and JSON with path, line, column, severity, rule and message.
-
-## Selectors and environment
-
-| Selector | One candidate per | Useful `node` fields |
+| Module | Rules | Params and data |
 |---|---|---|
-| `document` | Markdown file | `text` |
-| `frontmatter` | Existing top-level YAML key | `name`, `value`, `text` |
-| `directive` | Container or inline directive | `name`, `attrs`, `text`, `inline` |
-| `heading` | Heading | `level`, `text` |
-| `paragraph` | Paragraph | `text` |
-| `link` | Markdown link | `destination`, `text` |
-| `image` | Markdown image | `destination`, `text` |
+| `std/structure` | `large-skill`, `duplicate-heading` | `max-lines` (500) |
+| `std/metadata` | `metadata`, `stale-review`, `invalid-template`, `invalid-markup` | `max-age-days` (180) |
+| `std/references` | `broken-link`, `missing-reference`, `outdated-reference` | `external` list, `outdated` map |
+| `std/duplicates` | `duplicate-skill`, `duplicate-content` | `min-words` (12) |
+| `std/slots` | `invalid-slot`, `unknown-slot` | |
+| `std/similarity` | `similar-content`, `semantic-content` | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
 
-A pattern selector checks each row once: `node` is its first matched capture,
-and `captures` maps every matched capture name to a node with the fields above
-(`destination` holds a link's URL). `reaches` never matches in lint.
+`henia lint test` runs every module's examples, the standard library's
+included. The modules are readable with the rest of Henia's sources under
+`internal/lint/std/`.
 
-```toml
-[[lint.rules]]
-id = "introduce-code"
-select = '(_ (paragraph)? @intro . (code) @code)'
-assert = '"intro" in captures'
-message = "Introduce each code block with a paragraph."
-```
-
-All candidates expose `kind`, `dynamic`, `start` and `end` (byte offsets relative
-to the Markdown body; metadata offsets can be negative). Positions in diagnostics
-are one-based coordinates in the original file. Frontmatter positions point to
-the selected YAML key. Inline link positions point to link text.
-
-Every expression can access:
-
-- `frontmatter`: the complete parsed YAML map, including nested values.
-- `document.path`: scanned file path.
-- `document.kind`: `skill`, `command`, `agent`, or an empty string for resources.
-- `document.body`: unexpanded Markdown body.
-- `document.lines`: body line count.
-
-Missing map keys evaluate to `nil`; use `??` for defaults or `in` for presence.
-Use a document rule to require a missing field, because a `frontmatter` selector
-only visits keys that exist.
+## Configuration
 
 ```toml
-[[lint.rules]]
-id = "skill-description"
-select = "document"
-when = 'document.kind == "skill"'
-assert = 'len(frontmatter.description ?? "") >= 30'
-message = "Describe when to use this skill."
+[lint]
+disable = ["duplicate-heading"]
+
+[lint.config.large-skill]
 severity = "error"
+max-lines = 600
+
+[lint.config.missing-reference]
+external = ["skill:gestalt", "command:plan"]
+
+[lint.config.outdated-reference.outdated]
+"old-model-id" = "replacement-model-id"
 
 [[lint.rules]]
-id = "heading-depth"
-select = "heading"
-assert = 'node.level <= 3'
-message = "Keep headings within three levels."
-
-[[lint.rules]]
-id = "https-docs"
-select = "link"
-when = 'node.destination startsWith "http"'
-assert = 'node.destination startsWith "https://"'
-message = "Use HTTPS documentation links."
+id = "no-todo"
+query = '(paragraph :matches /TODO/) @p'
+message = "Resolve the TODO before release."
 ```
 
-## Name registries
+- `disable` turns rules off by id.
+- `[lint.config.<id>]` sets `severity` and overrides the rule's params: scalars
+  replace params, while tables and arrays replace data tables.
+- `[[lint.rules]]` declares a one-off rule inline with `id`, `query`, `message`,
+  and optionally `severity`, `at`, `related`, `params` and `data`.
+- A skill can turn a rule off for itself with `henia.lint.disable` in its frontmatter.
 
-A registry checks names that one document declares and others reference, such as
-[slots](slots.md#linting) a skill owns and skills that provide them. Declare `[[lint.registries]]` in
-`henia.toml`:
+Errors fail lint, and `--strict` also fails on warnings. `--format json` prints
+the diagnostics, including `related` locations and, for similarity findings,
+`similarity`, `method`, `shared_phrases` and `model`.
 
-```toml
-[[lint.registries]]
-id = "unknown-slot"
-declare = 'frontmatter.metadata?.slots ?? ""'
-reference = 'frontmatter.metadata?.provides ?? ""'
-match = "dotted"
-severity = "error"
+## Modules
+
+Lint loads modules from these layers, in order:
+
+1. the standard library;
+2. `lint/` in each installed source;
+3. `$XDG_CONFIG_HOME/henia/lint/`;
+4. the project's `.henia/lint/`;
+5. inline rules.
+
+Rule ids and module names are unique across all layers, and nothing shadows
+anything. To change a built-in rule, configure it, or disable it and compose a
+replacement.
+
+A module is a Markdown file:
+
+- its frontmatter sets `params` and `data`;
+- each `## <rule-id>` section documents a rule in prose, defines it in a
+  ```` ```hq ```` block, and tests it with ```` ```md ```` examples under
+  `### Matches` and `### Passes`.
+
+````md
+---
+data:
+  banned: [usage]
+---
+
+## repeated-usage
+
+Teams keep a single Usage section per document.
+
+```hq
+(import std/structure)
+
+(rule repeated-usage
+  :message "{@h.text} repeats; first on line {@first.line}"
+  :at @h
+  (repeated-heading @first @h ?text)
+  (row :table banned :value ?text))
 ```
 
-`declare` and `reference` are Expr expressions over `document` and `frontmatter`,
-evaluated once per scanned file. Each returns a string, split on whitespace, a list
-of strings, each split the same way, or `nil`. Every referenced name must be
-declared by some scanned file; otherwise the registry reports it at the first
-occurrence of the name in the referencing file's frontmatter, or at the file start.
+### Matches
 
-`match = "exact"` (default) requires an identical declared name. `match = "dotted"`
-also accepts a dotted descendant of a declared name: with `code.style` declared,
-`code.style.python` resolves and `code.styles` does not.
+```md
+## Usage
 
-`id` follows the custom rule ID format, must not share an ID with a built-in rule,
-custom rule or other registry, and works with `--disable`. `severity` is `warning`
-(default) or `error`. Evaluation failures are errors naming the registry.
+## Usage
+```
+````
 
-## Templates and literal content
+The module name is its path relative to the layer, without `.md`, as in
+`team/headings`. Module forms:
 
-The linter parses Go templates without executing them. Rules skip nodes containing
-template actions by default, avoiding false assertions about values that depend on
-a harness. This is conservative: a directive containing a template in its body is
-also considered dynamic. Document rules still run and see the original body.
+- `(rule id :key value ... pattern...)` defines a rule. It is a query whose rows
+  become diagnostics, and one module may give an id several clauses.
+- `(define (name ?var @capture ...) pattern...)` names a pattern. Callers pass
+  the variables and captures it binds, and every other variable stays local to
+  each use.
+- `(import module)` brings in a module's defines. Names that would collide are
+  an error.
 
-`include_dynamic = true` explicitly includes those nodes. Their parsed markup may
-contain neutral placeholders for template actions; use `node.dynamic` to distinguish
-them. For checks against actual expanded values, compile and lint the result:
+Frontmatter `params` scalars become `$name` values. `data` maps and lists become
+`row` nodes under a `data` root, with `:table`, `:key` or `:index`, and `:value`.
+An example overrides params in its fence info, as in ```` ```md max-lines=2 ````
+or ```` ```md outdated.old=new ````. A Matches example must make its rule report;
+a Passes example must not.
+
+### Rule keys
+
+| Key | Meaning |
+|---|---|
+| `:severity` | `warning` (default) or `error` |
+| `:message` | text with `{@c}` (path:line), `{@c.line}`, `{@c.text}`, `{@c.KEY}`, `{?var}`, `{?var.percent}`, `{?var.3}`, `{$param}` and `{shared}` |
+| `:at @a @b` | location: the first of these captures that matched; else the first capture |
+| `:related @c ...` | related location, chosen the same way |
+| `:focus ?var` | moves the location to the variable's first occurrence in the node |
+| `:score ?var` | fills `similarity` |
+| `:method name` | fills `method` |
+| `:shared @a @b` | fills `shared_phrases` and `{shared}` with up to five shared phrases |
+
+### Facts lint adds
+
+Beyond the document tree that queries see, lint rules match these:
+
+- `file`:
+  - `:kind` is `skill`, `command`, `agent`, `resource` or `document`;
+  - typed artifacts also carry `:name` and `:artifact` (`kind:name`);
+  - `:file` is the path on disk.
+- `problem` nodes under a file, with `:kind` `frontmatter`, `template` or
+  `markup` and a `:message`.
+- `entry` nodes under `frontmatter`, one per scalar, with a dotted `:key`,
+  `:value`, `:index` for list items, and `:tag` (YAML type, as in `!!str`).
+- `slot` nodes for `metadata.slots`, `provides` and `applies` entries, with
+  `:role`, `:slot`, `:type`, `:entry` and `:error`.
+- `link` and `image` facts:
+  - `:dest` is the destination as written;
+  - `:exists`, `:anchored` and `:valid` are `true` or `false`;
+  - `:problem` holds an inspection error;
+  - references carry `:ref` (`skill`, `command`, `agent`, `file` or `show`),
+    `:name` and `:artifact`.
+- `:position`, which orders nodes by file path and then offset: "first
+  occurrence" across files.
+- `:dynamic true` on nodes whose text holds a template action.
+
+Templates are parsed but never executed. Lint the build output to check
+expanded values:
 
 ```bash
 henia build skills-repo --harness codex --output .henia/build
-henia lint .henia/build/codex --config henia.toml --strict
+henia lint .henia/build/codex --strict
 ```
 
-Goldmark handles nested directives, escaping and literal contexts. Directive rules
-do not inspect examples inside code fences or inline code. No rule fetches URLs,
-executes templates, runs commands or modifies files. Expressions receive data and
-Expr built-ins; `now()` is disabled so rule results do not depend on the clock.
-Expression source and AST size and VM collection allocations have fixed limits;
-these are not a wall-clock or total process-memory quota.
+## Similarity
+
+`similar-content` and `semantic-content` compare each paragraph of at least
+`min-words` words with the earliest earlier paragraph above a threshold. Exact
+copies are left to `duplicate-content`, and paragraphs matched lexically are
+left out of the semantic check. Both stay off until a threshold is set:
+
+```toml
+[lint.config.similar-content]
+similarity = 0.7   # word-shingle Jaccard
+containment = 0.9  # shared shingles over the shorter paragraph
+
+[lint.semantic]
+enabled = true
+model_path = "models/potion-retrieval-32M"
+
+[lint.config.semantic-content]
+threshold = 0.35   # calibrate against accepted and rejected examples
+```
+
+`model_path` points to a local Model2Vec directory containing `tokenizer.json`,
+`config.json` and `model.safetensors`. A relative path resolves against the
+configuration file that declares it. Lint does not download models, call
+servers or run subprocesses. Inference uses the pure Go
+[aikit Model2Vec implementation](https://github.com/townsendmerino/aikit/tree/v1.16.0/embed),
+loads the model once, and only when a semantic rule runs.
+
+[Model2Vec](https://github.com/MinishLab/model2vec) embeddings find related
+wording with little lexical overlap. They lose token order and do not establish
+equivalent instructions; changed negation may score higher than a valid
+paraphrase. Findings request review; they never rewrite content. See
+[the evaluation notes](paragraph-similarity.md).

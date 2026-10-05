@@ -39,21 +39,36 @@ henia query '[(code :lang "toml") (code :lang "yaml")] @c'
 | `_` | any type, any key |
 
 Every type also takes `:text "exact"`, `:contains "case-insensitive"`,
-`:matches "go regexp"`, `:words` (its word count) and `:node` (an id in
-document order). `:level` and `:words` take a number or a range such as `1..3`,
-`80..` or `..20`.
+`:matches "go regexp"`, and the derived keys:
+
+- `:words` and `:chars`: word and character counts;
+- `:lines`: line count;
+- `:norm`: lower-cased text with collapsed whitespace;
+- `:node`: an id in document order;
+- `:position`: file path, then offset.
+
+`:level`, `:words`, `:chars` and `:lines` take a number or a range such as
+`1..3`, `80..` or `..20`. Any numeric value also takes `(> n)`, `(>= n)`,
+`(< n)` or `(<= n)`, and a date takes `(older days)`.
 Other values compare exactly; quote them with `"`, or leave single words bare.
 A `/regexp/` value matches any key, as in `:url /^https:/` or `:title /^Phase/`.
 A `?variable` value binds the key's value; every other use of the variable must
 be equal, which joins the patterns that share it. `(not value)` negates a
 value, as in `:lang (not "go")` or `:id (not ?x)`. Compared with a variable:
 
-- `(after ?x)` sorts after it, so `:id (after ?x)` lists each pair once and
-  `:node (after ?n)` never pairs a node with itself.
-- `(near ?t 0.6)` shares at least that Jaccard share of three-word shingles,
-  the measure `henia lint` uses for similar content.
+- `(after ?x)` and `(before ?x)` sort after or before it, so `:id (after ?x)`
+  lists each pair once and `:node (after ?n)` never pairs a node with itself.
+- `(contains ?x)` holds it as a substring, ignoring case.
+- `(covers ?x)` is it or a dotted prefix of it, as `code.style` covers
+  `code.style.go`.
+- `(near ?t 0.6)` shares at least that Jaccard share of three-word shingles.
+- `(overlap ?t 0.9)` shares at least that share of the shorter text's shingles.
 - `(similar ?t 0.85)` has at least that cosine similarity under a local
   Model2Vec model: `--model DIR`, else `[lint.semantic] model_path`.
+
+`near`, `overlap` and `similar` take an optional score variable,
+`(near ?t 0.6 ?score)`. In lint modules, numbers and thresholds may be
+`$params`.
 
 A section holds its heading and everything up to the next heading of the same
 or a higher level. Files other than Markdown hold blank-line-separated
@@ -66,8 +81,10 @@ query    := (pattern | "(" "not" pattern ")")+  ; patterns join on shared variab
 pattern  := "(" type item* ")" quant? capture?
           | "[" pattern+ "]" quant? capture?  ; alternatives
 value    := "string" | word | number | range | /regexp/ | ?variable
-          | "(" "not" value ")" | "(" "after" ?variable ")"
-          | "(" ("near" | "similar") ?variable threshold ")"
+          | $param | "(" "not" value ")" | "(" comparison (number | $param) ")"
+          | "(" ("after" | "before" | "contains" | "covers") ?variable ")"
+          | "(" ("near" | "overlap" | "similar") ?variable threshold ?score? ")"
+comparison := ">" | ">=" | "<" | "<=" | "older"
 item     := :key value | capture | pattern | ">" pattern | "."
           | "(" "not" (pattern | relation) ")" | relation
 relation := "(" ("reaches" | "inbound" | "to" | "from") pattern ")"
