@@ -114,6 +114,9 @@ func collect(ctx context.Context, paths []string) ([]scanned, error) {
 			if !info.Mode().IsRegular() || !strings.EqualFold(filepath.Ext(path), ".md") || seen[absolute] {
 				return nil
 			}
+			if dependency && artifactKind(path) == artifact.TypeUnknown {
+				return nil
+			}
 			seen[absolute] = true
 			files = append(files, scanned{path, !dependency})
 			return nil

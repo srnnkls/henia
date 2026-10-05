@@ -50,9 +50,10 @@ message = "Resolve the TODO before release."
 
 References resolve against everything lint can know, never a hand-kept list:
 
-- the scanned files, including git-ignored dependencies under the scanned
-  paths, such as phora-deployed skills. Those are read for their names and
-  anchors but never linted.
+- the scanned files, plus the skills, commands and agents in git-ignored
+  dependencies under the scanned paths, such as phora-deployed skills. Those
+  are read for their names but never linted, and links into them are checked
+  against the files on disk.
 - the installed library, the same skills `henia show` serves.
 - the commands and agents built into each harness in `henia.toml`, which come
   from its profile's `commands` and `agents`.
