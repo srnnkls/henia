@@ -169,7 +169,7 @@ func TestReadErrors(t *testing.T) {
 		{`(heading :level two)`, ":level takes a number or a range", ":level 2", 16},
 		{`(paragraph :matches "(")`, "invalid regular expression", "", 20},
 		{`(not (code))`, "a query needs a pattern outside (not ...)", "", 0},
-		{`(heading)?`, "quantifiers apply to patterns nested", "", 9},
+		{`(heading)?`, "a query needs a pattern that is not optional", "", 0},
 		{`(section . )`, "anchor . needs a pattern after it", "", 11},
 		{`(link :url /^https)`, "unterminated /regexp/", "", 11},
 		{`(heading :text ?t) (skill)`, "a query of several patterns prints its captures", "", 0},

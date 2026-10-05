@@ -32,10 +32,21 @@ tasks:
       fix_round: B2-H1 narrowed FR-2 to binders evaluated before the optional; targeted re-review fixed
   - id: QAG-003
     content: "Top-level P? as left join after required members; * and + still rejected at top level (FR-3, TR-1)"
-    status: pending
+    status: completed
     active_form: "Adding top-level optional members as left joins"
     depends_on: [QAG-002]
-    files: [internal/pattern/read.go, internal/pattern/check.go, internal/pattern/match.go, internal/pattern/leftjoin_test.go]
+    files: [internal/pattern/read.go, internal/pattern/check.go, internal/pattern/match.go, internal/pattern/leftjoin_test.go, internal/pattern/pattern_test.go]
+    evidence:
+      tests:
+        - TestTopLevelOptionalLeftJoins
+        - TestTopLevelOptionalReaderRules
+        - TestTopLevelOptionalBoundedByMaxBindings
+        - TestImpossibleIgnoresOptionalMembers
+        - TestOptionalMayReuseScoreBoundByRequiredMember
+      red: 8 failures on the top-level quantifier error
+      green: go test ./... -count=1 ok; go vet + go build ok
+      tropos: left join keeps unlinked skills once with @l empty; peer has 29 inbound rows
+      fix_round: B3-H1 Impossible skips optional members; B3-H2 before() counts scores; re-review fixed
   - id: QAG-004
     content: ":words/:chars/:lines on file over the text the query reads (rendered body by default, authored with --canonical and lint, frontmatter excluded, resources whole), on skill summed over files; :text unchanged (FR-4)"
     status: pending
@@ -63,7 +74,7 @@ tasks:
 meta:
   created: 2026-10-05
   last_updated: "2026-10-05"
-  progress: 2/7
+  progress: 3/7
 phases:
   - id: zero-groups
     tasks: [QAG-001, QAG-002, QAG-003]

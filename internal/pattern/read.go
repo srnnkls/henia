@@ -339,7 +339,7 @@ func (r *reader) query(end tokenKind) (*Query, error) {
 		}
 		if r.peek().kind == tOpen && head.kind == tSymbol && head.text == "not" {
 			r.at += 2
-			p, err := r.pattern(true)
+			p, err := r.pattern("")
 			if err != nil {
 				return nil, err
 			}
@@ -349,7 +349,7 @@ func (r *reader) query(end tokenKind) (*Query, error) {
 			q.Absent = append(q.Absent, p)
 			continue
 		}
-		p, err := r.pattern(true)
+		p, err := r.pattern("?")
 		if err != nil {
 			return nil, err
 		}
@@ -380,7 +380,9 @@ func (r *reader) next() token {
 	return t
 }
 
-func (r *reader) pattern(top bool) (*Pattern, error) {
+const nested = "?*+"
+
+func (r *reader) pattern(quants string) (*Pattern, error) {
 	open := r.next()
 	p := &Pattern{Pos: open.pos}
 	switch open.kind {
@@ -389,7 +391,7 @@ func (r *reader) pattern(top bool) (*Pattern, error) {
 			if r.peek().kind == tEOF {
 				return nil, &Error{Offset: open.pos, Message: "unclosed [", Hint: "close the alternation with ]"}
 			}
-			alt, err := r.pattern(false)
+			alt, err := r.pattern(nested)
 			if err != nil {
 				return nil, err
 			}
@@ -408,7 +410,7 @@ func (r *reader) pattern(top bool) (*Pattern, error) {
 			if err := r.expand(define, open); err != nil {
 				return nil, err
 			}
-			return r.pattern(top)
+			return r.pattern(quants)
 		}
 		if isForm(head) {
 			return nil, &Error{Offset: head.pos, Message: fmt.Sprintf("(%s ...) belongs inside a pattern", head.text), Hint: `e.g. (skill :id "X" (` + head.text + ` (skill) @t))`}
@@ -427,7 +429,7 @@ func (r *reader) pattern(top bool) (*Pattern, error) {
 		return nil, r.unexpected(open, "a pattern such as (heading)")
 	}
 	if t := r.peek(); t.kind == tQuant {
-		if top {
+		if !strings.Contains(quants, t.text) {
 			return nil, &Error{Offset: t.pos, Message: "quantifiers apply to patterns nested in another pattern"}
 		}
 		p.Quant = r.next().text[0]
@@ -510,7 +512,7 @@ func (r *reader) body(p *Pattern, open token) error {
 					}
 					negation.Relation = &relation
 				} else {
-					pattern, err := r.pattern(false)
+					pattern, err := r.pattern(nested)
 					if err != nil {
 						return err
 					}
@@ -523,7 +525,7 @@ func (r *reader) body(p *Pattern, open token) error {
 				afterPattern = false
 				continue
 			}
-			child, err := r.pattern(false)
+			child, err := r.pattern(nested)
 			if err != nil {
 				return err
 			}
@@ -546,7 +548,7 @@ func (r *reader) body(p *Pattern, open token) error {
 func (r *reader) relation() (Relation, error) {
 	r.next()
 	form := r.next()
-	target, err := r.pattern(false)
+	target, err := r.pattern(nested)
 	if err != nil {
 		return Relation{}, err
 	}
