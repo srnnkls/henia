@@ -155,7 +155,12 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 				}
 			}
 		}
-		if err := heniaSkill(cmd, cfg, harness, staging, dynamic, collect); err != nil {
+		profile, ok := cfg.Harness[harness]
+		for _, name := range slices.Sorted(maps.Keys(owners)) {
+			profile, ok = owners[name].Harness[harness], true
+			break
+		}
+		if err := heniaSkill(cmd, harness, profile, ok, staging, dynamic, collect); err != nil {
 			return err
 		}
 	}
@@ -171,8 +176,7 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 	return nil
 }
 
-func heniaSkill(cmd *cobra.Command, cfg *config.Config, harness, staging string, dynamic []build.Entry, collect func(owner, root string) error) error {
-	h, ok := cfg.Harness[harness]
+func heniaSkill(cmd *cobra.Command, harness string, h henia.Harness, ok bool, staging string, dynamic []build.Entry, collect func(owner, root string) error) error {
 	if !ok {
 		defaults, err := defaults.DefaultConfig()
 		if err != nil {
@@ -182,7 +186,9 @@ func heniaSkill(cmd *cobra.Command, cfg *config.Config, harness, staging string,
 			return fmt.Errorf("harness %s has no profile for the henia skill; configure [harness.%s] in the user henia.toml or set install_henia_skill = false", harness, harness)
 		}
 	}
-	h.ProjectRoot, h.UserRoot = library.ConfigDir(), library.ConfigDir()
+	if h.ProjectRoot == "" {
+		h.ProjectRoot, h.UserRoot = library.ConfigDir(), library.ConfigDir()
+	}
 	disabled := false
 	h.Files, h.Artifacts, h.Skills = nil, []string{"skills"}, henia.Artifacts{Catalog: &disabled}
 	slices.SortFunc(dynamic, func(a, b build.Entry) int { return strings.Compare(a.Name, b.Name) })
