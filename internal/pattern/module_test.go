@@ -2,6 +2,7 @@ package pattern
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -31,11 +32,11 @@ func TestReadModule(t *testing.T) {
 		}
 		t.Fatal(err)
 	}
-	if len(m.Rules) != 2 || m.Rules[0].ID != "bash-usage" || m.Rules[0].Severity != "error" || strings.Join(m.Rules[0].Params(), ",") != "want" {
+	if len(m.Rules) != 2 || m.Rules[0].ID != "bash-usage" || m.Rules[0].Severity != "error" || fmt.Sprint(m.Rules[0].Params()) != "map[want:false]" {
 		t.Fatalf("rule = %+v", m.Rules[0])
 	}
 	c := fixture(t)
-	rows, err := m.Rules[0].Query.Run(c.root, Environment{Resolve: c, Params: map[string]string{"want": "go"}})
+	rows, err := m.Rules[0].Query.Run(c.root, Environment{Resolve: c, Params: map[string]Value{"want": Text("go")}})
 	if err != nil {
 		t.Fatal(err)
 	}

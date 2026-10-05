@@ -15,7 +15,7 @@ type Query struct {
 	Absent   []*Pattern
 	Captures []string
 	Semantic bool
-	params   []string
+	params   map[string]bool
 }
 
 type Pattern struct {
@@ -307,7 +307,7 @@ type reader struct {
 	at       int
 	captures []string
 	semantic bool
-	params   []string
+	params   map[string]bool
 	defines  map[string]Define
 	expanded int
 }
@@ -322,7 +322,7 @@ func Read(src string) (*Query, error) {
 }
 
 func (r *reader) query(end tokenKind) (*Query, error) {
-	r.captures, r.semantic, r.params = nil, false, nil
+	r.captures, r.semantic, r.params = nil, false, map[string]bool{}
 	start := r.peek().pos
 	q := &Query{}
 	for r.peek().kind != end {
@@ -579,7 +579,7 @@ func (r *reader) attr(kind string) (Attr, error) {
 			switch operand.kind {
 			case tParam:
 				attr.Param = operand.text
-				r.params = append(r.params, operand.text)
+				r.params[operand.text] = true
 			case tInt, tFloat:
 				attr.Number, _ = strconv.ParseFloat(operand.text, 64)
 			default:
@@ -605,7 +605,7 @@ func (r *reader) attr(kind string) (Attr, error) {
 				threshold := r.next()
 				if threshold.kind == tParam {
 					attr.Limit = threshold.text
-					r.params = append(r.params, threshold.text)
+					r.params[threshold.text] = true
 				} else {
 					t, err := strconv.ParseFloat(threshold.text, 64)
 					if threshold.kind != tFloat && threshold.kind != tInt || err != nil || t <= 0 || t > 1 {
@@ -638,7 +638,7 @@ func (r *reader) attr(kind string) (Attr, error) {
 			return attr, &Error{Offset: value.pos, Message: ":matches takes a /regexp/ or string, not a $param"}
 		}
 		attr.Param = value.text
-		r.params = append(r.params, value.text)
+		r.params[value.text] = r.params[value.text] || false
 		return attr, nil
 	case tString, tSymbol, tInt:
 		attr.Value = value.text
@@ -691,6 +691,8 @@ func typeNames() []string {
 	slices.Sort(names)
 	return names
 }
+
+func Suggest(word string, candidates []string) string { return suggest(word, candidates) }
 
 func suggest(word string, candidates []string) string {
 	best, distance := "", 3

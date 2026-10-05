@@ -9,7 +9,11 @@ import (
 )
 
 func TestStdlibExamples(t *testing.T) {
-	failures, count, err := TestModules(nil, nil, Options{})
+	plan, err := Compile(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failures, count, err := plan.Test()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +91,13 @@ func TestInvalidRules(t *testing.T) {
 		{Options{Rules: []InlineRule{{ID: "large-skill", Message: "m", Query: "(heading) @h"}}}, "is defined in std/structure and henia.toml"},
 		{Options{Disable: []string{"no-such-rule"}}, `unknown lint rule "no-such-rule"`},
 		{Options{Config: map[string]map[string]any{"large-skill": {"severity": "fatal"}}}, "severity must be warning or error"},
+		{Options{Config: map[string]map[string]any{"large-skill": {"max-line": 2}}}, `lint.config.large-skill: large-skill has no param or data "max-line"; did you mean max-lines?`},
+		{Options{Config: map[string]map[string]any{"similar-content": {"similarity": "high"}}}, `lint.config.similar-content.similarity: "high" is not a number`},
+		{Options{Config: map[string]map[string]any{"missing-reference": {"external": "skill:x"}}}, "lint.config.missing-reference.external: must be a table or a list"},
+		{Options{Config: map[string]map[string]any{"outdated-reference": {"outdated": []any{"a"}}}}, "lint.config.outdated-reference.outdated must be a table"},
+		{Options{Config: map[string]map[string]any{"large-skil": {}}}, `no lint rule "large-skil"; did you mean large-skill?`},
+		{Options{Rules: []InlineRule{{ID: "limit", Message: "m", Query: "(file :lines (> $limit)) @f"}}}, "lint rule limit uses $limit, which henia.toml does not define under params"},
+		{Options{Rules: []InlineRule{{ID: "limit", Message: "m", Query: "(file :lines (> $limit)) @f", Params: map[string]any{"limit": "many"}}}}, `lint rule limit compares $limit as a number, but it is "many"`},
 	} {
 		if _, err := Run(t.Context(), []string{path}, tc.options); err == nil || !strings.Contains(err.Error(), tc.message) {
 			t.Errorf("%+v: err = %v, want %q", tc.options, err, tc.message)

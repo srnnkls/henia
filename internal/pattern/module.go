@@ -269,11 +269,11 @@ func (r *reader) rule(open token) (*Rule, error) {
 	return rule, nil
 }
 
-func (rule *Rule) Params() []string {
-	params := slices.Clone(rule.Query.params)
+func (rule *Rule) Params() map[string]bool {
+	params := rule.Query.Params()
 	for _, m := range placeholder.FindAllStringSubmatch(rule.Message, -1) {
-		if m[1] == "$" {
-			params = append(params, m[2])
+		if _, used := params[m[2]]; m[1] == "$" && !used {
+			params[m[2]] = false
 		}
 	}
 	return params

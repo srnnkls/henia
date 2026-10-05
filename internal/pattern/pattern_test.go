@@ -243,7 +243,7 @@ func TestEnvironment(t *testing.T) {
 	for _, row := range []map[string]string{{"table": "outdated", "key": "Term", "value": "Concept"}, {"table": "dates", "value": "2020-01-01"}, {"table": "dates", "value": "2026-09-30"}} {
 		data.Children = append(data.Children, &markup.Element{Type: "row", Attrs: row, Parent: data})
 	}
-	env := Environment{Resolve: c, Params: map[string]string{"max": "10", "days": "30"}, Data: data, Now: time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)}
+	env := Environment{Resolve: c, Params: map[string]Value{"max": Number(10), "days": Number(30)}, Data: data, Now: time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)}
 	cases := []struct{ name, query, want string }{
 		{"param comparison", `(file :lines (> $max)) @f`, "f="},
 		{"first occurrence", `(heading :norm ?t :node ?n) @dup (heading :norm ?t :node (before ?n)) @first`, "dup=Usage first=Usage"},
@@ -268,5 +268,9 @@ func TestEnvironment(t *testing.T) {
 	q, _ := Read(`(file :lines (> $missing)) @f`)
 	if _, err := q.Run(c.root, Environment{Resolve: c}); err == nil || !strings.Contains(err.Error(), "$missing has no value") {
 		t.Errorf("missing param: %v", err)
+	}
+	q, _ = Read(`(file :lines (> $max)) @f`)
+	if _, err := q.Run(c.root, Environment{Resolve: c, Params: map[string]Value{"max": Text("many")}}); err == nil || !strings.Contains(err.Error(), "compares it as a number") {
+		t.Errorf("text param compared as number: %v", err)
 	}
 }

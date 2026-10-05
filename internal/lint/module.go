@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/library"
@@ -38,8 +37,8 @@ type spec struct {
 	id       string
 	rules    []*pattern.Rule
 	module   string
-	params   map[string]string
-	data     map[string]any
+	params   map[string]pattern.Value
+	data     map[string]table
 	examples []example
 }
 
@@ -132,7 +131,11 @@ func (r *registry) specs(inline []InlineRule) ([]*spec, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := add(&spec{id: rule.ID, rules: []*pattern.Rule{rule}, module: "henia.toml", params: scalars(in.Params), data: in.Data}); err != nil {
+		params, data, err := defaults(in.Params, in.Data, "lint.rules."+in.ID)
+		if err != nil {
+			return nil, err
+		}
+		if err := add(&spec{id: rule.ID, rules: []*pattern.Rule{rule}, module: "henia.toml", params: params, data: data}); err != nil {
 			return nil, err
 		}
 	}
@@ -226,8 +229,12 @@ func (r *registry) parse(file moduleFile) ([]*spec, map[string]pattern.Define, e
 		}
 		return nil, nil, fmt.Errorf("%s: %w", file.path, err)
 	}
-	params, _ := art.Frontmatter["params"].(map[string]any)
-	data, _ := art.Frontmatter["data"].(map[string]any)
+	rawParams, _ := art.Frontmatter["params"].(map[string]any)
+	rawData, _ := art.Frontmatter["data"].(map[string]any)
+	params, data, err := defaults(rawParams, rawData, file.path)
+	if err != nil {
+		return nil, nil, err
+	}
 	var specs []*spec
 	byID := map[string]*spec{}
 	for _, rule := range module.Rules {
@@ -235,79 +242,10 @@ func (r *registry) parse(file moduleFile) ([]*spec, map[string]pattern.Define, e
 			s.rules = append(s.rules, rule)
 			continue
 		}
-		byID[rule.ID] = &spec{id: rule.ID, rules: []*pattern.Rule{rule}, module: file.name, params: scalars(params), data: data, examples: examples[rule.ID]}
+		byID[rule.ID] = &spec{id: rule.ID, rules: []*pattern.Rule{rule}, module: file.name, params: params, data: data, examples: examples[rule.ID]}
 		specs = append(specs, byID[rule.ID])
 	}
 	return specs, module.Defines, nil
-}
-
-func scalars(values map[string]any) map[string]string {
-	out := map[string]string{}
-	for key, value := range values {
-		switch value.(type) {
-		case map[string]any, []any:
-		default:
-			out[key] = fmt.Sprint(value)
-		}
-	}
-	return out
-}
-
-func (s *spec) configure(config map[string]any) error {
-	params, data := maps.Clone(s.params), maps.Clone(s.data)
-	if data == nil {
-		data = map[string]any{}
-	}
-	for key, value := range config {
-		switch v := value.(type) {
-		case map[string]any, []any:
-			data[key] = v
-		default:
-			if key == "severity" {
-				if v != "warning" && v != "error" {
-					return fmt.Errorf("lint.config.%s.severity must be warning or error", s.id)
-				}
-				rules := make([]*pattern.Rule, len(s.rules))
-				for i, rule := range s.rules {
-					copied := *rule
-					copied.Severity = v.(string)
-					rules[i] = &copied
-				}
-				s.rules = rules
-				continue
-			}
-			params[key] = fmt.Sprint(v)
-		}
-	}
-	s.params, s.data = params, data
-	return nil
-}
-
-func dataRoot(tables map[string]any) *markup.Element {
-	if len(tables) == 0 {
-		return nil
-	}
-	root := &markup.Element{Type: "data", Attrs: map[string]string{}}
-	add := func(attrs map[string]string) {
-		root.Children = append(root.Children, &markup.Element{Type: "row", Attrs: attrs, Parent: root, Index: len(root.Children)})
-	}
-	for _, table := range slices.Sorted(maps.Keys(tables)) {
-		switch rows := tables[table].(type) {
-		case map[string]any:
-			for _, key := range slices.Sorted(maps.Keys(rows)) {
-				add(map[string]string{"table": table, "key": key, "value": fmt.Sprint(rows[key])})
-			}
-		case []any:
-			for i, value := range rows {
-				add(map[string]string{"table": table, "index": strconv.Itoa(i), "value": fmt.Sprint(value)})
-			}
-		case []string:
-			for i, value := range rows {
-				add(map[string]string{"table": table, "index": strconv.Itoa(i), "value": value})
-			}
-		}
-	}
-	return root
 }
 
 type evaluation struct {
@@ -436,12 +374,12 @@ func disabledHere(e *markup.Element, rule string) bool {
 	})
 }
 
-func render(message string, row pattern.Row, params map[string]string) string {
+func render(message string, row pattern.Row, params map[string]pattern.Value) string {
 	for _, m := range pattern.Placeholders(message) {
 		value := ""
 		switch m[1] {
 		case "$":
-			value = params[m[2]]
+			value = params[m[2]].String()
 		case "?":
 			value = row.Vars[m[2]]
 			if n, err := strconv.ParseFloat(value, 64); err == nil && m[3] != "" {
@@ -495,35 +433,6 @@ func (f ExampleFailure) Error() string {
 	return fmt.Sprintf("%s:%d: %s should pass this example, but reported %d diagnostics", f.Module, f.Line, f.Rule, f.Found)
 }
 
-func TestModules(dirs []string, inline []InlineRule, options Options) ([]ExampleFailure, int, error) {
-	registry, err := loadModules(dirs)
-	if err != nil {
-		return nil, 0, err
-	}
-	specs, err := registry.specs(inline)
-	if err != nil {
-		return nil, 0, err
-	}
-	if options.Now.IsZero() {
-		options.Now = time.Now()
-	}
-	var failures []ExampleFailure
-	count := 0
-	for _, s := range specs {
-		for _, ex := range s.examples {
-			count++
-			found, err := s.try(ex, options)
-			if err != nil {
-				return nil, 0, err
-			}
-			if ex.matches != (found > 0) {
-				failures = append(failures, ExampleFailure{s.id, registry.files[s.module].path, ex.line, ex.matches, found})
-			}
-		}
-	}
-	return failures, count, nil
-}
-
 func (s *spec) try(ex example, options Options) (int, error) {
 	dir, err := os.MkdirTemp("", "henia-lint-example")
 	if err != nil {
@@ -538,7 +447,7 @@ func (s *spec) try(ex example, options Options) (int, error) {
 		return 0, err
 	}
 	trial := *s
-	if err := trial.configure(ex.params); err != nil {
+	if err := trial.apply(ex.params, fmt.Sprintf("example at line %d", ex.line)); err != nil {
 		return 0, err
 	}
 	ev := &evaluation{corpus: corpus([]library.Document{{Path: path, Kind: "skill"}})}

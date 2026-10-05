@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +14,6 @@ import (
 	"time"
 
 	"github.com/srnnkls/henia/internal/artifact"
-	"github.com/srnnkls/henia/internal/library"
 )
 
 type Diagnostic struct {
@@ -60,64 +58,20 @@ type document struct {
 // Run checks Markdown files and directories recursively. Artifact references are
 // resolved against the complete set of supplied paths, not an external registry.
 func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, error) {
-	if err := options.Validate(); err != nil {
-		return nil, err
-	}
-	if options.Now.IsZero() {
-		options.Now = time.Now()
-	}
-	files, err := collect(ctx, paths)
+	plan, err := Compile(options)
 	if err != nil {
 		return nil, err
 	}
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no Markdown files found")
-	}
-	registry, err := loadModules(options.Modules)
-	if err != nil {
-		return nil, err
-	}
-	specs, err := registry.specs(options.Rules)
-	if err != nil {
-		return nil, err
-	}
-	var known []string
-	for _, s := range specs {
-		known = append(known, s.id)
-		if err := s.configure(options.Config[s.id]); err != nil {
-			return nil, err
-		}
-	}
-	for _, rule := range slices.Concat(options.Disable, slices.Collect(maps.Keys(options.Config))) {
-		if !slices.Contains(known, rule) {
-			return nil, fmt.Errorf("unknown lint rule %q", rule)
-		}
-	}
-	var docs []library.Document
-	for _, path := range files {
-		docs = append(docs, library.Document{Path: path, Kind: string(artifactKind(path))})
-	}
-	ev := &evaluation{corpus: corpus(docs)}
-	diagnostics := []Diagnostic{}
-	for _, s := range specs {
-		if slices.Contains(options.Disable, s.id) {
-			continue
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		found, err := ev.run(s, options)
-		if err != nil {
-			return nil, err
-		}
-		diagnostics = append(diagnostics, found...)
-	}
+	return plan.Run(ctx, paths)
+}
+
+func sortDiagnostics(diagnostics []Diagnostic) []Diagnostic {
 	slices.SortFunc(diagnostics, func(a, b Diagnostic) int {
 		return cmp.Or(strings.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column), strings.Compare(a.Rule, b.Rule), strings.Compare(a.Message, b.Message))
 	})
 	return slices.CompactFunc(diagnostics, func(a, b Diagnostic) bool {
 		return a.Path == b.Path && a.Line == b.Line && a.Column == b.Column && a.Rule == b.Rule && a.Message == b.Message
-	}), nil
+	})
 }
 
 func collect(ctx context.Context, paths []string) ([]string, error) {

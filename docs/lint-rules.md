@@ -43,8 +43,10 @@ message = "Resolve the TODO before release."
 ```
 
 - `disable` turns rules off by id.
-- `[lint.config.<id>]` sets `severity` and overrides the rule's params: scalars
-  replace params, while tables and arrays replace data tables.
+- `[lint.config.<id>]` sets `severity` and overrides the rule's params and data
+  tables. Each value is parsed against its default: a number param takes a
+  number, a list or table takes the same shape, and an unknown key or rule is
+  an error that suggests the nearest name.
 - `[[lint.rules]]` declares a one-off rule inline with `id`, `query`, `message`,
   and optionally `severity`, `at`, `related`, `params` and `data`.
 - A skill can turn a rule off for itself with `henia.lint.disable` in its frontmatter.

@@ -52,7 +52,7 @@ type constraint struct {
 type Environment struct {
 	Resolve Resolver
 	Embed   func(string) []float32
-	Params  map[string]string
+	Params  map[string]Value
 	Data    *markup.Element
 	Now     time.Time
 }
@@ -86,9 +86,13 @@ func (q *Query) Run(root *markup.Element, env Environment) ([]Row, error) {
 	if q.Semantic && env.Embed == nil {
 		return nil, ErrNoModel
 	}
-	for _, name := range q.params {
-		if _, ok := env.Params[name]; !ok {
+	for name, number := range q.params {
+		value, ok := env.Params[name]
+		if !ok {
 			return nil, fmt.Errorf("$%s has no value; set it in the module frontmatter or [lint.config]", name)
+		}
+		if number && !value.IsNumber {
+			return nil, fmt.Errorf("$%s is %q, but the query compares it as a number", name, value.Text)
 		}
 	}
 	if env.Data != nil {
@@ -767,7 +771,7 @@ func (m *matcher) test(a Attr, e *markup.Element) bool {
 	case "contains":
 		needle := a.Value
 		if a.Param != "" {
-			needle = m.env.Params[a.Param]
+			needle = m.env.Params[a.Param].String()
 		}
 		return strings.Contains(strings.ToLower(e.Text), strings.ToLower(needle))
 	case "matches":
@@ -780,7 +784,7 @@ func (m *matcher) test(a Attr, e *markup.Element) bool {
 	if a.Op != "" {
 		limit := a.Number
 		if a.Param != "" {
-			limit, _ = strconv.ParseFloat(m.env.Params[a.Param], 64)
+			limit = m.env.Params[a.Param].Number
 		}
 		if a.Op == "older" {
 			date, err := time.Parse("2006-01-02", value)
@@ -801,7 +805,7 @@ func (m *matcher) test(a Attr, e *markup.Element) bool {
 		return n <= limit
 	}
 	if a.Param != "" {
-		return value == m.env.Params[a.Param]
+		return value == m.env.Params[a.Param].String()
 	}
 	if a.Re != nil {
 		return a.Re.MatchString(value)
@@ -826,7 +830,7 @@ func (m *matcher) satisfies(c constraint, bound string) (bool, float64) {
 	case "near", "overlap", "similar":
 		threshold := c.threshold
 		if c.limit != "" {
-			threshold, _ = strconv.ParseFloat(m.env.Params[c.limit], 64)
+			threshold = m.env.Params[c.limit].Number
 		}
 		if threshold <= 0 {
 			return false, 0
@@ -869,3 +873,22 @@ func (m *matcher) vector(text string) []float64 {
 	m.vectors[text] = vector
 	return vector
 }
+
+type Value struct {
+	Number   float64
+	Text     string
+	IsNumber bool
+}
+
+func Number(n float64) Value { return Value{Number: n, IsNumber: true} }
+
+func Text(s string) Value { return Value{Text: s} }
+
+func (v Value) String() string {
+	if v.IsNumber {
+		return strconv.FormatFloat(v.Number, 'f', -1, 64)
+	}
+	return v.Text
+}
+
+func (q *Query) Params() map[string]bool { return maps.Clone(q.params) }

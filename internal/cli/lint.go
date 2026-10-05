@@ -34,7 +34,11 @@ func newLintCommand() *cobra.Command {
 				return err
 			}
 			options.Disable = append(options.Disable, disabled...)
-			diagnostics, err := lint.Run(cmd.Context(), args, options)
+			plan, err := lint.Compile(options)
+			if err != nil {
+				return err
+			}
+			diagnostics, err := plan.Run(cmd.Context(), args)
 			if err != nil {
 				return err
 			}
@@ -79,7 +83,11 @@ A Matches example must make its rule report; a Passes example must not.`,
 			if err != nil {
 				return err
 			}
-			failures, count, err := lint.TestModules(options.Modules, options.Rules, options)
+			plan, err := lint.Compile(options)
+			if err != nil {
+				return err
+			}
+			failures, count, err := plan.Test()
 			if err != nil {
 				return err
 			}
