@@ -34,6 +34,8 @@ type Profile struct {
 	Computed map[string]string `toml:"computed"`
 	Files    map[string]File   `toml:"files"`
 	Preloads bool              `toml:"preloads"`
+	Commands []string          `toml:"commands"`
+	Agents   []string          `toml:"agents"`
 }
 
 type Context struct {

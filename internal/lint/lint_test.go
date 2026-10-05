@@ -52,10 +52,10 @@ func TestRulesAndPositions(t *testing.T) {
 	}
 }
 
-func TestExternalReferencesResolve(t *testing.T) {
+func TestInstalledAndBuiltinReferencesResolve(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\nUse `$vendored`, `/plan` and `$absent`.\n")
-	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Config: map[string]map[string]any{"missing-reference": {"external": []any{"skill:vendored", "command:plan"}}}})
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Known: []string{"skill:vendored"}, Builtin: []string{"command:plan"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,6 +107,16 @@ func TestGitIgnoredPathsAreSkipped(t *testing.T) {
 		if len(diagnostics) != 0 {
 			t.Fatalf("lint %s: unexpected diagnostics: %+v", path, diagnostics)
 		}
+	}
+	write(t, root, ".gitignore", "vendored/\nnotes.md\nskills/deployed/\n")
+	write(t, root, "skills/deployed/SKILL.md", "---\nname: deployed\ndescription: A deployed dependency\n---\n\n# Deployed\n\n## Steps\n\n[broken](absent.md)\n")
+	write(t, root, "skills/two/SKILL.md", "---\nname: two\ndescription: Second skill\n---\n\nUse `$deployed` and `henia show deployed#steps`, not `henia show deployed#gone`.\n")
+	diagnostics, err := lint.Run(t.Context(), []string{filepath.Join(root, "skills")}, lint.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || !strings.Contains(diagnostics[0].Message, "deployed#gone") {
+		t.Fatalf("ignored dependencies resolve but stay unlinted: %+v", diagnostics)
 	}
 	for _, path := range []string{filepath.Join(root, "vendored"), filepath.Join(root, "notes.md")} {
 		diagnostics, err := lint.Run(t.Context(), []string{path}, lint.Options{})

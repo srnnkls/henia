@@ -42,6 +42,8 @@ type Options struct {
 	Modules  []string                  `toml:"-"`
 	Disable  []string                  `toml:"disable,omitempty"`
 	Semantic SemanticOptions           `toml:"semantic,omitempty"`
+	Builtin  []string                  `toml:"-"`
+	Known    []string                  `toml:"-"`
 	Now      time.Time                 `toml:"-"`
 }
 
@@ -74,49 +76,53 @@ func sortDiagnostics(diagnostics []Diagnostic) []Diagnostic {
 	})
 }
 
-func collect(ctx context.Context, paths []string) ([]string, error) {
+type scanned struct {
+	path   string
+	linted bool
+}
+
+func collect(ctx context.Context, paths []string) ([]scanned, error) {
 	seen := make(map[string]bool)
-	var files []string
+	var files []scanned
 	for _, root := range paths {
 		ignored, err := gitIgnored(ctx, root)
 		if err != nil {
 			return nil, err
 		}
+		var dependencies []string
 		err = artifact.Walk(root, func(path string, info fs.FileInfo) error {
 			if err := ctx.Err(); err != nil {
 				return err
-			}
-			if absolute, err := filepath.Abs(path); err == nil && path != root && ignored[absolute] {
-				if info.IsDir() {
-					return fs.SkipDir
-				}
-				return nil
-			}
-			if info.IsDir() {
-				if slices.Contains([]string{".git", "node_modules", "vendor"}, info.Name()) ||
-					filepath.Base(filepath.Dir(path)) == ".henia" && slices.Contains([]string{"build", "cache", "state", "lint"}, info.Name()) {
-					return fs.SkipDir
-				}
-				return nil
-			}
-			if !info.Mode().IsRegular() || !strings.EqualFold(filepath.Ext(path), ".md") {
-				return nil
 			}
 			absolute, err := filepath.Abs(path)
 			if err != nil {
 				return err
 			}
-			if !seen[absolute] {
-				files = append(files, path)
-				seen[absolute] = true
+			dependency := path != root && ignored[absolute] || slices.ContainsFunc(dependencies, func(dir string) bool {
+				return strings.HasPrefix(absolute, dir+string(filepath.Separator))
+			})
+			if info.IsDir() {
+				if slices.Contains([]string{".git", "node_modules", "vendor"}, info.Name()) ||
+					filepath.Base(filepath.Dir(path)) == ".henia" && slices.Contains([]string{"build", "cache", "state", "lint"}, info.Name()) {
+					return fs.SkipDir
+				}
+				if dependency && path != root && ignored[absolute] {
+					dependencies = append(dependencies, absolute)
+				}
+				return nil
 			}
+			if !info.Mode().IsRegular() || !strings.EqualFold(filepath.Ext(path), ".md") || seen[absolute] {
+				return nil
+			}
+			seen[absolute] = true
+			files = append(files, scanned{path, !dependency})
 			return nil
 		})
 		if err != nil {
 			return nil, fmt.Errorf("scan %s: %w", root, err)
 		}
 	}
-	slices.Sort(files)
+	slices.SortFunc(files, func(a, b scanned) int { return strings.Compare(a.path, b.path) })
 	return files, nil
 }
 

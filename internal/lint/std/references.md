@@ -1,7 +1,6 @@
 ---
 description: Links and references that point nowhere or at outdated names.
 data:
-  external: []
   outdated: {}
 ---
 
@@ -47,15 +46,17 @@ See [usage](#usage).
 
 ## missing-reference
 
-`$skill`, `/command` and `@agent` spans must name a scanned artifact or one
-listed in the `external` table, as `kind:name`.
+`$skill`, `/command` and `@agent` spans must name a scanned artifact, one
+installed in the library, or a command or agent built into a configured
+harness. Git-ignored dependencies under the scanned paths count as scanned.
 
 ```hq
 (rule missing-reference
   :message "{@l.ref} reference \"{@l.name}\" is absent from scanned artifacts"
   (link :ref /^(skill|command|agent)$/ :artifact ?a) @l
   (not (file :artifact ?a))
-  (not (row :table "external" :value ?a)))
+  (not (row :table "installed" :value ?a))
+  (not (row :table "builtin" :value ?a)))
 ```
 
 ### Matches

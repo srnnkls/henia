@@ -268,7 +268,12 @@ func (ev *evaluation) run(s *spec, options Options) ([]Diagnostic, error) {
 }
 
 func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Diagnostic, error) {
-	env := pattern.Environment{Resolve: ev.corpus, Params: s.params, Data: dataRoot(s.data), Now: options.Now}
+	tables := maps.Clone(s.data)
+	if tables == nil {
+		tables = map[string]table{}
+	}
+	tables["builtin"], tables["installed"] = table{list: true, values: options.Builtin}, table{list: true, values: options.Known}
+	env := pattern.Environment{Resolve: ev.corpus, Params: s.params, Data: dataRoot(tables), Now: options.Now}
 	if rule.Query.Semantic {
 		if !options.Semantic.Enabled {
 			return nil, nil
@@ -281,6 +286,9 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 		}
 		env.Embed = ev.embed
 	}
+	if rule.Query.Impossible(env) {
+		return nil, nil
+	}
 	rows, err := rule.Query.Run(ev.corpus.Root, env)
 	if err != nil {
 		return nil, fmt.Errorf("lint rule %s: %w", rule.ID, err)
@@ -288,7 +296,7 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 	var out []Diagnostic
 	for _, row := range rows {
 		at := first(row, append(slices.Clone(rule.At), ""))
-		if at == nil || disabledHere(at, rule.ID) {
+		if at == nil || disabledHere(at, rule.ID) || dependency(at) {
 			continue
 		}
 		d := Diagnostic{Severity: rule.Severity, Rule: rule.ID}
@@ -471,4 +479,12 @@ func corpus(docs []library.Document) *library.Corpus {
 	}
 	addSlots(c.Root, documents)
 	return c
+}
+
+func dependency(e *markup.Element) bool {
+	file := e.Enclosing("file")
+	if file == nil && e.Type == "skill" && len(e.Children) > 0 {
+		file = e.Children[0]
+	}
+	return file != nil && file.Attrs["dependency"] == "true"
 }

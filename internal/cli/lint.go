@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +13,7 @@ import (
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
+	"github.com/srnnkls/henia/internal/vendor"
 )
 
 func newLintCommand() *cobra.Command {
@@ -116,8 +118,28 @@ func lintOptions(cmd *cobra.Command) (lint.Options, error) {
 	options := cfg.Lint
 	project := projectRoot(cmd)
 	seen := map[string]bool{}
-	for _, source := range library.Open(project, nil).Sources {
+	lib := library.Open(project, nil)
+	for _, source := range lib.Sources {
 		options.Modules = append(options.Modules, filepath.Join(source.Root, "lint"))
+	}
+	for _, entry := range lib.Entries {
+		options.Known = append(options.Known, "skill:"+entry.Name)
+	}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Harness)) {
+		h := cfg.Harness[name]
+		if h.Profile == "" {
+			continue
+		}
+		profile, err := vendor.Load(h.Profile, project, library.ConfigDir())
+		if err != nil {
+			return lint.Options{}, fmt.Errorf("harness %s: %w", name, err)
+		}
+		for _, command := range profile.Commands {
+			options.Builtin = append(options.Builtin, "command:"+command)
+		}
+		for _, agent := range profile.Agents {
+			options.Builtin = append(options.Builtin, "agent:"+agent)
+		}
 	}
 	options.Modules = append(options.Modules, filepath.Join(library.ConfigDir(), "lint"), filepath.Join(project, library.ProjectDir, "lint"))
 	options.Modules = slices.DeleteFunc(options.Modules, func(dir string) bool {

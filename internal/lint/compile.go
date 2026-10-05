@@ -240,12 +240,12 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no Markdown files found")
-	}
 	var docs []library.Document
-	for _, path := range files {
-		docs = append(docs, library.Document{Path: path, Kind: string(artifactKind(path))})
+	for _, file := range files {
+		docs = append(docs, library.Document{Path: file.path, Kind: string(artifactKind(file.path)), Dependency: !file.linted})
+	}
+	if !slices.ContainsFunc(files, func(file scanned) bool { return file.linted }) {
+		return nil, fmt.Errorf("no Markdown files found")
 	}
 	ev := &evaluation{corpus: corpus(docs)}
 	diagnostics := []Diagnostic{}

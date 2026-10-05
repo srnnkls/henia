@@ -123,3 +123,14 @@ These profiles apply to skills. Harness-wide permissions, command conversion,
 plugin publication and upload orchestration are separate concerns. In particular,
 OpenCode skill frontmatter must not be mistaken for OpenCode agent permissions.
 The [research matrix](vendor-research.md) links the vendor contracts.
+
+## Built-in commands and agents
+
+A profile lists the slash commands and subagents its harness ships with, as
+`commands` and `agents`. `henia lint` resolves `/command` and `@agent`
+references against the lists of every configured harness:
+
+```toml
+commands = ["clear", "compact", "plan"]
+agents = ["Explore", "Plan", "general-purpose"]
+```

@@ -37,8 +37,9 @@ type Rendering struct {
 }
 
 type Document struct {
-	Path string
-	Kind string
+	Path       string
+	Kind       string
+	Dependency bool
 }
 
 func (l *Library) Corpus(rendering *Rendering) *Corpus {
@@ -88,8 +89,12 @@ func Documents(docs []Document) *Corpus {
 		dirs[filepath.Dir(d.Path)] = skill
 	}
 	for _, d := range docs {
+		add := c.file
+		if d.Dependency {
+			add = c.stub
+		}
 		if skill := dirs[filepath.Dir(d.Path)]; skill != nil && filepath.Base(d.Path) == "SKILL.md" {
-			c.file(skill, d.Path, "SKILL.md", d.Kind, nil)
+			add(skill, d.Path, "SKILL.md", d.Kind, nil)
 			continue
 		}
 		owner := ""
@@ -101,10 +106,10 @@ func Documents(docs []Document) *Corpus {
 		}
 		if owner != "" && d.Kind == "" {
 			rel, _ := filepath.Rel(owner, d.Path)
-			c.file(dirs[owner], d.Path, filepath.ToSlash(rel), "resource", nil)
+			add(dirs[owner], d.Path, filepath.ToSlash(rel), "resource", nil)
 			continue
 		}
-		c.file(c.Root, d.Path, filepath.ToSlash(d.Path), cmp.Or(d.Kind, "document"), nil)
+		add(c.Root, d.Path, filepath.ToSlash(d.Path), cmp.Or(d.Kind, "document"), nil)
 	}
 	return c
 }
@@ -207,6 +212,33 @@ func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render
 	file.Children = append(append(head, problems...), file.Children...)
 	for i, child := range file.Children {
 		child.Parent, child.Index = file, i
+	}
+	c.adopt(parent, file)
+}
+
+func (c *Corpus) stub(parent *markup.Element, physical, rel, kind string, _ func() (string, *regexp.Regexp)) {
+	data, err := os.ReadFile(physical)
+	if err != nil {
+		return
+	}
+	art, err := artifact.Parse(data)
+	if err != nil {
+		return
+	}
+	file := &markup.Element{Type: "file", Attrs: map[string]string{"path": rel, "main": fmt.Sprint(rel == "SKILL.md"), "kind": kind, "file": physical, "dependency": "true"}}
+	if kind == "skill" || kind == "command" || kind == "agent" {
+		name, _ := art.Frontmatter["name"].(string)
+		if name == "" {
+			name = strings.TrimSuffix(filepath.Base(physical), ".md")
+			if filepath.Base(physical) == artifact.MainFileName(artifact.Type(kind)) {
+				name = filepath.Base(filepath.Dir(physical))
+			}
+		}
+		file.Attrs["name"], file.Attrs["artifact"] = name, kind+":"+name
+	}
+	sections, _ := markup.Sections([]byte(art.Body))
+	for _, section := range sections {
+		c.adopt(file, &markup.Element{Type: "section", Attrs: map[string]string{"id": section.Anchor, "title": section.Title, "level": strconv.Itoa(section.Level)}})
 	}
 	c.adopt(parent, file)
 }

@@ -99,7 +99,7 @@ func (e *Error) Explain(query string) string {
 
 var types = map[string][]string{
 	"skill":       {"id", "name", "source"},
-	"file":        {"path", "main", "kind", "name", "artifact", "file"},
+	"file":        {"path", "main", "kind", "name", "artifact", "file", "dependency"},
 	"section":     {"id", "title", "level"},
 	"heading":     {"level"},
 	"paragraph":   nil,

@@ -892,3 +892,39 @@ func (v Value) String() string {
 }
 
 func (q *Query) Params() map[string]bool { return maps.Clone(q.params) }
+
+func (q *Query) Impossible(env Environment) bool {
+	var walk func(p *Pattern) bool
+	walk = func(p *Pattern) bool {
+		for _, a := range p.Attrs {
+			if (a.Relate == "near" || a.Relate == "overlap" || a.Relate == "similar") && !a.Negate {
+				threshold := a.Threshold
+				if a.Limit != "" {
+					threshold = env.Params[a.Limit].Number
+				}
+				if threshold <= 0 {
+					return true
+				}
+			}
+		}
+		for _, alt := range p.Alts {
+			if !walk(alt) {
+				return false
+			}
+		}
+		for _, chain := range p.Chains {
+			for _, link := range chain.Links {
+				if link.Pattern.Quant != '?' && link.Pattern.Quant != '*' && walk(link.Pattern) {
+					return true
+				}
+			}
+		}
+		return len(p.Alts) > 0
+	}
+	for _, p := range q.Members {
+		if walk(p) {
+			return true
+		}
+	}
+	return false
+}

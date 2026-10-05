@@ -11,7 +11,7 @@ standard library's patterns and compose new rules from them.
 |---|---|---|
 | `std/structure` | `large-skill`, `duplicate-heading` | `max-lines` (500) |
 | `std/metadata` | `metadata`, `stale-review`, `invalid-template`, `invalid-markup` | `max-age-days` (180) |
-| `std/references` | `broken-link`, `missing-reference`, `outdated-reference` | `external` list, `outdated` map |
+| `std/references` | `broken-link`, `missing-reference`, `outdated-reference` | `outdated` map |
 | `std/duplicates` | `duplicate-skill`, `duplicate-content` | `min-words` (12) |
 | `std/slots` | `invalid-slot`, `unknown-slot` | |
 | `std/similarity` | `similar-content`, `semantic-content` | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
@@ -30,9 +30,6 @@ disable = ["duplicate-heading"]
 severity = "error"
 max-lines = 600
 
-[lint.config.missing-reference]
-external = ["skill:gestalt", "command:plan"]
-
 [lint.config.outdated-reference.outdated]
 "old-model-id" = "replacement-model-id"
 
@@ -50,6 +47,15 @@ message = "Resolve the TODO before release."
 - `[[lint.rules]]` declares a one-off rule inline with `id`, `query`, `message`,
   and optionally `severity`, `at`, `related`, `params` and `data`.
 - A skill can turn a rule off for itself with `henia.lint.disable` in its frontmatter.
+
+References resolve against everything lint can know, never a hand-kept list:
+
+- the scanned files, including git-ignored dependencies under the scanned
+  paths, such as phora-deployed skills. Those are read for their names and
+  anchors but never linted.
+- the installed library, the same skills `henia show` serves.
+- the commands and agents built into each harness in `henia.toml`, which come
+  from its profile's `commands` and `agents`.
 
 Errors fail lint, and `--strict` also fails on warnings. `--format json` prints
 the diagnostics, including `related` locations and, for similarity findings,
