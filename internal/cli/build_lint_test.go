@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
 )
 
@@ -356,9 +357,11 @@ func TestBuildWithoutSourceConfigReadsWorkingDirectoryConfig(t *testing.T) {
 func TestLintLoadsDependencyModules(t *testing.T) {
 	project := t.TempDir()
 	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	store := library.PackagesDir(library.ProjectKey(project))
 	fixture(t, filepath.Join(project, "skills", "own", "SKILL.md"), "---\nname: own\ndescription: Own skill for tests.\n---\n\n# Own\n\nTODO: finish.\n")
-	fixture(t, filepath.Join(project, ".henia", "sources", "dep", "skills", "dep", "SKILL.md"), "---\nname: dep\ndescription: Dependency skill.\n---\n\n# Dep\n\nTODO: never linted here.\n")
-	fixture(t, filepath.Join(project, ".henia", "sources", "dep", ".henia", "lint", "todo.md"), "## no-todo\n\n```hq\n(rule no-todo :message \"resolve the TODO\" (paragraph :matches /TODO/) @p)\n```\n")
+	fixture(t, filepath.Join(store, "dep", "skills", "dep", "SKILL.md"), "---\nname: dep\ndescription: Dependency skill.\n---\n\n# Dep\n\nTODO: never linted here.\n")
+	fixture(t, filepath.Join(store, "dep", ".henia", "lint", "todo.md"), "## no-todo\n\n```hq\n(rule no-todo :message \"resolve the TODO\" (paragraph :matches /TODO/) @p)\n```\n")
 	cmd := newLintCommand()
 	cmd.SilenceUsage = true
 	out := &bytes.Buffer{}

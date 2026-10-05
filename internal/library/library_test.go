@@ -77,24 +77,18 @@ func TestEnsureGitignoreKeepsExisting(t *testing.T) {
 	}
 }
 
-func TestDependencySources(t *testing.T) {
+func TestDependencyPackages(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
 	project := filepath.Join(root, "dotfiles")
-	tropos := filepath.Join(project, ProjectDir, DependencyDir, "tropos")
-	gestalt := filepath.Join(tropos, ProjectDir, DependencyDir, "gestalt")
-	installed := filepath.Join(root, "data", "henia", "sources", "global")
+	store := PackagesDir(ProjectKey(project))
+	tropos := filepath.Join(store, "tropos")
 	skill(t, tropos, "review")
 	skill(t, tropos, "shared")
-	skill(t, gestalt, "gestalt")
-	skill(t, installed, "shared")
+	skill(t, filepath.Join(store, "gestalt"), "gestalt")
+	skill(t, filepath.Join(PackagesDir("global"), "global"), "shared")
+	skill(t, filepath.Join(PackagesDir(ProjectKey(filepath.Join(root, "other"))), "elsewhere"), "hidden")
 	if err := os.WriteFile(filepath.Join(tropos, ConfigFile), []byte("[harness.claude]\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(gestalt, ProjectDir, DependencyDir), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(tropos, filepath.Join(gestalt, ProjectDir, DependencyDir, "loop")); err != nil {
 		t.Fatal(err)
 	}
 	lib := Open(project, nil)
@@ -102,6 +96,9 @@ func TestDependencySources(t *testing.T) {
 		if got, err := lib.Resolve(ref); err != nil || got.ID != want || (want != "global:shared" && got.Tier != Dependency) {
 			t.Errorf("Resolve(%q) = %q (%s), %v; want %q", ref, got.ID, got.Tier, err, want)
 		}
+	}
+	if _, err := lib.Resolve("hidden"); err == nil {
+		t.Error("another project's packages are visible")
 	}
 	if review, _ := lib.Resolve("review"); review.Origin.Config != filepath.Join(tropos, ConfigFile) {
 		t.Errorf("tropos config = %q", review.Origin.Config)

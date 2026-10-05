@@ -12,18 +12,20 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/defaults"
+	"github.com/srnnkls/henia/internal/deps"
 	"github.com/srnnkls/henia/internal/lint"
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/vendor"
 )
 
 type Config struct {
-	Lint      lint.Options             `toml:"lint,omitempty"`
-	Artifacts []string                 `toml:"artifacts,omitempty"`
-	Build     BuildOptions             `toml:"build,omitempty"`
-	Harness   map[string]henia.Harness `toml:"harness,omitempty"`
-	Preload   preload.Settings         `toml:"preload,omitempty"`
-	Resources ResourceOptions          `toml:"resources,omitempty"`
+	Lint      lint.Options               `toml:"lint,omitempty"`
+	Artifacts []string                   `toml:"artifacts,omitempty"`
+	Build     BuildOptions               `toml:"build,omitempty"`
+	Harness   map[string]henia.Harness   `toml:"harness,omitempty"`
+	Preload   preload.Settings           `toml:"preload,omitempty"`
+	Resources ResourceOptions            `toml:"resources,omitempty"`
+	Depends   map[string]deps.Dependency `toml:"dependencies,omitempty"`
 }
 
 type ResourceOptions struct {

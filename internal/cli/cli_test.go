@@ -20,7 +20,7 @@ func TestHelpDescribesCompilerBoundary(t *testing.T) {
 	}
 	for _, command := range rootCmd.Commands() {
 		switch command.Name() {
-		case "add", "deploy", "sync", "update":
+		case "deploy":
 			t.Fatalf("deployment command still registered: %s", command.Name())
 		}
 	}

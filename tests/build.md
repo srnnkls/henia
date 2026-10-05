@@ -10,6 +10,7 @@ Usage:
   henia [command]
 
 Available Commands:
+  add         Declare a skill package dependency and fetch it
   build       Compile local canonical artifacts for multiple harnesses
   completion  Generate the autocompletion script for the specified shell
   context     Print a skill's runtime context
@@ -18,8 +19,11 @@ Available Commands:
   ls          List the skills in the library
   preload     Run one skill preload under Henia's sandbox and refusal rules
   query       Match S-expression patterns against library skills and their resources
+  rm          Remove a skill package dependency and its files
   show        Print a library skill or one of its sections, rendered for the caller
   slots       Resolve the installed providers of skill slots
+  sync        Fetch the declared skill packages at their locked commits
+  update      Move the declared skill packages to their latest commits
 
 Flags:
       --config string   Config file path (default "henia.toml")

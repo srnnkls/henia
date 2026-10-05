@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	ProjectDir    = ".henia"
-	ConfigFile    = "henia.toml"
-	SkillsDir     = "skills"
-	Project       = "project"
-	Dependency    = "dependency"
-	Global        = "global"
-	DependencyDir = "sources"
+	ProjectDir = ".henia"
+	ConfigFile = "henia.toml"
+	SkillsDir  = "skills"
+	Project    = "project"
+	Dependency = "dependency"
+	Global     = "global"
+	LockFile   = "henia.lock"
 )
 
 type File struct {
@@ -124,13 +124,15 @@ func Open(project string, extra []string) *Library {
 			}
 		}
 		l.add(Source{Name: Project, Tier: Project, Root: root, Config: config})
-		l.dependencies(project, map[string]bool{})
+		l.dependencies(project)
 	}
 	roots := slices.Clone(extra)
-	if entries, err := os.ReadDir(SourcesDir()); err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() {
-				roots = append(roots, filepath.Join(SourcesDir(), entry.Name()))
+	for _, dir := range []string{PackagesDir("global"), SourcesDir()} {
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					roots = append(roots, filepath.Join(dir, entry.Name()))
+				}
 			}
 		}
 	}
@@ -151,24 +153,33 @@ func source(root, tier string) Source {
 	return s
 }
 
-func (l *Library) dependencies(project string, seen map[string]bool) {
-	dir := filepath.Join(project, ProjectDir, DependencyDir)
+func PackagesDir(scope string) string {
+	return filepath.Join(xdg("XDG_DATA_HOME", ".local", "share"), "henia", "packages", scope)
+}
+
+func StateDir(scope string) string {
+	return filepath.Join(xdg("XDG_STATE_HOME", ".local", "state"), "henia", "packages", scope)
+}
+
+func ProjectKey(project string) string {
+	absolute, err := filepath.Abs(project)
+	if err != nil {
+		absolute = project
+	}
+	sum := sha256.Sum256([]byte(absolute))
+	return filepath.Base(absolute) + "-" + hex.EncodeToString(sum[:])[:12]
+}
+
+func (l *Library) dependencies(project string) {
+	dir := PackagesDir(ProjectKey(project))
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
 	for _, entry := range entries {
-		root := filepath.Join(dir, entry.Name())
-		physical, err := filepath.EvalSymlinks(root)
-		if err != nil || seen[physical] {
-			continue
+		if root := filepath.Join(dir, entry.Name()); entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			l.add(source(root, Dependency))
 		}
-		if info, err := os.Stat(physical); err != nil || !info.IsDir() {
-			continue
-		}
-		seen[physical] = true
-		l.add(source(root, Dependency))
-		l.dependencies(root, seen)
 	}
 }
 
@@ -272,7 +283,7 @@ func digest(dir string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-const gitignore = "/*\n!/.gitignore\n!/henia.toml\n!/skills/\n!/harnesses/\n!/lint/\n"
+const gitignore = "/*\n!/.gitignore\n!/henia.toml\n!/henia.lock\n!/skills/\n!/harnesses/\n!/lint/\n"
 
 func EnsureGitignore(dir string) error {
 	path := filepath.Join(dir, ".gitignore")
