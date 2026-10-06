@@ -243,7 +243,6 @@ a built-in one:
 ```toml
 [preload]
 timeout = "10s"      # per preload
-fas_timeout = "10s"  # per FAS consultation
 output = 8000
 
 [[preload.refuse]]
@@ -272,9 +271,22 @@ prefix_rule(pattern=["henia", "show"], decision="allow")
 prefix_rule(pattern=["henia", "preload"], decision="allow")
 ```
 
-When [FAS](https://github.com/srnnkls/fas) is on PATH, Henia also asks
-`fas eval --harness henia` after its own check, so existing rule sets can
-refuse more; its rule name appears as `blocked by fas/<rule>`.
+The user `henia.toml` can name a policy command that Henia asks after its own
+check, so your own rules refuse more:
+
+```toml
+[preload]
+policy = "gate check --caller henia"
+policy_timeout = "10s"
+```
+
+The command is split into words like a shell would, without running a shell,
+and reads `{command, skill, package, tier, caller, cwd}` as JSON on stdin. It
+answers `{"decision": "allow" | "deny", "command", "rule", "reason"}`; a deny
+prints as `blocked by gate/<rule>: <reason>`, and a rewritten command passes
+Henia's check again. A policy that fails, times out or answers anything else
+blocks the preload. Without `policy`, Henia asks no one. A project `henia.toml`
+cannot set one.
 
 ## Skill modes
 
@@ -354,10 +366,3 @@ when the package's own instructions already describe the runtime.
 
 Harnesses truncate skill listings early, so keep about ten skills static or
 hybrid per harness.
-
-## Guarding
-
-Library content is meant to be read through the runtime. A FAS rule can deny
-direct reads of `.henia/skills` and `henia/packages` paths, as
-[Tropos's `henia_library.cue`](https://github.com/srnnkls/tropos/blob/main/rules/fas/security/henia_library.cue)
-does for Read, Grep, Glob and reading Bash commands.

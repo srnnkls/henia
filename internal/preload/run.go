@@ -11,20 +11,23 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"mvdan.cc/sh/v3/shell"
 )
 
 const (
-	DefaultTimeout    = 10 * time.Second
-	DefaultOutput     = 8000
-	DefaultFASTimeout = 10 * time.Second
+	DefaultTimeout       = 10 * time.Second
+	DefaultOutput        = 8000
+	DefaultPolicyTimeout = 10 * time.Second
 )
 
 type Settings struct {
-	Timeout     string `toml:"timeout,omitempty"`
-	FASTimeout  string `toml:"fas_timeout,omitempty"`
-	Output      int    `toml:"output,omitempty"`
-	Unsandboxed string `toml:"unsandboxed,omitempty"`
-	Refuse      []Rule `toml:"refuse,omitempty"`
+	Timeout       string `toml:"timeout,omitempty"`
+	Policy        string `toml:"policy,omitempty"`
+	PolicyTimeout string `toml:"policy_timeout,omitempty"`
+	Output        int    `toml:"output,omitempty"`
+	Unsandboxed   string `toml:"unsandboxed,omitempty"`
+	Refuse        []Rule `toml:"refuse,omitempty"`
 }
 
 type Context struct {
@@ -37,7 +40,8 @@ type Context struct {
 
 type Runner struct {
 	Timeout        time.Duration
-	FASTimeout     time.Duration
+	Policy         []string
+	PolicyTimeout  time.Duration
 	Output         int
 	RunUnsandboxed bool
 	Refuse         []Rule
@@ -45,7 +49,7 @@ type Runner struct {
 }
 
 func NewRunner(user, project Settings) (*Runner, error) {
-	r := &Runner{Timeout: DefaultTimeout, FASTimeout: DefaultFASTimeout, Output: DefaultOutput, Sandbox: sandbox}
+	r := &Runner{Timeout: DefaultTimeout, PolicyTimeout: DefaultPolicyTimeout, Output: DefaultOutput, Sandbox: sandbox}
 	for _, layer := range []struct {
 		Settings
 		user bool
@@ -53,7 +57,7 @@ func NewRunner(user, project Settings) (*Runner, error) {
 		for _, setting := range []struct {
 			name, value string
 			target      *time.Duration
-		}{{"timeout", layer.Timeout, &r.Timeout}, {"fas_timeout", layer.FASTimeout, &r.FASTimeout}} {
+		}{{"timeout", layer.Timeout, &r.Timeout}, {"policy_timeout", layer.PolicyTimeout, &r.PolicyTimeout}} {
 			if setting.value == "" {
 				continue
 			}
@@ -78,6 +82,16 @@ func NewRunner(user, project Settings) (*Runner, error) {
 			r.RunUnsandboxed = true
 		default:
 			return nil, fmt.Errorf(`preload.unsandboxed must be "skip" or "run", got %q`, layer.Unsandboxed)
+		}
+		if layer.Policy != "" {
+			if !layer.user {
+				return nil, errors.New("preload.policy is honoured only in the user henia.toml")
+			}
+			words, err := shell.Fields(layer.Policy, nil)
+			if err != nil || len(words) == 0 {
+				return nil, fmt.Errorf("preload.policy %q is not a command", layer.Policy)
+			}
+			r.Policy = words
 		}
 		r.Refuse = append(r.Refuse, layer.Refuse...)
 	}
@@ -151,15 +165,15 @@ func (r *Runner) Run(ctx context.Context, command string, c Context) string {
 	if refusal := Check(command, c.Dir, r.Refuse); refusal != nil {
 		return "henia: " + refusal.String()
 	}
-	command, refusal, err := r.consultFAS(ctx, command, c)
+	command, refusal, err := r.consultPolicy(ctx, command, c)
 	switch {
 	case err != nil:
-		return "henia: blocked: fas failed: " + err.Error()
+		return "henia: blocked: " + r.policyName() + " failed: " + err.Error()
 	case refusal != nil:
 		return "henia: " + refusal.String()
 	}
 	if refusal := Check(command, c.Dir, r.Refuse); refusal != nil {
-		return "henia: " + refusal.String() + " (after fas rewrote it)"
+		return "henia: " + refusal.String() + " (after " + r.policyName() + " rewrote it)"
 	}
 	shell, err := exec.LookPath("bash")
 	if err != nil {
@@ -225,16 +239,17 @@ func (l *limited) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-type fasResponse struct {
+type policyResponse struct {
 	Decision string `json:"decision"`
 	Command  string `json:"command"`
 	Rule     string `json:"rule"`
 	Reason   string `json:"reason"`
 }
 
-func (r *Runner) consultFAS(ctx context.Context, command string, c Context) (string, *Refusal, error) {
-	fas, err := exec.LookPath("fas")
-	if err != nil {
+func (r *Runner) policyName() string { return filepath.Base(r.Policy[0]) }
+
+func (r *Runner) consultPolicy(ctx context.Context, command string, c Context) (string, *Refusal, error) {
+	if len(r.Policy) == 0 {
 		return command, nil, nil
 	}
 	input, err := json.Marshal(map[string]string{
@@ -243,9 +258,9 @@ func (r *Runner) consultFAS(ctx context.Context, command string, c Context) (str
 	if err != nil {
 		return "", nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, r.FASTimeout)
+	ctx, cancel := context.WithTimeout(ctx, r.PolicyTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, fas, "eval", "--harness", "henia")
+	cmd := exec.CommandContext(ctx, r.Policy[0], r.Policy[1:]...)
 	cmd.Dir = c.Dir
 	cmd.Stdin = bytes.NewReader(input)
 	var stderr bytes.Buffer
@@ -254,12 +269,12 @@ func (r *Runner) consultFAS(ctx context.Context, command string, c Context) (str
 	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return "", nil, fmt.Errorf("timed out after %s", r.FASTimeout)
+		return "", nil, fmt.Errorf("timed out after %s", r.PolicyTimeout)
 	}
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 	}
-	var resp fasResponse
+	var resp policyResponse
 	if err := json.Unmarshal(out, &resp); err != nil {
 		return "", nil, fmt.Errorf("unreadable response %q", strings.TrimSpace(string(out)))
 	}
@@ -270,9 +285,9 @@ func (r *Runner) consultFAS(ctx context.Context, command string, c Context) (str
 		}
 		return command, nil, nil
 	case "deny":
-		rule := "fas"
+		rule := r.policyName()
 		if resp.Rule != "" {
-			rule = "fas/" + resp.Rule
+			rule += "/" + resp.Rule
 		}
 		return "", &Refusal{Rule: rule, Reason: resp.Reason}, nil
 	}
