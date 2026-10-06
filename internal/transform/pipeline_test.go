@@ -80,3 +80,20 @@ func BenchmarkPipeline(b *testing.B) {
 		}
 	}
 }
+
+func TestStaticBlocksAndSlots(t *testing.T) {
+	source := "# Skill\n\n:::static\n## Routes\n\n| a | b |\n\n:::instruction{priority=high}\nRule.\n:::\n:::\n\n## Detail\n\nMore :slot[code.style code.check] and `:slot[literal]`.\n\n```md\n:::static\nliteral\n:::\n```\n\n:::static\nLast :slot[code.check].\n:::\n"
+	art := &artifact.Artifact{Body: source}
+	for head, want := range map[bool]string{
+		false: "# Skill\n\n## Routes\n\n| a | b |\n\n:::instruction{priority=\"high\"}\nRule.\n:::\n\n## Detail\n\nMore !`henia slots code.style code.check` and `:slot[literal]`.\n\n```md\n:::static\nliteral\n:::\n```\n\nLast !`henia slots code.check`.\n",
+		true:  "## Routes\n\n| a | b |\n\n:::instruction{priority=\"high\"}\nRule.\n:::\n\nLast !`henia slots code.check`.\n",
+	} {
+		got, err := (&Transformer{OutputFormat: "directives", Head: head}).Transform(art)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Body != want {
+			t.Errorf("head=%v:\ngot  %q\nwant %q", head, got.Body, want)
+		}
+	}
+}

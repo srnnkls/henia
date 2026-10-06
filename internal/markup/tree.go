@@ -2,6 +2,7 @@ package markup
 
 import (
 	"bytes"
+	"errors"
 	"slices"
 	"sort"
 	"strconv"
@@ -27,6 +28,7 @@ type Element struct {
 	Children      []*Element
 	Index         int
 	Order         int
+	directive     *directive
 }
 
 // Tree places extra elements under the innermost block that spans them. A
@@ -38,6 +40,9 @@ func Tree(source []byte, extra ...*Element) (*Element, error) {
 	b.blocks(root, doc, true)
 	b.finish(root)
 	Graft(root, extra...)
+	if err == nil {
+		err = b.err
+	}
 	return root, err
 }
 
@@ -111,6 +116,7 @@ type builder struct {
 	source []byte
 	body   string
 	lines  []int
+	err    error
 }
 
 func (b *builder) file() *Element {
@@ -176,7 +182,7 @@ func (b *builder) block(node ast.Node) *Element {
 		e.Type = "table"
 		b.inlines(e, v)
 	case *blockNode:
-		e.Type, e.Attrs["name"], e.Start, e.End = "directive", v.name, v.open.start, v.close.stop
+		e.Type, e.Attrs["name"], e.Start, e.End, e.directive = "directive", v.name, v.open.start, v.close.stop, &v.directive
 		for _, a := range v.attrs {
 			e.Attrs[a.name] = a.value
 		}
@@ -236,7 +242,8 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 			}
 			return ast.WalkSkipChildren, nil
 		case *inlineNode:
-			e = &Element{Type: "directive", Attrs: map[string]string{"name": v.name, "inline": "true"}}
+			d := v.directive
+			e = &Element{Type: "directive", Attrs: map[string]string{"name": v.name, "inline": "true"}, directive: &d}
 			for _, a := range v.attrs {
 				e.Attrs[a.name] = a.value
 			}
@@ -285,14 +292,26 @@ func (b *builder) content(directive *Element, content span) {
 		return
 	}
 	nested := &builder{source: b.source[content.start:content.stop]}
-	doc, _ := run(inlineDirectiveParser, nested.source)
+	doc, err := run(inlineDirectiveParser, nested.source)
 	for block := doc.FirstChild(); block != nil; block = block.NextSibling() {
 		nested.inlines(directive, block)
+	}
+	if err == nil {
+		err = nested.err
+	}
+	if location, ok := errors.AsType[*Error](err); ok && b.err == nil {
+		b.err = locate(b.source, content.start+location.Column-1, location.Message)
 	}
 	for _, child := range directive.Children {
 		child.Walk(func(e *Element) bool {
 			e.Start += content.start
 			e.End += content.start
+			if e.directive != nil {
+				e.directive.open.start += content.start
+				e.directive.open.stop += content.start
+				e.directive.close.start += content.start
+				e.directive.close.stop += content.start
+			}
 			return true
 		})
 	}

@@ -80,27 +80,28 @@ func (h harnessRule) render(row pattern.Row, kind string) (string, error) {
 	return wrap(b.String()), err
 }
 
-type edit struct {
-	start, end int
-	text, rule string
-}
-
-func Render(body string, rendering Rendering) (string, []Rendered, []string, error) {
+func Rewrites(tree *markup.Element, rendering Rendering) ([]markup.Edit, []Rendered, error) {
 	r, err := recognition()
 	if err != nil {
-		return "", nil, nil, err
-	}
-	tree, err := markup.Tree([]byte(body))
-	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, err
 	}
 	refs, err := Recognize(tree)
 	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, err
 	}
 	addresses, err := Addresses(tree)
 	if err != nil {
-		return "", nil, nil, err
+		return nil, nil, err
+	}
+	sources := make([]Rendered, 0, len(refs)+len(addresses))
+	for _, ref := range refs {
+		sources = append(sources, Rendered{Reference: ref})
+	}
+	for _, address := range addresses {
+		sources = append(sources, Rendered{Reference: address, Address: true})
+	}
+	if len(refs) == 0 {
+		return nil, sources, nil
 	}
 	tables := maps.Clone(r.tables)
 	tools := pattern.Table{Keys: slices.Sorted(maps.Keys(rendering.Tools))}
@@ -109,7 +110,7 @@ func Render(body string, rendering Rendering) (string, []Rendered, []string, err
 	}
 	tables["tools"] = tools
 	tables["served"] = pattern.Table{List: true, Values: slices.Sorted(maps.Keys(rendering.Served))}
-	var edits []edit
+	var edits []markup.Edit
 	apply := func(rewrite *pattern.Rewrite, output func(pattern.Row) (string, error)) error {
 		rows, err := rewrite.Query.Run(tree, pattern.Environment{Data: pattern.DataRoot(tables)})
 		if err != nil {
@@ -121,76 +122,58 @@ func Render(body string, rendering Rendering) (string, []Rendered, []string, err
 			if err != nil {
 				return fmt.Errorf("rewrite %s: %w", rewrite.ID, err)
 			}
-			edits = append(edits, edit{target.Start, target.End, text, rewrite.ID})
+			edits = append(edits, markup.Edit{Start: target.Start, End: target.End, Text: text, Rule: rewrite.ID})
 		}
 		return nil
 	}
 	for _, rewrite := range r.rewrites {
 		if err := apply(rewrite, func(row pattern.Row) (string, error) { return rewrite.Output.Render(row, nil, nil), nil }); err != nil {
-			return "", nil, nil, err
+			return nil, nil, err
 		}
 	}
 	for _, kind := range slices.Sorted(maps.Keys(rendering.References)) {
 		rule, err := harnessRewrite(kind, rendering.References[kind])
 		if err != nil {
-			return "", nil, nil, err
+			return nil, nil, err
 		}
 		if err := apply(rule.rewrite, func(row pattern.Row) (string, error) { return rule.render(row, kind) }); err != nil {
-			return "", nil, nil, err
+			return nil, nil, err
 		}
 	}
-	slices.SortStableFunc(edits, func(a, b edit) int { return a.start - b.start })
-	var out strings.Builder
-	var kept []edit
-	var dropped []string
-	position, shifts := 0, map[int]int{}
-	for _, e := range edits {
-		if len(kept) > 0 && kept[len(kept)-1].start == e.start && kept[len(kept)-1].end == e.end {
-			continue
-		}
-		if e.start < position {
-			line := strings.Count(body[:e.start], "\n") + 1
-			dropped = append(dropped, fmt.Sprintf("line %d: rewrite %s overlaps an earlier rewrite and was dropped", line, e.rule))
-			continue
-		}
-		out.WriteString(body[position:e.start])
-		shifts[e.start] = out.Len()
-		out.WriteString(e.text)
-		position = e.end
-		kept = append(kept, e)
-	}
-	out.WriteString(body[position:])
-	rendered := make([]Rendered, 0, len(refs)+len(addresses))
-	sources := make([]Rendered, 0, len(refs)+len(addresses))
-	for _, ref := range refs {
-		sources = append(sources, Rendered{Reference: ref})
-	}
-	for _, address := range addresses {
-		sources = append(sources, Rendered{Reference: address, Address: true})
-	}
+	return edits, sources, nil
+}
+
+func Locate(applied markup.Applied, sources []Rendered) []Rendered {
+	var rendered []Rendered
 	for _, source := range sources {
-		ref := source.Reference
-		start, end := ref.Start, ref.End
-		delta, rule, inside := 0, "", false
-		for _, e := range kept {
-			switch {
-			case e.start == start && e.end == end:
-				rule = e.rule
-				ref.Start, ref.End = shifts[e.start], shifts[e.start]+len(e.text)
-			case e.end <= start:
-				delta += len(e.text) - (e.end - e.start)
-			case e.start < end:
-				inside = true
-			}
-		}
-		if inside {
+		start, end, rule, ok := applied.Span(source.Start, source.End)
+		if !ok {
 			continue
 		}
-		if rule == "" {
-			ref.Start, ref.End = start+delta, end+delta
-		}
-		rendered = append(rendered, Rendered{ref, rule, source.Address})
+		source.Start, source.End, source.Rewrite = start, end, rule
+		rendered = append(rendered, source)
 	}
 	slices.SortFunc(rendered, func(a, b Rendered) int { return a.Start - b.Start })
-	return out.String(), rendered, dropped, nil
+	return rendered
+}
+
+func Render(body string, rendering Rendering) (string, []string, error) {
+	tree, err := markup.Tree([]byte(body))
+	if err != nil {
+		return "", nil, err
+	}
+	edits, _, err := Rewrites(tree, rendering)
+	if err != nil {
+		return "", nil, err
+	}
+	applied := markup.Apply(body, edits)
+	return applied.Text, Warnings(body, applied.Dropped), nil
+}
+
+func Warnings(body string, dropped []markup.Edit) []string {
+	var warnings []string
+	for _, e := range dropped {
+		warnings = append(warnings, fmt.Sprintf("line %d: %s overlaps an earlier rewrite and was dropped", strings.Count(body[:e.Start], "\n")+1, e.Rule))
+	}
+	return warnings
 }
