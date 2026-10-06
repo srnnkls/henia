@@ -93,6 +93,9 @@ ambiguous, and Henia asks for the qualified name. Same-named skills never
 replace each other silently. `<skill>#<section>` addresses a heading anchor,
 as in `henia show tropos:git#commits`.
 
+A dependency hides a global package of the same name, so a project that pins
+its own Tropos reads only that one.
+
 `henia build` compiles the project's skills together with its dependencies'. A
 dependency's skills render with its own harness `variables`, `tools` and
 `references` as defaults. The project's harness of the same name overrides them
