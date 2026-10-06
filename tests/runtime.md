@@ -31,10 +31,11 @@ lists the dynamic ones.
 
 ```scrut
 $ grep -h -e '^Follow' -e 'henia slots' "$T/build/claude/skills/code/SKILL.md" "$T/build/pi/skills/code/SKILL.md"
+allowed-tools: Bash(henia slots *)
 Follow `henia show style-guide` and `henia show checks`.
-!`henia preload --skill code -- 'henia slots --markdown code.style code.check'`
+!`henia slots --markdown code.style code.check`
 Follow `/skill:style-guide` and `/skill:checks`.
-run first: `henia preload --skill code -- 'henia slots --markdown code.style code.check'`
+run first: `henia slots --markdown code.style code.check`
 ```
 
 The catalog skill names each dynamic skill with its description and the
@@ -520,7 +521,7 @@ echo '\''done'\'''
 ---
 # Status
 
-Branch: run first: `henia preload --skill status -- 'git branch --show-current'`
+Branch: the output of `henia preload --skill status -- 'git branch --show-current'`
 
 Run first:
 
@@ -675,17 +676,16 @@ $ H="$T/hybrid"; mk "$H/skills/route/SKILL.md" '---\nname: route\ndescription: R
 > grep allowed-tools "$T/hybrid-build/claude/skills/route/SKILL.md"
 > sed -e '1,/^---$/d' "$T/hybrid-build/codex/skills/route/SKILL.md"
 
-!`henia preload --skill route -- 'henia show route --head'`
-allowed-tools: Bash(henia preload *)
+!`henia show route --head`
+allowed-tools: Bash(henia show *)
 
 ## Routes
 
 Use `$checks` first.
 
+run first: `henia show route --toc`
 
-run first: `henia preload --skill route -- 'henia show route --toc'`
-
-run first: `henia preload --skill route -- 'henia context route'`
+run first: `henia context route`
 ```
 
 `henia show --head` renders the blocks, the skill's contents and the contents

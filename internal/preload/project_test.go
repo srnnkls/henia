@@ -5,7 +5,7 @@ import "testing"
 func TestProject(t *testing.T) {
 	body := "Status: !`git status --short`\n\n- Log:\n\n  ```!\n  echo 'a'\n  git log -1\n  ```\n\nShown, not run: `` !`date` ``\n"
 	native := "Status: !`henia preload --skill s -- 'git status --short'`\n\n- Log:\n\n  ```!\n  henia preload --skill s -- 'echo '\\''a'\\''\n  git log -1'\n  ```\n\nShown, not run: `` !`date` ``\n"
-	runFirst := "Status: run first: `henia preload --skill s -- 'git status --short'`\n\n- Log:\n\n  Run first:\n\n  ```bash\n  henia preload --skill s -- 'echo '\\''a'\\''\n  git log -1'\n  ```\n\nShown, not run: `` !`date` ``\n"
+	runFirst := "Status: the output of `henia preload --skill s -- 'git status --short'`\n\n- Log:\n\n  Run first:\n\n  ```bash\n  henia preload --skill s -- 'echo '\\''a'\\''\n  git log -1'\n  ```\n\nShown, not run: `` !`date` ``\n"
 	if got := Project(body, "s", true); got != native {
 		t.Errorf("native:\n%s\nwant:\n%s", got, native)
 	}
@@ -14,6 +14,17 @@ func TestProject(t *testing.T) {
 	}
 	if got := Project("!`` echo `x` ``\n", "s", true); got != "!`` henia preload --skill s -- 'echo `x`' ``\n" {
 		t.Errorf("backticks: %q", got)
+	}
+	own := "Commits:\n\n!`henia slots --markdown git.commits`\n\nTone !`henia slots --inline release.tone` here.\n\n!`henia show s --toc`\n"
+	if got := Project(own, "s", true); got != own {
+		t.Errorf("own native: %q", got)
+	}
+	ownRunFirst := "Commits:\n\nrun first: `henia slots --markdown git.commits`\n\nTone the output of `henia slots --inline release.tone` here.\n\nrun first: `henia show s --toc`\n"
+	if got := Project(own, "s", false); got != ownRunFirst {
+		t.Errorf("own run first:\n%s\nwant:\n%s", got, ownRunFirst)
+	}
+	if got := Tools(own + "!`date`\n"); len(got) != 3 || got[0] != "Bash(henia slots *)" || got[1] != "Bash(henia show *)" || got[2] != RunnerTool {
+		t.Errorf("tools: %q", got)
 	}
 	if got := Project("plain\n", "s", true); got != "plain\n" {
 		t.Errorf("unchanged: %q", got)

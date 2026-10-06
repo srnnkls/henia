@@ -146,7 +146,7 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string, mode 
 		placedContents, placedRelated := false, false
 		if mode.head {
 			static := strings.TrimSpace(r.render(entry, true))
-			placedContents, placedRelated = places(static, tocPreload, entry.Name, name), places(static, contextPreload, entry.Name, name)
+			placedContents, placedRelated = places(static, preload.ShowCommand, entry.Name, name), places(static, preload.ContextCommand, entry.Name, name)
 			if static != "" {
 				fmt.Fprint(out, expand(entry, static+"\n\n"))
 			}

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/srnnkls/henia/internal/library"
@@ -11,12 +10,6 @@ import (
 )
 
 const inlineDepth = 4
-
-var (
-	slotsPreload   = regexp.MustCompile(`^henia slots --(markdown|inline)((?: [A-Za-z0-9_.-]+)+)$`)
-	tocPreload     = regexp.MustCompile(`^henia show (\S+) --toc$`)
-	contextPreload = regexp.MustCompile(`^henia context (\S+)$`)
-)
 
 type resolver struct {
 	lib        *library.Library
@@ -32,10 +25,10 @@ func newResolver(lib *library.Library, r *renderer, project string) *resolver {
 }
 
 func (x *resolver) resolve(command string) (string, bool) {
-	if m := slotsPreload.FindStringSubmatch(command); m != nil {
+	if m := preload.SlotsCommand.FindStringSubmatch(command); m != nil {
 		return x.slots(m[1] == "inline", strings.Fields(m[2])), true
 	}
-	if m := tocPreload.FindStringSubmatch(command); m != nil {
+	if m := preload.ShowCommand.FindStringSubmatch(command); m != nil && m[2] == "toc" {
 		entry, err := x.lib.Resolve(m[1])
 		if err != nil {
 			return fmt.Sprintf("henia: %v\n", err), true
@@ -44,7 +37,7 @@ func (x *resolver) resolve(command string) (string, bool) {
 		contents(&b, x.lib.Reference(entry), x.render.body(entry))
 		return b.String(), true
 	}
-	if m := contextPreload.FindStringSubmatch(command); m != nil {
+	if m := preload.ContextCommand.FindStringSubmatch(command); m != nil {
 		entry, err := x.lib.Resolve(m[1])
 		if err != nil {
 			return fmt.Sprintf("henia: %v\n", err), true

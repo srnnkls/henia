@@ -5,8 +5,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/preload"
 )
 
 func Digest(canonical []byte) string {
@@ -28,5 +31,9 @@ func hybridHead(head, canonical *artifact.Artifact, native bool) {
 		head.Body = fmt.Sprintf("!`henia show %s --head`\n", name)
 		return
 	}
-	head.Body += fmt.Sprintf("\n\n!`henia show %s --toc`\n\n!`henia context %s`\n", name, name)
+	for _, command := range []string{"henia show " + name + " --toc", "henia context " + name} {
+		if !slices.ContainsFunc(preload.Find([]byte(head.Body)), func(p preload.Preload) bool { return p.Command == command }) {
+			head.Body = strings.TrimRight(head.Body, "\n") + "\n\n!`" + command + "`\n"
+		}
+	}
 }

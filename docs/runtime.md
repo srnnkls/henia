@@ -403,17 +403,26 @@ henia: blocked by henia/not-a-preload: changelog declares no such preload
 ```
 ````
 
-Claude runs the rewritten preload natively in `!` syntax, and the build adds
-`Bash(henia preload *)` to a declared `allowed-tools`. Harnesses without native
-preloads get a run-first line instead.
+Henia's own read commands stay as they are, with no wrapper:
+`henia slots --markdown|--inline …`, `henia show <skill> --head|--toc` and
+`henia context <skill>`. They are what `:slot[…]`, `:contents[]`, `:related[]`
+and a hybrid head render to.
+
+Claude runs preloads natively in `!` syntax, and the build adds the matching
+`Bash(henia preload *)`, `Bash(henia slots *)`, `Bash(henia show *)` or
+`Bash(henia context *)` to a declared `allowed-tools`. Harnesses without native
+preloads get a run-first line instead, or "the output of" a command that sits
+inside a sentence. `henia show` resolves all three cases itself.
 
 macOS cannot nest one sandbox inside another, so Henia's sandbox cannot start
-inside Codex's. Let Codex run `henia show` and `henia preload` outside its
-sandbox, and Henia sandboxes each preload itself:
+inside Codex's. Let Codex run Henia's commands outside its sandbox, and Henia
+sandboxes each preload itself:
 
 ```
 # ~/.codex/rules/henia.rules
 prefix_rule(pattern=["henia", "show"], decision="allow")
+prefix_rule(pattern=["henia", "slots"], decision="allow")
+prefix_rule(pattern=["henia", "context"], decision="allow")
 prefix_rule(pattern=["henia", "preload"], decision="allow")
 ```
 
@@ -506,16 +515,17 @@ single preload:
 ```console
 $ sed -n '/^---$/,$p' build/claude/skills/release/SKILL.md
 ---
-allowed-tools: Bash(henia preload *)
+allowed-tools: Bash(henia show *)
 description: Cut a release. Use when tagging a version or publishing notes.
 name: release
 ---
 
-!`henia preload --skill release -- 'henia show release --head'`
+!`henia show release --head`
 ```
 
 Elsewhere the head holds the rendered `:::static` blocks, then run-first lines
-for `henia show <skill> --toc` and `henia context <skill>`:
+for `henia show <skill> --toc` and `henia context <skill>` unless the blocks
+place them:
 
 ```console
 $ sed -n '/^## Routes/,$p' build/codex/skills/release/SKILL.md
@@ -526,10 +536,9 @@ $ sed -n '/^## Routes/,$p' build/codex/skills/release/SKILL.md
 | `notes` | Draft notes with `henia show changelog` |
 | `tag <version>` | Tag after the checks in Checklist (`henia show 'release#checklist'`) pass |
 
+run first: `henia show release --toc`
 
-run first: `henia preload --skill release -- 'henia show release --toc'`
-
-run first: `henia preload --skill release -- 'henia context release'`
+run first: `henia context release`
 ```
 
 `henia show <skill> --head` prints the `:::static` blocks, the skill's contents
