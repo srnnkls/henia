@@ -2,13 +2,10 @@ package reference
 
 import (
 	"regexp"
-	"slices"
 	"strings"
 
+	"github.com/srnnkls/henia/internal/markup"
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/text"
-	"github.com/yuin/goldmark/util"
 )
 
 type Type string
@@ -44,13 +41,7 @@ var artifactName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 func Parse(body string) []Reference {
 	var refs []Reference
 	source := []byte(body)
-	// Rendered XML directives still contain Markdown references. Keep their
-	// contents visible to inline parsing while retaining Markdown code blocks.
-	blocks := slices.DeleteFunc(parser.DefaultBlockParsers(), func(p util.PrioritizedValue) bool {
-		return p.Value == parser.NewHTMLBlockParser()
-	})
-	p := parser.NewParser(parser.WithBlockParsers(blocks...), parser.WithInlineParsers(parser.DefaultInlineParsers()...))
-	root := p.Parse(text.NewReader(source))
+	root := markup.ParseHTMLAsText(source)
 	ast.Walk(root, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		span, ok := node.(*ast.CodeSpan)
 		if !entering || !ok || span.ChildCount() != 1 {

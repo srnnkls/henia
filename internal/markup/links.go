@@ -3,10 +3,7 @@ package markup
 import (
 	"strings"
 
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/text"
 )
 
 type Link struct {
@@ -15,9 +12,7 @@ type Link struct {
 }
 
 func Links(source []byte) []Link {
-	p := &directiveParser{}
-	md := goldmark.New(goldmark.WithExtensions(extension.Table), goldmark.WithParserOptions(directiveOptions(p)...))
-	doc := md.Parser().Parse(text.NewReader(source))
+	doc, _ := run(linkParser, source)
 	var links []Link
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		link, ok := n.(*ast.Link)

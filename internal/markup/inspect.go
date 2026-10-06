@@ -3,11 +3,7 @@ package markup
 import (
 	"fmt"
 
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/text"
-	"github.com/yuin/goldmark/util"
 )
 
 // Node is a stable, read-only view for lint rules. Offsets address input bytes.
@@ -26,17 +22,10 @@ type Node struct {
 }
 
 func parse(source []byte, inline bool) (ast.Node, error) {
-	p := &directiveParser{}
-	md := goldmark.New(goldmark.WithParserOptions(directiveOptions(p)...))
 	if inline {
-		md = goldmark.New(goldmark.WithParser(parser.NewParser(
-			parser.WithBlockParsers(util.Prioritized(parser.NewParagraphParser(), 1000)),
-			parser.WithInlineParsers(parser.DefaultInlineParsers()...),
-			parser.WithInlineParsers(util.Prioritized(&inlineParser{p}, 150)),
-		)))
+		return run(inlineDirectiveParser, source)
 	}
-	root := md.Parser().Parse(text.NewReader(source))
-	return root, p.err
+	return run(directiveParser, source)
 }
 
 // Inspect uses the same Goldmark extension as rendering, including nested inline

@@ -7,12 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 )
 
@@ -35,25 +32,21 @@ type Element struct {
 // Tree places extra elements under the innermost block that spans them. A
 // directive error still yields the tree.
 func Tree(source []byte, extra ...*Element) (*Element, error) {
-	p := &directiveParser{}
-	md := goldmark.New(goldmark.WithExtensions(extension.Table), goldmark.WithParserOptions(append(directiveOptions(p), parser.WithAutoHeadingID())...))
-	doc := md.Parser().Parse(text.NewReader(source))
+	doc, err := run(documentParser, source)
 	b := &builder{source: source}
 	root := b.file()
-	root.Body = string(source)
 	b.blocks(root, doc, true)
 	b.finish(root)
 	for _, e := range extra {
 		place(root, e)
 	}
 	b.finish(root)
-	return root, p.err
+	return root, err
 }
 
 func PlainTree(source []byte) *Element {
 	b := &builder{source: source}
 	root := b.file()
-	root.Body = string(source)
 	start := -1
 	for offset := 0; offset <= len(source); {
 		end := bytes.IndexByte(source[offset:], '\n')
@@ -107,16 +100,18 @@ func (e *Element) add(child *Element) {
 
 type builder struct {
 	source []byte
+	body   string
 	lines  []int
 }
 
 func (b *builder) file() *Element {
+	b.body = string(b.source)
 	for i, c := range b.source {
 		if c == '\n' {
 			b.lines = append(b.lines, i)
 		}
 	}
-	return &Element{Type: "file", Attrs: map[string]string{}, End: len(b.source)}
+	return &Element{Type: "file", Attrs: map[string]string{}, Body: b.body, End: len(b.source)}
 }
 
 func (b *builder) blocks(parent *Element, node ast.Node, sectioned bool) {
@@ -218,16 +213,16 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 		if !entering || n == node {
 			return ast.WalkContinue, nil
 		}
-		e := &Element{Attrs: map[string]string{}}
+		var e *Element
 		switch v := n.(type) {
 		case *ast.Link:
-			e.Type, e.Attrs["url"] = "link", string(v.Destination)
+			e = &Element{Type: "link", Attrs: map[string]string{"url": string(v.Destination)}}
 		case *ast.Image:
-			e.Type, e.Attrs["url"] = "image", string(v.Destination)
+			e = &Element{Type: "image", Attrs: map[string]string{"url": string(v.Destination)}}
 		case *ast.AutoLink:
-			e.Type, e.Attrs["url"] = "link", string(v.URL(b.source))
+			e = &Element{Type: "link", Attrs: map[string]string{"url": string(v.URL(b.source))}}
 		case *inlineNode:
-			e.Type, e.Attrs["name"], e.Attrs["inline"] = "directive", v.name, "true"
+			e = &Element{Type: "directive", Attrs: map[string]string{"name": v.name, "inline": "true"}}
 			for _, a := range v.attrs {
 				e.Attrs[a.name] = a.value
 			}
@@ -294,7 +289,7 @@ func (b *builder) finish(e *Element) {
 		e.Start = bytes.LastIndexByte(b.source[:e.Start], '\n') + 1
 	}
 	if e.Text == "" && e.Type != "file" {
-		e.Text = string(bytes.TrimRight(b.source[e.Start:e.End], "\n"))
+		e.Text = strings.TrimRight(b.body[e.Start:e.End], "\n")
 	}
 	e.Line = sort.SearchInts(b.lines, e.Start) + 1
 	e.EndLine = sort.SearchInts(b.lines, max(e.Start, e.End-1)) + 1
@@ -312,6 +307,6 @@ func place(e, extra *Element) {
 	e.Children = slices.Insert(e.Children, at, extra)
 }
 
-func directiveOptions(p *directiveParser) []parser.Option {
-	return []parser.Option{parser.WithBlockParsers(util.Prioritized(&blockParser{p}, 850)), parser.WithInlineParsers(util.Prioritized(&inlineParser{p}, 150))}
+func directiveOptions() []parser.Option {
+	return []parser.Option{parser.WithBlockParsers(util.Prioritized(&blockParser{}, 850)), parser.WithInlineParsers(util.Prioritized(&inlineParser{}, 150))}
 }

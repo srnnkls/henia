@@ -6,9 +6,8 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/yuin/goldmark"
+	"github.com/srnnkls/henia/internal/markup"
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/text"
 )
 
 type Preload struct {
@@ -20,7 +19,7 @@ type Preload struct {
 
 func Find(source []byte) []Preload {
 	var found []Preload
-	root := goldmark.New().Parser().Parse(text.NewReader(source))
+	root := markup.ParseCommonMark(source)
 	_ = ast.Walk(root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil

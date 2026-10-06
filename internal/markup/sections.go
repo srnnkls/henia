@@ -3,10 +3,7 @@ package markup
 import (
 	"bytes"
 
-	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/text"
 )
 
 type Section struct {
@@ -18,7 +15,7 @@ type Section struct {
 }
 
 func Sections(source []byte) ([]Section, error) {
-	root := goldmark.New(goldmark.WithParserOptions(parser.WithAutoHeadingID())).Parser().Parse(text.NewReader(source))
+	root, _ := run(headingParser, source)
 	var sections []Section
 	err := ast.Walk(root, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		heading, ok := node.(*ast.Heading)

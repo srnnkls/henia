@@ -57,14 +57,17 @@ func (n *inlineNode) Dump(source []byte, level int) {
 	ast.DumpHelper(n, source, level, map[string]string{"Name": n.name}, nil)
 }
 
-type directiveParser struct{ err error }
+var failure = parser.NewContextKey()
 
-func (p *directiveParser) fail(source []byte, offset int, message string) {
-	if p.err != nil {
-		return
+func fail(pc parser.Context, source []byte, offset int, message string) {
+	if pc.Get(failure) == nil {
+		pc.Set(failure, locate(source, offset, message))
 	}
+}
+
+func locate(source []byte, offset int, message string) *Error {
 	offset = min(offset, len(source))
-	p.err = &Error{bytes.Count(source[:offset], []byte{'\n'}) + 1, offset - bytes.LastIndexByte(source[:offset], '\n'), message}
+	return &Error{bytes.Count(source[:offset], []byte{'\n'}) + 1, offset - bytes.LastIndexByte(source[:offset], '\n'), message}
 }
 
 func nameLength(s []byte) int {
@@ -119,7 +122,7 @@ func attributes(input []byte) ([]attribute, int, error) {
 	return result, position.Start, nil
 }
 
-type blockParser struct{ *directiveParser }
+type blockParser struct{}
 
 func (*blockParser) Trigger() []byte             { return []byte{':'} }
 func (*blockParser) CanInterruptParagraph() bool { return true }
@@ -155,7 +158,7 @@ func (p *blockParser) Open(parent ast.Node, r text.Reader, pc parser.Context) (a
 			err = fmt.Errorf("unexpected text after directive attributes")
 		}
 		if err != nil {
-			p.fail(r.Source(), segment.Start+i, err.Error())
+			fail(pc, r.Source(), segment.Start+i, err.Error())
 		}
 		d.attrs = attrs
 	}
@@ -192,11 +195,11 @@ func (p *blockParser) Continue(node ast.Node, r text.Reader, pc parser.Context) 
 func (p *blockParser) Close(node ast.Node, r text.Reader, pc parser.Context) {
 	n := node.(*blockNode)
 	if !n.closed {
-		p.fail(r.Source(), n.open.start, "unclosed directive "+n.name)
+		fail(pc, r.Source(), n.open.start, "unclosed directive "+n.name)
 	}
 }
 
-type inlineParser struct{ *directiveParser }
+type inlineParser struct{}
 
 func (*inlineParser) Trigger() []byte { return []byte{':'} }
 func (p *inlineParser) Parse(parent ast.Node, r text.Reader, pc parser.Context) ast.Node {
@@ -210,7 +213,7 @@ func (p *inlineParser) Parse(parent ast.Node, r text.Reader, pc parser.Context) 
 	_, start := r.Position()
 	_, ok := r.FindClosure('[', ']', text.FindClosureOptions{CodeSpan: true, Nesting: true, Advance: true})
 	if !ok {
-		p.fail(r.Source(), segment.Start, "unclosed inline directive")
+		fail(pc, r.Source(), segment.Start, "unclosed inline directive")
 		r.SetPosition(savedLine, savedPosition)
 		return nil
 	}
@@ -221,7 +224,7 @@ func (p *inlineParser) Parse(parent ast.Node, r text.Reader, pc parser.Context) 
 	if spaces < len(rest) && rest[spaces] == '{' {
 		attrs, consumed, err := attributes(rest[spaces:])
 		if err != nil {
-			p.fail(r.Source(), end.Start+spaces, err.Error())
+			fail(pc, r.Source(), end.Start+spaces, err.Error())
 			r.SetPosition(savedLine, savedPosition)
 			return nil
 		}
@@ -257,7 +260,6 @@ func render(input, format string, depth int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	p := &directiveParser{}
 	var edits []edit
 	err = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		switch n := node.(type) {
@@ -275,8 +277,7 @@ func render(input, format string, depth int) (string, error) {
 			content, err := render(string(source[n.content.start:n.content.stop]), format, depth+1)
 			if err != nil {
 				if location, ok := errors.AsType[*Error](err); ok {
-					p.fail(source, n.content.start+location.Column-1, location.Message)
-					return ast.WalkStop, p.err
+					return ast.WalkStop, locate(source, n.content.start+location.Column-1, location.Message)
 				}
 				return ast.WalkStop, err
 			}
