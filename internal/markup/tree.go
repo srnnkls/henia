@@ -49,6 +49,18 @@ func Tree(source []byte, extra ...*Element) (*Element, error) {
 	return root, b.failures
 }
 
+func Graft(root *Element, extra ...*Element) {
+	if len(extra) == 0 {
+		return
+	}
+	for _, e := range extra {
+		place(root, e)
+	}
+	b := &builder{source: []byte(root.Body)}
+	b.file()
+	b.finish(root)
+}
+
 func PlainTree(source []byte) *Element {
 	b := &builder{source: source}
 	root := b.file()
@@ -293,6 +305,7 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 		}
 		e.Start, e.End = extent(n)
 		parent.add(e)
+		b.inlines(e, n)
 		return ast.WalkSkipChildren, nil
 	})
 }
