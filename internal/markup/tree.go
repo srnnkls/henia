@@ -164,12 +164,12 @@ func (b *builder) block(node ast.Node) *Element {
 		e.Type = "paragraph"
 		b.inlines(e, v)
 	case *ast.FencedCodeBlock:
-		e.Type, e.Attrs["lang"] = "code", string(v.Language(b.source))
+		e.Type, e.Attrs["lang"], e.Attrs["inline"] = "code", string(v.Language(b.source)), "false"
 		if v.Info != nil {
 			e.Attrs["info"] = strings.TrimSpace(string(v.Info.Segment.Value(b.source)))
 		}
 	case *ast.CodeBlock:
-		e.Type = "code"
+		e.Type, e.Attrs["inline"] = "code", "false"
 	case *ast.HTMLBlock:
 		e.Type = "html"
 	case *ast.ThematicBreak:
@@ -271,7 +271,12 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 			e = &Element{Type: "link", Attrs: map[string]string{"url": string(v.URL(b.source))}}
 		case *ast.CodeSpan:
 			e = &Element{Type: "code", Attrs: map[string]string{"inline": "true"}}
-			e.Start, e.End = b.ticks(extent(n))
+			inner, end := extent(n)
+			e.Start, e.End = b.ticks(inner, end)
+			if inner >= 0 {
+				e.Text = b.body[inner:end]
+			}
+			e.Attrs["ticks"] = strconv.Itoa(inner - e.Start)
 			parent.add(e)
 			return ast.WalkSkipChildren, nil
 		case *inlineNode:
