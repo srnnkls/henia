@@ -5,7 +5,7 @@ output = ".henia/build"
 
 [harness.claude]
 profile = "claude"
-format = "xml"
+directives = "xml"
 
 [harness.claude.variables]
 review_mode = "thorough"
@@ -15,7 +15,7 @@ read = "Read"
 
 [harness.codex]
 profile = "codex"
-format = "directives"
+directives = "keep"
 
 [harness.codex.variables]
 review_mode = "focused"
@@ -23,16 +23,18 @@ review_mode = "focused"
 [harness.codex.tools]
 read = "read_file"
 
-[lint]
-max_lines = 500
-max_age_days = 180
+[lint.config.large-skill]
+max-lines = 500
 
-[lint.outdated]
+[lint.config.stale-review]
+max-age-days = 180
+
+[lint.config.outdated-reference.outdated]
 "old-model-id" = "replacement-model-id"
 
 [[lint.rules]]
 id = "instruction-priority"
-query = '(directive :name "instruction" :priority (not /^(normal|high|critical)$/)) @d'
+query = '(directive :name "instruction" :dynamic (not "true") :priority (not /^(normal|high|critical)$/)) @d'
 message = "Instructions need a valid priority."
 
 [[lint.rules]]

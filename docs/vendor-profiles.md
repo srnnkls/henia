@@ -1,33 +1,17 @@
-# Vendor profiles and metadata expressions
+# Vendor profiles
 
-Enable a profile explicitly in a project configuration:
+A *profile* maps canonical skill metadata onto one harness's frontmatter, along
+with any extra files that harness reads. Write the skill once, and each profile
+emits the shape its harness expects.
 
-```toml
-[harness.claude]
-profile = "claude"
-directives = "xml"
-strict = true
-```
-
-Canonical metadata follows Agent Skills (`name`, `description`, `license`,
-`compatibility`, string-valued `metadata`) and adds `model_tier`, `tools`,
-`tools_policy` and `enabled` for transforms. Unknown author fields
-remain available to templates. A profile diagnoses and omits fields it cannot
-represent. `strict = true` turns these warnings into build failures. Canonical
-type errors and malformed target metadata always fail compilation.
-
-`henia.variables` holds template-only data. `henia.auto_invoke` and
-`henia.user_invocable` express portable invocation preferences where supported.
-Profiles without corresponding behavior issue a diagnostic. A target-specific
-value wins;
-setting it to YAML `null` suppresses an inherited preference for that target.
-
-```yaml
+```bash
+mkdir -p skills/review
+cat > skills/review/SKILL.md <<'EOF'
+---
 name: review
-description: Review code changes when the user requests a review.
+description: Review code changes when the user asks for a review.
+tools: [Read, Grep]
 henia:
-  variables:
-    priority: high
   targets:
     claude:
       auto_invoke: false
@@ -38,27 +22,96 @@ henia:
       openai:
         interface:
           display_name: Code review
-          short_description: Review correctness and coverage
           default_prompt: "Use $review to review these changes."
+---
+
+# Review
+
+Check correctness first, then coverage.
+EOF
+cat > henia.toml <<'EOF'
+[harness.claude]
+profile = "claude"
+
+[harness.codex]
+profile = "codex"
+EOF
 ```
 
-This emits `disable-model-invocation: true` for Claude and
+```console
+$ henia build .
+Warning: skills/review (codex): unsupported frontmatter tools; omitted
+Built 2 artifact(s) in .henia/build
+
+$ cat .henia/build/claude/skills/review/SKILL.md
+---
+allowed-tools: Read Grep
+argument-hint: '[file or PR]'
+description: Review code changes when the user asks for a review.
+disable-model-invocation: true
+name: review
+---
+
+# Review
+
+Check correctness first, then coverage.
+
+$ cat .henia/build/codex/skills/review/agents/openai.yaml
+interface:
+    default_prompt: Use $review to review these changes.
+    display_name: Code review
+policy:
+    allow_implicit_invocation: false
+```
+
+`auto_invoke: false` becomes `disable-model-invocation: true` for Claude Code and
 `policy.allow_implicit_invocation: false` in Codex's `agents/openai.yaml`.
-OpenAI native policy values override computed defaults. Native frontmatter
-overrides apply last; YAML `null` removes a field. These fields never leak into
-another target's output. Sidecars are generated alongside the skill resources.
+Codex skill frontmatter has no tool list, so the Codex profile drops `tools` and
+says so. Add `strict = true` to the harness and the warning fails the build:
+
+```console
+$ henia build .
+Error: skills/review: transform review for codex: unsupported skill metadata: unsupported frontmatter tools; omitted
+```
+
+## Canonical metadata
+
+Canonical metadata follows [Agent Skills](https://agentskills.io/specification):
+`name`, `description`, `license`, `compatibility` and string-valued `metadata`.
+Henia adds `model_tier`, `tools`, `tools_policy` and `enabled` for profiles to
+map. Templates can still read any other author field. A profile omits each field
+it cannot represent and prints a diagnostic. Type errors in canonical metadata
+and malformed target metadata always fail the build.
+
+Template-only data goes in `henia.variables`. Two keys state portable invocation
+preferences:
+
+- `henia.auto_invoke`: whether the model may invoke the skill on its own;
+- `henia.user_invocable`: whether the user may invoke it.
+
+A profile without the matching behavior prints a diagnostic. A value under
+`henia.targets.<harness>` wins over the shared one. Setting it to YAML `null`
+drops an inherited preference for that target.
+
+A target's `frontmatter` and `openai` tables are native overrides:
+
+- Native OpenAI policy values override the computed defaults.
+- Native frontmatter applies last, and YAML `null` removes a field.
+
+Neither leaks into another target's output. Sidecar files land next to the
+skill's resources.
 
 ## Customizing profiles
 
-Profile definitions merge from:
+Profiles merge from three places, later ones over earlier:
 
-1. Bundled `internal/profile/profiles/<profile>.toml`.
-2. `~/.config/henia/harnesses/<profile>/transform.toml`.
-3. `<project>/.henia/harnesses/<profile>/transform.toml`.
+1. the bundled `internal/profile/profiles/<profile>.toml`;
+2. `~/.config/henia/harnesses/<profile>/transform.toml`;
+3. `<project>/.henia/harnesses/<profile>/transform.toml`, where the project is
+   the directory that holds the selected `henia.toml`.
 
-The project root is the directory containing the selected `henia.toml`.
-Tables merge recursively, arrays concatenate, and later scalar values override.
-Use a new profile name for a completely different schema. For example:
+Tables merge recursively. Arrays concatenate, and later scalars override. A
+completely different schema takes a new profile name:
 
 ```toml
 # .henia/harnesses/my-agent/transform.toml
@@ -78,59 +131,89 @@ value = '{name: input.name, description: input.description}'
 # henia.toml
 [harness.my-agent]
 profile = "my-agent"
-directives = "keep"
 ```
 
-No runtime script or Go change is needed. Profile syntax is TOML; computed values
-use [Expr](https://expr-lang.org/docs/language-definition).
+With `henia.targets.my-agent.auto_invoke: false` in the skill:
+
+```console
+$ henia build . --clean
+Warning: skills/review (my-agent): unsupported frontmatter tools; omitted
+Built 1 artifact(s) in .henia/build
+
+$ cat .henia/build/my-agent/manifests/review.json
+{
+  "description": "Review code changes when the user asks for a review.",
+  "name": "review"
+}
+
+$ head -5 .henia/build/my-agent/skills/review/SKILL.md
+---
+automatic: false
+description: Review code changes when the user asks for a review.
+name: review
+---
+```
+
+This needs no script and no Go code. Profiles are TOML; computed values are
+[Expr](https://expr-lang.org/docs/language-definition) expressions.
 
 ## Profile contract
 
 | Field | Purpose |
 |---|---|
-| `fields` | Output frontmatter allowlist; must include required skill metadata |
-| `aliases` | Simple input key renames; conflicting aliases fail |
-| `computed` | Output key → Expr expression |
-| `consume` | Input keys consumed by computations and omitted from output |
-| `controls` | Invocation preferences represented by this profile |
-| `files` | Named file declarations with `path`, `format`, and `value` |
+| `fields` | output frontmatter allowlist; must include the required skill metadata |
+| `aliases` | input key renames; conflicting aliases fail |
+| `computed` | output key → Expr expression |
+| `consume` | input keys that computations read; omitted from the output |
+| `controls` | invocation preferences the profile represents |
+| `files` | named files, each with `path`, `format` and `value` |
+| `preloads` | the harness runs `` !`cmd` `` preloads natively; others get a run-first block |
+| `commands`, `agents` | the harness's built-in slash commands and subagents |
 
-Computed expressions receive `input` (templated canonical metadata), `settings`
-(merged Henia preferences), `native` (selected target overrides), and `ctx`:
-`name`, `profile`, `path`, `variables`, `tools`, and `keys`. Here `ctx.path` is
-the harness's build output directory, never a configured installation destination.
+Computed expressions see four inputs:
+
+- `input`: the templated canonical metadata;
+- `settings`: the merged Henia preferences;
+- `native`: the selected target's overrides;
+- `ctx`: `name`, `profile`, `path`, `variables`, `tools` and `keys`.
+
+`ctx.path` is the harness's build output directory and never an installation
+destination.
 
 Helpers:
 
-- `toolNames(value, mapping)`: map a list of tool names, then join with spaces.
-  A scalar string is preserved as one vendor expression, or mapped as one exact
-  name. Use YAML lists to map several canonical tool names.
-- `merge(base, override)`: recursively merge maps using config precedence.
-- `require(value, message)`: fail when a needed value is nil or an empty string.
+- `toolNames(value, mapping)` maps a list of tool names and joins them with
+  spaces. A scalar string passes through as one vendor expression, or maps as a
+  single exact name, so list several canonical tools as a YAML list.
+- `merge(base, override)` merges maps recursively, with config precedence.
+- `require(value, message)` fails when a needed value is nil or an empty string.
 
-Computations all read the same immutable canonical input, not each other's
-results. A `nil` computed result adds no field. Existing field values remain unless
-explicitly removed by a native override. Legacy TOML key/value mappings run before
-the profile; native output overrides run after it. Output types are preserved.
+Every computation reads the same immutable canonical input; none sees another's
+result. A `nil` result adds no field. Existing field values stay unless a native
+override removes them. Output types are preserved. The harness's
+`[harness.<name>.frontmatter]` renames and value maps run before the profile, and
+native overrides run after it.
 
-File `value` expressions produce data for `yaml`/`json`, or a string for `text`.
-`nil` and empty maps suppress a file. Paths are relative to the harness build output root;
-`{name}` expands to the skill directory name. Traversal and collisions with main
-files, resources or other emitted files fail preflight. Shared harness-level files
-are not implicitly merged across skills: competing writers cause an error.
+A file's `value` produces data for `yaml` and `json`, or a string for `text`.
+`nil` or an empty map produces no file. Paths are relative to the harness's build
+output root, and `{name}` expands to the skill's directory name. A path that
+escapes the root or collides with a main file, a resource or another emitted file
+fails before anything is written. Henia does not merge harness-level files across
+skills; two skills writing one path is an error.
 
-These profiles apply to skills. Harness-wide permissions, command conversion,
-plugin publication and upload orchestration are separate concerns. In particular,
-OpenCode skill frontmatter must not be mistaken for OpenCode agent permissions.
-The [research matrix](vendor-research.md) links the vendor contracts.
+Profiles cover skills. Harness-wide permissions, command conversion, plugin
+publication and uploads are separate concerns. OpenCode skill frontmatter, for
+one, is not where OpenCode agent permissions go. The
+[research matrix](vendor-research.md) links each vendor's contract.
 
 ## Built-in commands and agents
 
-A profile lists the slash commands and subagents its harness ships with, as
-`commands` and `agents`. `henia lint` resolves `/command` and `@agent`
-references against the lists of every configured harness:
+A profile lists the slash commands and subagents its harness ships with:
 
 ```toml
 commands = ["clear", "compact", "plan"]
 agents = ["Explore", "Plan", "general-purpose"]
 ```
+
+`henia lint` resolves `/command` and `@agent` references against these lists for
+every configured harness, so `/compact` in a skill is not a broken reference.

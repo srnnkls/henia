@@ -1,38 +1,36 @@
 # Skill portability
 
-Native discovery paths below describe vendor contracts. Henia writes each variant
-under its build output directory; Phora chooses the installation destinations.
-
-
-Primary-source research checked 2026-09-07. This document distinguishes the
-vendor contract from Henia's compiler choices; it is not an installation guide.
+What each vendor's skill contract requires, from primary sources checked on
+2026-09-07. Henia writes each variant under its build output directory, and
+Phora picks the installation paths. For how Henia maps metadata, see
+[vendor profiles](vendor-profiles.md).
 
 ## Shared format
 
 The [Agent Skills specification](https://agentskills.io/specification) defines a
-directory containing `SKILL.md`: YAML frontmatter followed by Markdown, with
-optional scripts and resources. Required fields are `name` and `description`.
-Optional portable fields are `license`, `compatibility`, string-valued `metadata`,
-and experimental `allowed-tools`.
+skill as a directory holding `SKILL.md`. The file is YAML frontmatter followed by
+Markdown, and the directory may also carry scripts and resources. `name` and
+`description` are required. The optional portable fields are `license`,
+`compatibility`, string-valued `metadata` and the experimental `allowed-tools`.
 
-Directive syntax is an extension to Markdown. Selecting XML output for Claude is
-an author/compiler preference, not a requirement of the skill package format.
-Retained directives are prompt text unless a consumer implements their semantics.
-Go templates execute before directive rendering; references transform afterward.
+Directives extend Markdown. Rendering them as XML for Claude is a compiler
+choice; the package format does not require it. A kept directive is prompt text
+unless its consumer gives it meaning. Go templates run before directives render,
+and references transform after.
 
 ## Vendor differences
 
 | Profile | Project skill location or distribution | Metadata differences |
 |---|---|---|
-| Claude Code | `.claude/skills/<name>/SKILL.md` | Adds invocation controls, tools, model, context, hooks and other Code fields |
-| Claude upload/API | Uploadable skill directory | Restricts frontmatter to the six standard fields; extra Code fields can cause upload failure |
-| Codex | `.agents/skills/<name>/SKILL.md` | Optional `agents/openai.yaml` carries UI, invocation policy and dependencies |
-| ChatGPT | Skill/plugin distribution | Shares OpenAI skill metadata and optional `agents/openai.yaml`; do not invent a local discovery directory |
-| OpenCode | `.opencode/skills/<name>/SKILL.md` | Recognizes name, description, license, compatibility and metadata; ignores other frontmatter |
-| Gemini CLI | `.gemini/skills/<name>/SKILL.md` | Documents name/description and Agent Skills compatibility; `.agents/skills` is also recognized |
-| GitHub Copilot | `.github/skills/<name>/SKILL.md` | Documents name, description, license and `allowed-tools`; also discovers compatible directories |
-| Cursor | `.cursor/skills/<name>/SKILL.md` | Adds paths, disable-model-invocation, icon, color and metadata |
-| Agent Skills | Portable `<name>/SKILL.md` directory | Standard fields only; installation and optional field support depend on the consumer |
+| Claude Code | `.claude/skills/<name>/SKILL.md` | adds invocation controls, tools, model, context, hooks and other Code fields |
+| Claude upload/API | uploadable skill directory | limits frontmatter to the six standard fields; extra Code fields can fail the upload |
+| Codex | `.agents/skills/<name>/SKILL.md` | optional `agents/openai.yaml` carries UI, invocation policy and dependencies |
+| ChatGPT | skill or plugin distribution | shares OpenAI skill metadata and the optional `agents/openai.yaml`; has no documented local discovery directory |
+| OpenCode | `.opencode/skills/<name>/SKILL.md` | reads name, description, license, compatibility and metadata; ignores other frontmatter |
+| Gemini CLI | `.gemini/skills/<name>/SKILL.md` | documents name, description and Agent Skills compatibility; also reads `.agents/skills` |
+| GitHub Copilot | `.github/skills/<name>/SKILL.md` | documents name, description, license and `allowed-tools`; also discovers compatible directories |
+| Cursor | `.cursor/skills/<name>/SKILL.md` | adds paths, disable-model-invocation, icon, color and metadata |
+| Agent Skills | portable `<name>/SKILL.md` directory | standard fields only; installation and optional fields depend on the consumer |
 
 Sources: [Claude Code](https://code.claude.com/docs/en/skills#frontmatter-reference),
 [OpenAI skills](https://learn.chatgpt.com/docs/build-skills),
@@ -43,27 +41,30 @@ Sources: [Claude Code](https://code.claude.com/docs/en/skills#frontmatter-refere
 
 ## Mapping implications
 
-- Key renames alone are insufficient. Automatic invocation uses a negative
-  `disable-model-invocation` boolean in Claude Code and a positive
-  `policy.allow_implicit_invocation` boolean in OpenAI's sidecar.
-- Tool lists need value mappings and sometimes shape changes. Tool names and
-  permissions are not interchangeable. OpenCode's harness permissions belong in
-  its configuration, not in skill frontmatter.
-- Native overrides must be scoped to a target so another vendor does not receive
-  unsupported fields. Unsupported behavior needs a diagnostic.
-- Sidecar emission needs collision and path validation. Packaging a skill is
-  separate from publishing a plugin, uploading it or enabling it in an account.
-- Compiler variables and lint-only metadata should remain available to templates
-  without leaking into strict vendor frontmatter.
-- Vendor schemas can evolve independently from body renderers. Keep the two
-  configuration choices independent and allow custom harness definitions.
+- Renaming keys is not enough. Claude Code turns automatic invocation off with a
+  negative boolean, `disable-model-invocation`. OpenAI's sidecar turns it on with
+  a positive one, `policy.allow_implicit_invocation`.
+- Tool lists need value mappings, and sometimes a different shape. Tool names
+  and permissions differ between vendors. OpenCode's harness permissions belong
+  in its configuration, not in skill frontmatter.
+- A native override applies to one target, so no other vendor receives fields it
+  cannot read. Unsupported behavior gets a diagnostic.
+- Sidecar files need path and collision checks. Packaging a skill is separate
+  from publishing a plugin, uploading it or enabling it in an account.
+- Compiler variables and lint-only metadata stay available to templates and out
+  of strict vendor frontmatter.
+- Vendor schemas change independently of body rendering. The two stay separate
+  configuration choices, and custom harness definitions are allowed.
 
-## Scope alignment
+## Specifications
 
-The [markup scope](../specs/draft/markup-pipeline/spec.md) requires frontmatter
-template context, backward-compatible variables, `if`/`range`/`template`, and
-`templates → directives → references`. The linked
-[harness scope](../specs/draft/schema-transform/spec.md) additionally specifies
-canonical metadata, configuration merging, extensible transforms and emitted
-files. The user selected TOML + Expr for metadata computations and the lint
-rule DSL; this supersedes the original Starlark requirement.
+The [markup spec](../specs/draft/markup-pipeline/spec.md) covers:
+
+- the frontmatter template context and backward-compatible variables;
+- `if`, `range` and `template`;
+- the order `templates → directives → references`.
+
+The [harness spec](../specs/draft/schema-transform/spec.md) covers canonical
+metadata, configuration merging, extensible transforms and emitted files.
+Profiles are TOML with Expr computations; lint rules are
+[henia query](query.md) patterns.

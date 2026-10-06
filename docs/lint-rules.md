@@ -1,15 +1,70 @@
 # Lint rules
 
-`henia lint` runs rules written in [hq](query.md) over a package's contents.
-Without paths it scans the project's package: the `skills`, `commands` and
+`henia lint` checks a skill package's contents with rules written as
+[henia query](query.md) patterns. The standard library runs by default, and
+projects and users add their own rules beside it.
+
+Make a skill with two problems:
+
+```bash
+git init deploy-skills && cd deploy-skills
+mkdir -p skills/deploy
+cat > skills/deploy/SKILL.md <<'EOF'
+---
+name: deploy
+description: Ship a release to production.
+---
+
+# Deploy
+
+Read the [runbook](reference/runbook.md) first.
+
+## Usage
+
+Run `make release`.
+
+## Usage
+
+Tag the commit.
+EOF
+```
+
+```console
+$ henia lint skills --strict
+skills/deploy/SKILL.md:8:11: warning [broken-link] local reference does not exist: reference/runbook.md
+skills/deploy/SKILL.md:14:4: warning [duplicate-heading] heading repeated; first occurrence on line 10
+Error: lint found 2 diagnostic(s)
+```
+
+Errors fail lint. Warnings fail it only under `--strict`. `--disable` turns
+rules off by id, and `--format json` prints the diagnostics with their `related`
+locations and, for similarity findings, `similarity`, `method`,
+`shared_phrases` and `model`.
+
+## What lint reads
+
+Without paths, lint scans the project's package: the `skills`, `commands` and
 `agents` directories that `henia.toml` names, at the project root and in
 `.henia/`, plus the sources of its harness `files`. A directory argument yields
-its skills, commands and agents and the resources and references inside skill
+its skills, commands and agents, and the resources and references inside skill
 directories; other Markdown is left out. A file argument is always linted.
+Git-ignored files below each scanned path are skipped.
 
-Rules live in Markdown modules: the standard library ships with Henia and runs
-by default, and projects and users add their own modules, which import the
-standard library's patterns and compose new rules from them.
+References resolve against everything lint can know, never a hand-kept list:
+
+- the scanned files;
+- the skills of the project's skill packages, transitively. Lint reads them for
+  their names and anchors and never lints them.
+- the commands and agents built into each harness in `henia.toml`, from its
+  profile's `commands` and `agents`.
+
+Templates are parsed and never executed, and lint fetches no URLs. To check
+expanded values, lint the build output:
+
+```bash
+henia build skills-repo --harness codex --output .henia/build
+henia lint .henia/build/codex --strict
+```
 
 ## Standard library
 
@@ -22,70 +77,62 @@ standard library's patterns and compose new rules from them.
 | `std/slots` | `invalid-slot`, `unknown-slot` | |
 | `std/similarity` | `similar-content`, `semantic-content` | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
 
-`henia lint test` runs every module's examples, the standard library's
-included. The modules are readable with the rest of Henia's source code under
-`internal/lint/std/`.
+The modules live under `internal/lint/std/`, readable like any other module.
+`henia lint test` runs the examples of every module, the standard library's
+included:
+
+```console
+$ henia lint test
+29 lint examples passed
+```
 
 ## Configuration
 
+`henia.toml` tunes rules and holds one-off rules:
+
 ```toml
 [lint]
-disable = ["duplicate-heading"]
+disable = ["large-static"]
+
+[lint.config.duplicate-heading]
+severity = "error"
 
 [lint.config.large-skill]
-severity = "error"
 max-lines = 600
 
 [lint.config.outdated-reference.outdated]
 "old-model-id" = "replacement-model-id"
 
 [[lint.rules]]
-id = "no-todo"
-query = '(paragraph :matches /TODO/) @p'
-message = "Resolve the TODO before release."
+id = "no-make"
+query = '(paragraph :matches /\bmake /) @p'
+message = "Use the mise task, not make."
+```
+
+With that file in the project above:
+
+```console
+$ henia lint skills
+skills/deploy/SKILL.md:8:11: warning [broken-link] local reference does not exist: reference/runbook.md
+skills/deploy/SKILL.md:12:1: warning [no-make] Use the mise task, not make.
+skills/deploy/SKILL.md:14:4: error [duplicate-heading] heading repeated; first occurrence on line 10
+Error: lint found 3 diagnostic(s)
 ```
 
 - `disable` turns rules off by id.
 - `[lint.config.<id>]` sets `severity` and overrides the rule's params and data
   tables. Each value is parsed against its default: a number param takes a
-  number, a list or table takes the same shape, and an unknown key or rule is
+  number, and a list or table takes the same shape. An unknown key or rule is
   an error that suggests the nearest name.
-- `[[lint.rules]]` declares a one-off rule inline with `id`, `query`, `message`,
-  and optionally `severity`, `at`, `related`, `params` and `data`.
-- A skill can turn a rule off for itself with `henia.lint.disable` in its frontmatter.
-
-References resolve against everything lint can know, never a hand-kept list:
-
-- the scanned files;
-- the skills of the project's skill packages, transitively. Those are read for
-  their names and anchors but never linted.
-- the commands and agents built into each harness in `henia.toml`, which come
-  from its profile's `commands` and `agents`.
-
-Errors fail lint, and `--strict` also fails on warnings. `--format json` prints
-the diagnostics, including `related` locations and, for similarity findings,
-`similarity`, `method`, `shared_phrases` and `model`.
+- `[[lint.rules]]` declares a rule inline with `id`, `query` and `message`, and
+  optionally `severity`, `at`, `related`, `params` and `data`.
+- A skill turns a rule off for itself with `henia.lint.disable` in its
+  frontmatter.
 
 ## Modules
 
-Lint loads modules from these layers, in order:
-
-1. the standard library;
-2. `.henia/lint/` in each skill package, named `<package>/<module>`;
-3. `$XDG_CONFIG_HOME/henia/lint/`;
-4. the project's `.henia/lint/`;
-5. inline rules.
-
-Rule ids and module names are unique across all layers, and nothing shadows
-anything. To change a built-in rule, configure it, or disable it and compose a
-replacement.
-
-A module is a Markdown file:
-
-- its frontmatter sets `params` and `data`;
-- each `## <rule-id>` section documents a rule in prose, defines it in a
-  ```` ```hq ```` block, and tests it with ```` ```md ```` examples under
-  `### Matches` and `### Passes`.
+A module is a Markdown file of rules. Save this as
+`.henia/lint/team/headings.md`:
 
 ````md
 ---
@@ -95,7 +142,7 @@ data:
 
 ## repeated-usage
 
-Teams keep a single Usage section per document.
+A document keeps a single Usage section.
 
 ```hq
 (import std/structure)
@@ -114,24 +161,56 @@ Teams keep a single Usage section per document.
 
 ## Usage
 ```
+
+### Passes
+
+```md
+## Setup
+
+## Setup
+```
 ````
 
-The module name is its path relative to the layer, without `.md`, as in
-`team/headings`. Module forms:
+```console
+$ henia lint skills --disable duplicate-heading,no-make
+skills/deploy/SKILL.md:8:11: warning [broken-link] local reference does not exist: reference/runbook.md
+skills/deploy/SKILL.md:14:4: warning [repeated-usage] Usage repeats; first on line 10
+```
 
-- `(rule id :key value ... pattern...)` defines a rule. It is a query whose rows
-  become diagnostics, and one module may give an id several clauses.
+- The frontmatter sets `params` and `data`.
+- Each `## <rule-id>` section explains its rule in prose, defines it in a
+  ```` ```hq ```` block, and tests it with ```` ```md ```` examples under
+  `### Matches` and `### Passes`. A Matches example must make its rule report;
+  a Passes example must not.
+- An example overrides params in its fence info, as in ```` ```md max-lines=2 ````
+  or ```` ```md outdated.old=new ````.
+- The module name is its path relative to the layer, without `.md`, as in
+  `team/headings`.
+
+Lint loads modules from these layers, in order:
+
+1. the standard library;
+2. `.henia/lint/` in each skill package, named `<package>/<module>`;
+3. `$XDG_CONFIG_HOME/henia/lint/`;
+4. the project's `.henia/lint/`;
+5. inline rules.
+
+Rule ids and module names are unique across all layers, and nothing shadows
+anything. To change a built-in rule, configure it, or disable it and compose a
+replacement.
+
+### Forms
+
+- `(rule id :key value ... pattern...)` defines a rule: a query whose rows
+  become diagnostics. One module may give an id several clauses.
 - `(define (name ?var @capture ...) pattern...)` names a pattern. Callers pass
-  the variables and captures it binds, and every other variable stays local to
-  each use.
+  the variables and captures it binds; every other variable stays local to each
+  use.
 - `(import module)` brings in a module's defines. Names that would collide are
   an error.
 
 Frontmatter `params` scalars become `$name` values. `data` maps and lists become
 `row` nodes under a `data` root, with `:table`, `:key` or `:index`, and `:value`.
-An example overrides params in its fence info, as in ```` ```md max-lines=2 ````
-or ```` ```md outdated.old=new ````. A Matches example must make its rule report;
-a Passes example must not.
 
 ### Rule keys
 
@@ -148,7 +227,19 @@ a Passes example must not.
 
 ### Grouped rules
 
-A rule may end with [`(group ...)`](query.md), whose filters take `$params`:
+A rule may end with a [`(group ...)`](query.md#grouping) clause, whose filters
+take `$params`. Saved as `.henia/lint/team/reach.md`, this one flags skills
+that no other skill links to:
+
+````md
+---
+params:
+  min-inbound: 1
+---
+
+## unreferenced-skill
+
+Every skill is linked from at least one other skill.
 
 ```hq
 (rule unreferenced-skill
@@ -158,13 +249,24 @@ A rule may end with [`(group ...)`](query.md), whose filters take `$params`:
   (skill :id (not ?s) (link :target ?s) @l)?
   (group @t (count @l ?n (< $min-inbound))))
 ```
+````
+
+```console
+$ henia lint skills
+skills/deploy/SKILL.md:1:1: warning [unreferenced-skill] deploy has 0 inbound links; under 1
+skills/deploy/SKILL.md:8:11: warning [broken-link] local reference does not exist: reference/runbook.md
+skills/deploy/SKILL.md:12:1: warning [no-make] Use the mise task, not make.
+skills/deploy/SKILL.md:14:4: error [duplicate-heading] heading repeated; first occurrence on line 10
+skills/deploy/SKILL.md:14:4: warning [repeated-usage] Usage repeats; first on line 10
+Error: lint found 5 diagnostic(s)
+```
 
 Grouped rows feed `:at`, `:related` and `{?var}` unchanged, and a collected
 capture such as `@l` locates at its first node.
 
 ### Facts lint adds
 
-Beyond the document tree that queries see, lint rules match these:
+Lint rules see the document tree that queries see, plus these facts:
 
 - `file`:
   - `:kind` is `skill`, `command`, `agent`, `resource` or `document`;
@@ -183,24 +285,16 @@ Beyond the document tree that queries see, lint rules match these:
   - `:problem` holds an inspection error;
   - references carry `:ref` (`skill`, `command`, `agent`, `file` or `show`),
     `:name` and `:artifact`.
-- `:position`, which orders nodes by file path and then offset: "first
+- `:position` orders nodes by file path, then offset, which gives "first
   occurrence" across files.
-- `:dynamic true` on nodes whose text holds a template action.
-
-Templates are parsed but never executed. Lint the build output to check
-expanded values:
-
-```bash
-henia build skills-repo --harness codex --output .henia/build
-henia lint .henia/build/codex --strict
-```
+- `:dynamic true` marks nodes whose text holds a template action.
 
 ## Similarity
 
 `similar-content` and `semantic-content` compare each paragraph of at least
-`min-words` words with the earliest earlier paragraph above a threshold. Exact
-copies are left to `duplicate-content`, and paragraphs matched lexically are
-left out of the semantic check. Both stay off until a threshold is set:
+`min-words` words with the earliest earlier paragraph above a threshold.
+`duplicate-content` reports exact copies, and paragraphs matched lexically are
+left out of the semantic check. Both rules stay off until a threshold is set:
 
 ```toml
 [lint.config.similar-content]
@@ -215,15 +309,15 @@ model_path = "models/potion-retrieval-32M"
 threshold = 0.35   # calibrate against accepted and rejected examples
 ```
 
-`model_path` points to a local Model2Vec directory containing `tokenizer.json`,
+`model_path` names a local Model2Vec directory holding `tokenizer.json`,
 `config.json` and `model.safetensors`. A relative path resolves against the
-configuration file that declares it. Lint does not download models, call
-servers or run subprocesses. Inference uses the pure Go
-[aikit Model2Vec implementation](https://github.com/townsendmerino/aikit/tree/v1.16.0/embed),
-loads the model once, and only when a semantic rule runs.
+configuration file that declares it. Lint downloads no models, calls no servers
+and runs no subprocesses. Inference uses the pure Go
+[aikit Model2Vec implementation](https://github.com/townsendmerino/aikit/tree/v1.16.0/embed)
+and loads the model once, only when a semantic rule runs.
 
 [Model2Vec](https://github.com/MinishLab/model2vec) embeddings find related
-wording with little lexical overlap. They lose token order and do not establish
-equivalent instructions; changed negation may score higher than a valid
-paraphrase. Findings request review; they never rewrite content. See
-[the evaluation notes](paragraph-similarity.md).
+wording with little lexical overlap. They lose token order and cannot tell
+whether two instructions mean the same: a negated sentence may score higher
+than a valid paraphrase. Findings ask for review and never rewrite content.
+[Paragraph similarity](paragraph-similarity.md) has the evaluation.
