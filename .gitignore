@@ -1,3 +1,4 @@
 /.henia/
 /.worktrees/
 /examples/phora/*/*.lock
+/mise.local.toml

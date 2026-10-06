@@ -15,7 +15,7 @@ staged
 ```
 
 ```scrut
-$ cd "$W/project" && env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID ZDOTDIR="$W/zdotdir" XDG_DATA_HOME="$W/data" XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/config" CLAUDE_CONFIG_DIR="$W/home/claude" claude -p 'Use the code skill, then run every henia show command listed in its slot providers context. Reply with each canary token you found, one per line, and nothing else.' --model "${CLAUDE_MODEL:-sonnet}" --allowedTools 'Bash(henia show *)' > "$W/claude.txt" 2>&1; grep -o 'CANARY-[A-Z][A-Z-]*' "$W/claude.txt" | sort -u
+$ cd "$W/project" && env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID ZDOTDIR="$W/zdotdir" XDG_DATA_HOME="$W/data" XDG_CACHE_HOME="$W/cache" XDG_CONFIG_HOME="$W/config" CLAUDE_CONFIG_DIR="$W/home/claude" claude -p 'Use the code skill, then run every henia show command listed in its slot providers context. Reply with each canary token you found, one per line, and nothing else.' --model "${CLAUDE_MODEL:-sonnet}" --permission-mode default --allowedTools 'Skill(code)' 'Bash(henia show *)' > "$W/claude.txt" 2>&1; grep -o 'CANARY-[A-Z][A-Z-]*' "$W/claude.txt" | sort -u
 CANARY-ACME-REVIEW
 CANARY-HOUSE-GO
 CANARY-HOUSE-REVIEW
