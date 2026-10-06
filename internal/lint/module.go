@@ -1,7 +1,6 @@
 package lint
 
 import (
-	"embed"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -14,13 +13,11 @@ import (
 
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/library"
+	"github.com/srnnkls/henia/internal/lint/std"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/pattern"
 	"github.com/srnnkls/henia/internal/similarity"
 )
-
-//go:embed std/*.md
-var stdlib embed.FS
 
 type InlineRule struct {
 	ID       string         `toml:"id"`
@@ -38,7 +35,7 @@ type spec struct {
 	rules    []*pattern.Rule
 	module   string
 	params   map[string]pattern.Value
-	data     map[string]table
+	data     map[string]pattern.Table
 	examples []example
 }
 
@@ -62,13 +59,13 @@ type registry struct {
 
 func loadModules(dirs []ModuleDir) (*registry, error) {
 	r := &registry{files: map[string]moduleFile{}, defines: map[string]map[string]pattern.Define{}, loading: map[string]bool{}}
-	err := fs.WalkDir(stdlib, "std", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(std.FS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		data, err := stdlib.ReadFile(path)
-		name := strings.TrimSuffix(path, ".md")
-		r.files[name] = moduleFile{name, "henia:" + path, data}
+		data, err := std.FS.ReadFile(path)
+		name := "std/" + strings.TrimSuffix(path, ".md")
+		r.files[name] = moduleFile{name, "henia:std/" + path, data}
 		return err
 	})
 	if err != nil {
@@ -160,11 +157,6 @@ func (r *registry) imported(name string) (map[string]pattern.Define, error) {
 	return defines, err
 }
 
-type block struct {
-	start, line int
-	text        string
-}
-
 func (r *registry) parse(file moduleFile) ([]*spec, map[string]pattern.Define, error) {
 	art, err := artifact.Parse(file.data)
 	if err != nil {
@@ -175,17 +167,13 @@ func (r *registry) parse(file moduleFile) ([]*spec, map[string]pattern.Define, e
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", file.path, err)
 	}
-	var source strings.Builder
-	var blocks []block
+	source, blocks := pattern.Source(tree, shift)
 	examples := map[string][]example{}
 	tree.Walk(func(e *markup.Element) bool {
 		if e.Type != "code" {
 			return true
 		}
 		switch e.Attrs["lang"] {
-		case "hq":
-			blocks = append(blocks, block{source.Len(), e.Line + 1 + shift, e.Text})
-			source.WriteString(e.Text + "\n")
 		case "md", "markdown":
 			heading := e.Enclosing("section")
 			if heading == nil || heading.Attrs["level"] != "3" || heading.Parent == nil || heading.Parent.Type != "section" {
@@ -216,15 +204,15 @@ func (r *registry) parse(file moduleFile) ([]*spec, map[string]pattern.Define, e
 		}
 		return true
 	})
-	module, err := pattern.ReadModule(source.String(), r.imported)
+	module, err := pattern.ReadModule(source, r.imported)
 	if err != nil {
 		var pe *pattern.Error
 		if errors.As(err, &pe) {
 			for i := len(blocks) - 1; i >= 0; i-- {
-				if pe.Offset >= blocks[i].start {
-					pe.Offset -= blocks[i].start
-					line := blocks[i].line + strings.Count(blocks[i].text[:min(pe.Offset, len(blocks[i].text))], "\n")
-					return nil, nil, fmt.Errorf("%s:%d: %s", file.path, line, strings.TrimPrefix(pe.Explain(blocks[i].text), "henia query: "))
+				if pe.Offset >= blocks[i].Start {
+					pe.Offset -= blocks[i].Start
+					line := blocks[i].Line + strings.Count(blocks[i].Text[:min(pe.Offset, len(blocks[i].Text))], "\n")
+					return nil, nil, fmt.Errorf("%s:%d: %s", file.path, line, strings.TrimPrefix(pe.Explain(blocks[i].Text), "henia query: "))
 				}
 			}
 		}
@@ -271,10 +259,10 @@ func (ev *evaluation) run(s *spec, options Options) ([]Diagnostic, error) {
 func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Diagnostic, error) {
 	tables := maps.Clone(s.data)
 	if tables == nil {
-		tables = map[string]table{}
+		tables = map[string]pattern.Table{}
 	}
-	tables["builtin"] = table{list: true, values: options.Builtin}
-	env := pattern.Environment{Resolve: ev.corpus, Params: s.params, Data: dataRoot(tables), Now: options.Now}
+	tables["builtin"] = pattern.Table{List: true, Values: options.Builtin}
+	env := pattern.Environment{Resolve: ev.corpus, Params: s.params, Data: pattern.DataRoot(tables), Now: options.Now}
 	if rule.Query.Semantic {
 		if !options.Semantic.Enabled {
 			return nil, nil
