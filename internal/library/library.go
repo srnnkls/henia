@@ -120,18 +120,19 @@ func Open(project string, extra []string) *Library {
 		l.add(Package{Name: Project, Tier: Project, Root: root, Config: config})
 		l.dependencies(project)
 	}
-	roots := slices.Clone(extra)
+	for _, root := range extra {
+		l.add(readPackage(root, Global))
+	}
 	for _, dir := range []string{PackagesDir("global"), legacyDir()} {
-		if entries, err := os.ReadDir(dir); err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
-					roots = append(roots, filepath.Join(dir, entry.Name()))
-				}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if (entry.IsDir() || entry.Type()&os.ModeSymlink != 0) && !l.has(entry.Name()) {
+				l.add(readPackage(filepath.Join(dir, entry.Name()), Global))
 			}
 		}
-	}
-	for _, root := range roots {
-		l.add(readPackage(root, Global))
 	}
 	return l
 }
@@ -182,6 +183,10 @@ func (l *Library) dependencies(project string) {
 			l.add(readPackage(root, Dependency))
 		}
 	}
+}
+
+func (l *Library) has(name string) bool {
+	return slices.ContainsFunc(l.Packages, func(p Package) bool { return p.Name == name })
 }
 
 func (l *Library) add(pkg Package) {
