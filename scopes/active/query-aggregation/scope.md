@@ -119,7 +119,7 @@ An aggregate takes one trailing comparison, `(>, >=, <, <=)` with a number or `$
 - [ ] Given `(skill (code :lang ?l)) @s (group ?l (count @s ?n))` over a fixture skill holding `go` and `bash` blocks, then both languages print with `?n=1`.
 - [ ] Given `(code :lang "cobol") @c (group (count @c ?n))`, then one row prints with `?n=0`.
 - [ ] Given tropos, when running `henia q '(skill :id "limen" (from (link)? @l))'`, then it prints a row with `@l` empty (rows dedupe on their captures, so both `limen` elements print as one row).
-- [ ] Given tropos, when running `henia q '(skill :words 0) @s' --count`, then it prints 0.
+- [ ] Given tropos, when running `henia q '(skill :words 0 (file)) @s' --count`, then it prints 0 (skills without files, such as the dependency duplicates in Gotchas, count 0 by FR-4).
 - [ ] Given tropos, when running `henia q '(skill (section)? @x) @s (group @s (count @x ?n))' --sort -?n --json`, then each object holds `"s"` and a numeric `"?n"`, in descending order.
 - [ ] Given a lint module rule ending in `(group @t (count @l ?n (< $min-inbound))))` with `min-inbound: 1`, when linting a library with one unreferenced skill, then exactly that skill is reported with `{?n}` rendered as 0.
 
@@ -153,6 +153,8 @@ Each task tests behavior its predecessor makes reachable, so batches are serial.
 - The acceptance commands against `~/projects/tropos`.
 
 ## Gotchas & Learnings
+
+- Follow-up outside this scope: the corpus attaches both copies' files to the global element when a dependency and a global install share a skill id; fix ownership in internal/library/corpus.go.
 
 - tropos resolves two `limen` skill elements, so per-skill counts group by the `@skill` node, not by `:id`; grouping on `?id` merges them.
 - When a dependency package and a global install provide the same skill id, the corpus attaches both copies' files to the global skill element; the dependency element has no files and counts `:words 0` (gestalt, limen, loqui in tropos).

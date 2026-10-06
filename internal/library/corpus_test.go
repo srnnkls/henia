@@ -151,3 +151,34 @@ func TestCountsEmptyBody(t *testing.T) {
 		t.Errorf("empty body :lines 0: %d rows, want 1", got)
 	}
 }
+
+func TestCountsMalformedFrontmatterCRLF(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a", "SKILL.md")
+	write(t, path, "---\r\nbroken: [\r\n---\r\none\r\n")
+	corpus := Documents([]Document{{Path: path, Kind: "skill"}})
+	for query, want := range map[string]int{
+		`(skill :id "a" (file :path "SKILL.md" :words 1))`:     1,
+		`(skill :id "a" (file :path "SKILL.md" :chars 5))`:     1,
+		`(skill :id "a" (file :path "SKILL.md" :lines 1))`:     1,
+		`(skill :id "a" (file (problem :kind "frontmatter")))`: 1,
+	} {
+		if got := matches(t, corpus, query); got != want {
+			t.Errorf("%s: %d rows, want %d", query, got, want)
+		}
+	}
+}
+
+func TestCountsMalformedFrontmatterClosedAtEOF(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a", "SKILL.md")
+	write(t, path, "---\nbroken: [\n---")
+	corpus := Documents([]Document{{Path: path, Kind: "skill"}})
+	for query, want := range map[string]int{
+		`(skill :id "a" (file :path "SKILL.md" :words 0))`:     1,
+		`(skill :id "a" (file :path "SKILL.md" :lines 0))`:     1,
+		`(skill :id "a" (file (problem :kind "frontmatter")))`: 1,
+	} {
+		if got := matches(t, corpus, query); got != want {
+			t.Errorf("%s: %d rows, want %d", query, got, want)
+		}
+	}
+}

@@ -210,9 +210,21 @@ batches:
         status: fixed
     residual: []
     reports: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-*
-deferred:
-  - id: B4-D1
-    found_by:
-      - claude-opus (rereview)
-    claim: withoutFrontmatter recognizes LF delimiters only; malformed CRLF frontmatter, or a closing --- at EOF without newline, keeps the whole source in Body
-    reason: re-review observation outside the admitted triggers; cannot open a fix round
+deferred: []
+integration:
+  reviewers:
+    - claude-opus
+    - peer-gpt6.1-sol
+    - peer-gpt6-astra
+  cross_batch_findings:
+    - id: I-M1
+      found_by:
+        - peer-gpt6.1-sol
+      mechanism: 'deferred B4-D1 reachable through grouped lint thresholds: fallback kept CRLF/EOF-closed frontmatter'
+      fix: artifact.SplitFrontmatter shared by Parse and the corpus fallback
+      status: fixed
+      rereview: peer-gpt6.1-sol fixed
+  acceptance: 10/11 met at 520d9fd; AC9 amended by user decision to (skill :words 0 (file)) @s --count = 0 (verified 0); duplicate-id corpus ownership recorded as follow-up
+  validation: go test ./... -count=1 ok; go vet + go build ok; henia lint test 29 passed
+  base_drift: 0 behind origin/feat/markup-pipeline (trunk) and origin/fix/library-links
+  readiness: ready

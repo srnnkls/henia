@@ -149,7 +149,7 @@ func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render
 	}
 	art, err := artifact.Parse(data)
 	if err != nil {
-		file := &markup.Element{Type: "file", Attrs: attrs, Body: string(withoutFrontmatter(data)), Line: 1, EndLine: 1}
+		file := &markup.Element{Type: "file", Attrs: attrs, Body: withoutFrontmatter(data), Line: 1, EndLine: 1}
 		c.adopt(file, problem("frontmatter", err.Error(), 1, 1))
 		c.adopt(parent, file)
 		c.Problems = append(c.Problems, fmt.Sprintf("%s: %v", physical, err))
@@ -243,15 +243,12 @@ func (c *Corpus) stub(parent *markup.Element, physical, rel, kind string, _ func
 	c.adopt(parent, file)
 }
 
-func withoutFrontmatter(data []byte) []byte {
-	if !bytes.HasPrefix(data, []byte("---\n")) {
-		return data
+func withoutFrontmatter(data []byte) string {
+	_, body, err := artifact.SplitFrontmatter(string(data))
+	if err != nil {
+		return string(data)
 	}
-	end := bytes.Index(data[3:], []byte("\n---\n"))
-	if end < 0 {
-		return data
-	}
-	return data[3+end+len("\n---\n"):]
+	return body
 }
 
 func problem(kind, message string, line, column int) *markup.Element {
