@@ -17,7 +17,7 @@ standard library's patterns and compose new rules from them.
 |---|---|---|
 | `std/structure` | `large-skill`, `large-static`, `duplicate-heading` | `max-lines` (500), `max-static-lines` (150) |
 | `std/metadata` | `metadata`, `stale-review`, `invalid-template`, `invalid-markup` | `max-age-days` (180) |
-| `std/references` | `broken-link`, `missing-reference`, `outdated-reference` | `outdated` map |
+| `std/references` | `broken-link`, `missing-reference`, `outdated-reference`; define `reference` | `outdated` map, `sigils` map |
 | `std/duplicates` | `duplicate-skill`, `duplicate-content` | `min-words` (12) |
 | `std/slots` | `invalid-slot`, `unknown-slot` | |
 | `std/similarity` | `similar-content`, `semantic-content` | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
@@ -123,12 +123,18 @@ The module name is its path relative to the layer, without `.md`, as in
   become diagnostics, and one module may give an id several clauses.
 - `(define (name ?var @capture ...) pattern...)` names a pattern. Callers pass
   the variables and captures it binds, and every other variable stays local to
-  each use.
+  each use. A parameter bound by a regexp group takes a `?variable` or a value
+  to compare with.
 - `(import module)` brings in a module's defines. Names that would collide are
   an error.
 
 Frontmatter `params` scalars become `$name` values. `data` maps and lists become
 `row` nodes under a `data` root, with `:table`, `:key` or `:index`, and `:value`.
+
+`std/references` defines how a code span names an artifact.
+`(reference @r ?kind ?name)` matches a single-backtick span whose sigil, looked
+up in its `sigils` table, gives the kind: `skill`, `command`, `agent`, `file` or
+`tool`. Lint and `henia query` read the canonical text's references through it.
 An example overrides params in its fence info, as in ```` ```md max-lines=2 ````
 or ```` ```md outdated.old=new ````. A Matches example must make its rule report;
 a Passes example must not.
@@ -138,7 +144,7 @@ a Passes example must not.
 | Key | Meaning |
 |---|---|
 | `:severity` | `warning` (default) or `error` |
-| `:message` | text with `{@c}` (path:line), `{@c.line}`, `{@c.text}`, `{@c.KEY}`, `{?var}`, `{?var.percent}`, `{?var.3}`, `{$param}` and `{shared}` |
+| `:message` | text with `{@c}` (path:line), `{@c.line}`, `{@c.text}`, `{@c.KEY}`, `{?var}`, `{?var.percent}`, `{?var.3}`, `{$param}` and `{shared}`; a `{?var}` counts as a use of the variable |
 | `:at @a @b` | location: the first of these captures that matched; else the first capture |
 | `:related @c ...` | related location, chosen the same way |
 | `:focus ?var` | moves the location to the variable's first occurrence in the node |

@@ -162,7 +162,12 @@ func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render
 		body, syntax = render()
 		shift = 0
 	}
-	file, _ := markup.Tree([]byte(body), c.references(body, syntax)...)
+	file, _ := markup.Tree([]byte(body))
+	links, err := c.references(file, body, syntax, render != nil)
+	if err != nil {
+		c.Problems = append(c.Problems, fmt.Sprintf("%s: %v", physical, err))
+	}
+	markup.Graft(file, links...)
 	var problems []*markup.Element
 	directives := []byte(body)
 	if typed {
@@ -292,12 +297,19 @@ func frontmatter(values map[string]any, header []byte, lines int) *markup.Elemen
 	return head
 }
 
-func (c *Corpus) references(body string, syntax *regexp.Regexp) []*markup.Element {
+func (c *Corpus) references(file *markup.Element, body string, syntax *regexp.Regexp, rendered bool) ([]*markup.Element, error) {
 	var links []*markup.Element
 	add := func(start, end int, attrs map[string]string) {
 		links = append(links, &markup.Element{Type: "link", Attrs: attrs, Start: start + 1, End: end - 1})
 	}
-	for _, ref := range reference.Parse(body) {
+	var refs []reference.Reference
+	var err error
+	if rendered {
+		refs = reference.Parse(body)
+	} else {
+		refs, err = reference.Recognize(file)
+	}
+	for _, ref := range refs {
 		switch ref.Type {
 		case reference.TypeSkill:
 			attrs := c.skillLink(ref)
@@ -332,7 +344,7 @@ func (c *Corpus) references(body string, syntax *regexp.Regexp) []*markup.Elemen
 			add(m[0], m[1], attrs)
 		}
 	}
-	return links
+	return links, err
 }
 
 func (c *Corpus) skillLink(ref reference.Reference) map[string]string {
