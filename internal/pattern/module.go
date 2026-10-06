@@ -175,6 +175,30 @@ func (r *reader) expand(d Define, open token) error {
 	suffix := "_" + strconv.Itoa(r.expanded)
 	var body []token
 	for _, t := range d.Body {
+		if t.kind == tRegex {
+			if re, err := regexp.Compile(t.text); err == nil {
+				for _, name := range re.SubexpNames() {
+					if name == "" {
+						continue
+					}
+					if t.groups == nil {
+						t.groups = map[string]string{}
+					}
+					t.groups[name] = "?" + name + suffix
+					if i := slices.Index(d.Params, "?"+name); i >= 0 {
+						arg := args[i]
+						switch {
+						case len(arg) == 1 && arg[0].kind == tVar:
+							t.groups[name] = "?" + arg[0].text
+						case len(arg) == 1 && (arg[0].kind == tString || arg[0].kind == tSymbol || arg[0].kind == tInt):
+							t.groups[name] = "=" + arg[0].text
+						default:
+							return &Error{Offset: open.pos, Message: fmt.Sprintf("(%s ...) binds ?%s from a regexp group, so it takes a ?variable or a value there", d.Name, name)}
+						}
+					}
+				}
+			}
+		}
 		if t.kind == tVar || t.kind == tCapture {
 			if i := slices.Index(d.Params, sigil(t)); i >= 0 {
 				body = append(body, args[i]...)
@@ -249,6 +273,12 @@ func (r *reader) rule(open token) (*Rule, error) {
 	}
 	if rule.Message == "" {
 		return nil, &Error{Offset: open.pos, Message: fmt.Sprintf("rule %s needs a :message", rule.ID)}
+	}
+	r.printed = nil
+	for _, m := range placeholder.FindAllStringSubmatch(rule.Message, -1) {
+		if m[1] == "?" {
+			r.printed = append(r.printed, m[2])
+		}
 	}
 	q, err := r.query(tClose)
 	if err != nil {

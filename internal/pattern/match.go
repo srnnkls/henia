@@ -414,6 +414,16 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 	}
 	seed := binding{}
 	for _, a := range p.Attrs {
+		if len(a.Groups) > 0 {
+			vars, ok := a.submatches(e)
+			if !ok {
+				return nil, nil
+			}
+			if seed, ok = m.unify(seed, binding{vars: vars}); !ok {
+				return nil, nil
+			}
+			continue
+		}
 		if a.Var == "" {
 			if m.test(a, e) == a.Negate {
 				return nil, nil
@@ -843,6 +853,32 @@ func (a Attr) value(e *markup.Element) (string, bool) {
 	}
 	value, ok := e.Attrs[a.Key]
 	return value, ok
+}
+
+func (a Attr) submatches(e *markup.Element) (map[string]string, bool) {
+	text, ok := e.Text, true
+	if a.Key != "matches" {
+		text, ok = a.value(e)
+	}
+	match := a.Re.FindStringSubmatch(text)
+	if !ok || match == nil {
+		return nil, false
+	}
+	vars := map[string]string{}
+	for _, g := range a.Groups {
+		value := match[a.Re.SubexpIndex(g.Name)]
+		if g.Var == "" {
+			if value != g.Value {
+				return nil, false
+			}
+			continue
+		}
+		if bound, seen := vars[g.Var]; seen && bound != value {
+			return nil, false
+		}
+		vars[g.Var] = value
+	}
+	return vars, true
 }
 
 func lines(e *markup.Element) int {
