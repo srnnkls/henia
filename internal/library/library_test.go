@@ -104,3 +104,24 @@ func TestDependencyPackages(t *testing.T) {
 		t.Errorf("tropos config = %q", review.Origin.Config)
 	}
 }
+
+func TestGlobalPackageShadowedByDependency(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
+	project := filepath.Join(root, "notes")
+	skill(t, filepath.Join(PackagesDir(ProjectKey(project)), "tropos"), "review")
+	skill(t, filepath.Join(PackagesDir("global"), "tropos"), "review")
+	skill(t, filepath.Join(PackagesDir("global"), "tropos"), "scope")
+
+	lib := Open(project, nil)
+	var ids []string
+	for _, e := range lib.Entries {
+		ids = append(ids, e.ID+" "+e.Tier)
+	}
+	if got, want := strings.Join(ids, ", "), "tropos:review dependency"; got != want {
+		t.Errorf("entries = %s; want %s", got, want)
+	}
+	if skills := lib.Corpus(nil).Root.Children; len(skills) != 1 || len(skills[0].Children) == 0 {
+		t.Errorf("corpus holds %d skills; want one with its files", len(skills))
+	}
+}
