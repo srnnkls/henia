@@ -264,3 +264,10 @@ harness acceptance tests that compose slots through `claude -p` and `codex exec`
 (`mise run test:acceptance`, see [slots](docs/slots.md#acceptance-tests)). Specs
 live under [`specs/draft`](specs/draft); the harness scope now uses TOML + Expr.
 Starlark and CUE are not required or executed.
+
+Benchmarks measure parsing, rendering, `henia build` and `henia show` over a
+skill corpus, `$HENIA_BENCH_CORPUS` or `~/projects/tropos`, and skip without one:
+
+```bash
+go test -run '^$' -bench . -benchmem ./internal/markup ./internal/build ./internal/cli
+```
