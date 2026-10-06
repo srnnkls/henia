@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.1.0-alpha.18](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.17...v0.1.0-alpha.18) (2026-10-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* **query:** a capture inside a pattern's parentheses no longer names the enclosing node; (skill @s ...) is an error, and (skill :id "git" @s) captures "git". Aggregate outputs and scores take @name instead of ?name, lint rules take :score @score, and --sort names them as @n.
+* **preload:** Henia no longer runs a policy program it finds on PATH, and preload.fas_timeout is now preload.policy_timeout.
+
+### Features
+
+* **preload:** ask only a policy command the user configures ([135e96c](https://github.com/srnnkls/henia/commit/135e96c7f9325b8ef4bfdca0fb14d3adc0593fa9))
+* **query:** a capture applies to what precedes it ([793ca49](https://github.com/srnnkls/henia/commit/793ca49550c7fc4a050e67a9ff7a728b745cdd52))
+* **query:** accept top-level optional patterns as left joins ([ba9cab7](https://github.com/srnnkls/henia/commit/ba9cab7d596ad6195b487e0057082f4f0a4de188))
+* **query:** count words, chars and lines on skill and file nodes ([3fa844f](https://github.com/srnnkls/henia/commit/3fa844f89d1a1c1fe4d7ea252bc43b84d5bd5109))
+* **query:** fall back per enclosing row for optional siblings and relation targets ([d3b2ea9](https://github.com/srnnkls/henia/commit/d3b2ea92d861eb1b1393d6310a81c72a50570455))
+* **query:** group rows and aggregate them with (group ...) ([6ca5cd9](https://github.com/srnnkls/henia/commit/6ca5cd94cc264ae9dc15df41b86eb890831a172a))
+* **query:** let optional bindings join a required binder matched before them ([b54b05c](https://github.com/srnnkls/henia/commit/b54b05cb72396ed653354dc152c54cbef09184b1))
+* **query:** sort rows with --sort ([e37b6a8](https://github.com/srnnkls/henia/commit/e37b6a860acfbcbc9683b57d2a48c20da54e1c5e))
+
+
+### Bug Fixes
+
+* **library:** shadow a global package named like a project dependency ([2f23a99](https://github.com/srnnkls/henia/commit/2f23a99f687103bdc82399181aa61f89eebfcdb6))
+* **library:** strip frontmatter the parser recognizes when it fails to decode ([2a32d7f](https://github.com/srnnkls/henia/commit/2a32d7fac73c369a59173cc78b4a3010fe65bb05))
+* **profile:** move vendor profiles out of a vendor directory ([542ced0](https://github.com/srnnkls/henia/commit/542ced0b7607547ab462a2a2e64e41e4d6c778da))
+* **reference:** a # reference names a file only when it looks like a path ([b1998ae](https://github.com/srnnkls/henia/commit/b1998aeea3be06829ea5561af3eb8e41911dae93))
+* **transform:** render undefined template variables as nothing ([3c70ab9](https://github.com/srnnkls/henia/commit/3c70ab92d653282a764ef64bbed0725ad2f1c036))
+
+
+### Performance Improvements
+
+* **library:** compute skill digests and sections only for ls --json ([52e2c70](https://github.com/srnnkls/henia/commit/52e2c702a21ee7ebc4e8202f69c5b4fc4ae9877b))
+* **markup:** share goldmark parsers and count parses ([690799b](https://github.com/srnnkls/henia/commit/690799b20f4de12109a58c663352c221608d09ee))
+* **query:** match typed patterns against a node-kind index ([28457d8](https://github.com/srnnkls/henia/commit/28457d8c535b58c2721b107955342b1132161381))
+* **transform:** cache reference templates and splice links in one pass ([c1c887f](https://github.com/srnnkls/henia/commit/c1c887fe0c6ef7ee0180b474b76dbcbde8a61d9e))
+
 ## [0.1.0-alpha.17](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.16...v0.1.0-alpha.17) (2026-10-05)
 
 
