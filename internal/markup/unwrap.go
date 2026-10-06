@@ -3,6 +3,9 @@ package markup
 import "strings"
 
 func Unwrap(source, name string) (string, []string) {
+	if !strings.Contains(source, name) {
+		return source, nil
+	}
 	root, _ := Tree([]byte(source))
 	type block struct {
 		start, end int
