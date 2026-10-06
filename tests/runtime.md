@@ -319,14 +319,13 @@ $ mkdir -p "$T/config/henia"; printf '[resources]\ndisclosure = false\n' > "$T/c
 
 `henia show` runs a skill's preloads, `` !`cmd` `` inline or a fence whose info
 string is `!`, and prints each command above its output. Stubs stand in for
-`fas`, `gh` and `curl`; `pre` writes a skill whose body is one preload block.
+`gh` and `curl`; `pre` writes a skill whose body is one preload block.
 
 ````scrut
 $ B="$T/bin"; S="$L/tropos/skills/pre"; mkdir -p "$B" "$S" "$T/config/henia"
-> printf '#!/bin/sh\ncat > /dev/null\necho "{\\"decision\\":\\"allow\\"}"\n' > "$B/fas"
 > printf '#!/bin/sh\necho "gh $*"\n' > "$B/gh"
 > printf '#!/bin/sh\necho "curl $*"\n' > "$B/curl"
-> chmod +x "$B/fas" "$B/gh" "$B/curl"
+> chmod +x "$B/gh" "$B/curl"
 > hn() { env PATH="$B:$PATH" HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_CONFIG_HOME="$T/config" henia "$@"; }
 > pre() { printf -- '---\nname: pre\ndescription: Preloads.\n---\n\n```!\n%s\n```\n' "$1" > "$S/SKILL.md"; hn show pre; }
 > printf -- '---\nname: pre\ndescription: Preloads.\n---\n\n# Pre\n\n- Branch: !`git --no-optional-locks branch --show-current`\n\n```!\necho one\necho two\n```\n\nExamples stay text: `` !`date` `` and\n\n```markdown\nStatus: !`git status`\n```\n' > "$S/SKILL.md"
@@ -458,7 +457,7 @@ curl -s -X POST https://search.example.com/logs/_search -d {"query":{"match_all"
 ```
 ````
 
-### Configured refusals and FAS
+### Configured refusals and policy
 
 `[preload] refuse` in a user or project `henia.toml` adds refusals; nothing
 removes a built-in, and a project cannot allow unsandboxed runs.
@@ -473,21 +472,28 @@ henia: blocked by henia.toml: admin endpoints change state
 henia: preloads not run: preload.unsandboxed = "run" is honoured only in the user henia.toml
 ````
 
-When `fas` is on PATH, Henia asks it after its own check; a deny names the rule.
+`[preload] policy` in the user `henia.toml` names a command Henia asks after
+its own check; a deny names the command and the rule. Without it, Henia asks
+no one, whatever is on PATH.
 
 ````scrut
-$ printf '#!/bin/sh\ncat > /dev/null\necho "{\\"decision\\":\\"deny\\",\\"rule\\":\\"no-uname\\",\\"reason\\":\\"uname stays private\\"}"\n' > "$B/fas"
+$ printf '#!/bin/sh\ncat > /dev/null\necho "{\\"decision\\":\\"deny\\",\\"rule\\":\\"no-uname\\",\\"reason\\":\\"uname stays private\\"}"\n' > "$B/gate"; chmod +x "$B/gate"
 > pre "uname -s" | sed -n 3p
-henia: blocked by fas/no-uname: uname stays private
+> printf '[preload]\npolicy = "gate check --caller henia"\n' > "$T/config/henia/henia.toml"
+> pre "uname -s" | sed -n 3p
+Darwin|Linux (regex)
+henia: blocked by gate/no-uname: uname stays private
 ````
 
-`preload.fas_timeout` bounds the FAS call; a FAS that does not answer in time
-blocks the preload.
+`preload.policy_timeout` bounds the policy call; a policy that does not answer
+in time blocks the preload. A project `henia.toml` cannot set a policy.
 
 ````scrut
-$ printf '#!/bin/sh\nsleep 5; echo late\n' > "$B/fas"; printf '[preload]\nfas_timeout = "1s"\n' > "$T/config/henia/henia.toml"
+$ printf '#!/bin/sh\nsleep 5; echo late\n' > "$B/gate"; printf '[preload]\npolicy = "gate check --caller henia"\npolicy_timeout = "1s"\n' > "$T/config/henia/henia.toml"
 > pre "uname -s" | sed -n 3p; : > "$T/config/henia/henia.toml"
-henia: blocked: fas failed: timed out after 1s
+> printf '[preload]\npolicy = "gate check"\n' > "$P/henia.toml"; pre "echo hi" | head -n 1; rm "$P/henia.toml"
+henia: blocked: gate failed: timed out after 1s
+henia: preloads not run: preload.policy is honoured only in the user henia.toml
 ````
 
 ### Projection
@@ -529,8 +535,7 @@ echo '\''done'\'''
 named library skill declares as a preload; built-in refusals still apply.
 
 ````scrut
-$ printf '#!/bin/sh\ncat > /dev/null\necho "{\\"decision\\":\\"allow\\"}"\n' > "$B/fas"
-> printf -- '---\nname: pre\ndescription: Preloads.\n---\n\nBranch: !`git --no-optional-locks branch --show-current`\n\nOpen: !`gh pr create --fill`\n' > "$S/SKILL.md"
+$ printf -- '---\nname: pre\ndescription: Preloads.\n---\n\nBranch: !`git --no-optional-locks branch --show-current`\n\nOpen: !`gh pr create --fill`\n' > "$S/SKILL.md"
 > hn preload --skill pre -- 'git --no-optional-locks branch --show-current'
 > hn preload --skill pre -- 'gh pr create --fill'
 > hn preload --skill pre -- 'curl -s https://example.com'

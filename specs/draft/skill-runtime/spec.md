@@ -133,7 +133,7 @@ rendering and prints each in place as a `text` block: the command after `$ `
 ### Invariant
 
 A preload has no side effects. Henia guarantees this itself, independent of
-FAS, Tropos or any rule set:
+any policy, Tropos or rule set:
 
 1. Write sandbox. Every preload runs in an OS sandbox that denies file writes
    except to `/dev/null`; reads and network stay open. macOS uses
@@ -190,7 +190,8 @@ their writes still hit the sandbox, and a project can refuse them by name.
 ```toml
 [preload]
 timeout = "10s"        # per preload
-fas_timeout = "10s"    # per FAS consultation; a late answer blocks the preload
+policy = "gate check --caller henia"  # only in the user henia.toml
+policy_timeout = "10s" # per policy call; a late answer blocks the preload
 output = 8000          # bytes of output kept per preload
 unsandboxed = "skip"   # "run" only in the user henia.toml
 
@@ -205,18 +206,21 @@ reason = "admin endpoints change state"
 ```
 
 Settings come from the user `henia.toml` (`$XDG_CONFIG_HOME/henia/`) and the
-project's `henia.toml`; the project wins for `timeout`, `fas_timeout` and
+project's `henia.toml`; the project wins for `timeout`, `policy_timeout` and
 `output`. Refusal
 rules from both add to the built-ins; none removes one. Invalid settings or
 rules stop all preloads with a note.
 
-### FAS
+### Policy
 
-FAS is optional user policy consulted after Henia's own check. When `fas` is on
-PATH, Henia runs `fas eval --harness henia` in the project directory with
-`{command, skill, source, tier, caller, cwd}`. A deny prints as
-`blocked by fas/<rule>: <reason>`; `ask` arrives as deny; a rewritten command
-passes Henia's check again. A failing or unreadable `fas` blocks the preload.
+A policy is optional user configuration consulted after Henia's own check.
+When the user `henia.toml` sets `preload.policy`, Henia splits it into words,
+runs it without a shell in the project directory and writes
+`{command, skill, package, tier, caller, cwd}` to its stdin. A deny prints as
+`blocked by <command>/<rule>: <reason>`, where `<command>` is the policy's
+program name; a rewritten command passes Henia's check again. A failing,
+late or unreadable policy blocks the preload. Without the setting no policy
+runs, whatever is on PATH; a project `henia.toml` cannot set one.
 
 ### Rendering
 
@@ -233,7 +237,7 @@ only a code span directly after a `!` that starts a line or follows whitespace
 
 A projected skill is loaded by its harness, not by `henia show`, so `henia build`
 rewrites each preload into `henia preload --skill <name> -- '<command>'`, which
-applies the same check, FAS consultation, sandbox and timeout and prints the
+applies the same check, policy, sandbox and timeout and prints the
 same block. `henia preload` runs only a command the named library skill
 declares as a preload, in its neutral render or the render for any harness its
 source configures; a harness's placeholders (`${CLAUDE_SKILL_DIR}`,
@@ -261,12 +265,6 @@ those listed are read with `henia ls` and `henia show`". Harnesses truncate or
 drop descriptions well before large listings, and bare skill names are not enough
 for an agent to discover what to read.
 
-## Guarding
-
-Library content is read through the runtime. A FAS rule denies direct reads of
-`.henia/skills` and `henia/sources/` paths with Read, Grep, Glob and reading Bash
-commands. FAS stays stateless; Henia generates nothing for it.
-
 ## Fixes this requires
 
 - Global configuration honours an absolute `XDG_CONFIG_HOME`
@@ -291,12 +289,11 @@ commands. FAS stays stateless; Henia generates nothing for it.
 - Unit and scrut: preload detection, including examples that must not run;
   every built-in refusal with its message; GraphQL queries and search POSTs
   that run; a write blocked by the sandbox; timeout, output budget and exit
-  notes; configured refusals; FAS deny, rewrite and failure through a stub.
-- Acceptance: a fixture library with a canary skill, a projected entry skill and
-  FAS hooks in isolated homes; Claude Code and Codex read the canary through
-  `henia show`, and a direct read is denied. A library skill's preload prints
-  a canary only its command produces, and a preload the project's FAS rules
-  deny shows the rule instead of running.
+  notes; configured refusals; policy deny, rewrite and failure through a stub.
+- Acceptance: a fixture library with a canary skill and a projected entry
+  skill in isolated homes; Claude Code and Codex read the canary through
+  `henia show`, and a library skill's preload prints a canary only its command
+  produces.
 - Tropos: its source installs as `$XDG_DATA_HOME/henia/sources/tropos`, Claude
   projects only the entry skills, and `henia slots --for code` still resolves
   Loqui.
