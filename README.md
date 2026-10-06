@@ -79,18 +79,18 @@ Search all of them at once. Which skills do the others point to most?
 
 ```console
 $ henia query '(skill :id ?s) @t (skill :id (not ?s) (link :target ?s) @l)?
->   (group @t (count @l ?n))' --sort '-?n' --limit 3
-?n=50
+>   (group @t (count @l @n))' --sort '-@n' --limit 3
 @t  review  skill
 @l  50 nodes
+@n  50
 
-?n=29
 @t  peer  skill
 @l  29 nodes
+@n  29
 
-?n=15
 @t  test  skill
 @l  15 nodes
+@n  15
 henia query: 3 of 26 rows shown
 ```
 

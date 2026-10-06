@@ -14,6 +14,8 @@ type Query struct {
 	Members  []*Pattern
 	Absent   []*Pattern
 	Captures []string
+	Values   map[string]bool
+	numbers  map[string]bool
 	Semantic bool
 	Group    *Group
 	params   map[string]bool
@@ -74,6 +76,8 @@ type Attr struct {
 	Number    float64
 	Limit     string
 	Score     string
+	Capture   string
+	OutPos    int
 }
 
 type Error struct {
@@ -308,6 +312,8 @@ type reader struct {
 	tokens   []token
 	at       int
 	captures []string
+	values   map[string]bool
+	numbers  map[string]bool
 	semantic bool
 	params   map[string]bool
 	defines  map[string]Define
@@ -332,7 +338,7 @@ func Read(src string, sort ...string) (*Query, error) {
 }
 
 func (r *reader) query(end tokenKind) (*Query, error) {
-	r.captures, r.semantic, r.params = nil, false, map[string]bool{}
+	r.captures, r.values, r.numbers, r.semantic, r.params = nil, map[string]bool{}, map[string]bool{}, false, map[string]bool{}
 	start := r.peek().pos
 	q := &Query{}
 	for r.peek().kind != end {
@@ -384,7 +390,7 @@ func (r *reader) query(end tokenKind) (*Query, error) {
 	if len(q.Members) == 0 {
 		return nil, &Error{Offset: start, Message: "a query needs a pattern outside (not ...)", Hint: `try (skill :id "NAME" (heading) @h)`}
 	}
-	q.Captures, q.Semantic, q.params, q.sorts = r.captures, r.semantic, r.params, r.sorts
+	q.Captures, q.Values, q.numbers, q.Semantic, q.params, q.sorts = r.captures, r.values, r.numbers, r.semantic, r.params, r.sorts
 	if len(q.Captures) == 0 {
 		if len(q.Members) > 1 || len(q.Absent) > 0 {
 			return nil, &Error{Offset: start, Message: "a query of several patterns prints its captures; name one with @", Hint: `e.g. (link :target ?s) @l (skill :id ?s)`}
@@ -439,7 +445,7 @@ func (r *reader) pattern(quants string) (*Pattern, error) {
 			return r.pattern(quants)
 		}
 		if isGroup(head) {
-			return nil, &Error{Offset: head.pos, Message: "(group ...) belongs at the top level of a query, after its patterns", Hint: `e.g. (code :lang ?l) @c (group ?l (count @c ?n))`}
+			return nil, &Error{Offset: head.pos, Message: "(group ...) belongs at the top level of a query, after its patterns", Hint: `e.g. (code :lang ?l) @c (group ?l (count @c @n))`}
 		}
 		if isForm(head) {
 			return nil, &Error{Offset: head.pos, Message: fmt.Sprintf("(%s ...) belongs inside a pattern", head.text), Hint: `e.g. (skill :id "X" (` + head.text + ` (skill) @t))`}
@@ -469,19 +475,31 @@ func (r *reader) pattern(quants string) (*Pattern, error) {
 	}
 	if t := r.peek(); t.kind == tCapture {
 		r.next()
-		if p.Capture != "" {
-			return nil, &Error{Offset: t.pos, Message: "a pattern takes one capture"}
+		if err := r.name(p, t); err != nil {
+			return nil, err
 		}
-		r.name(p, t.text)
 	}
 	return p, nil
 }
 
-func (r *reader) name(p *Pattern, capture string) {
-	p.Capture = capture
-	if !slices.Contains(r.captures, capture) {
-		r.captures = append(r.captures, capture)
+func (r *reader) name(p *Pattern, t token) error {
+	if r.values[t.text] {
+		return &Error{Offset: t.pos, Message: fmt.Sprintf("@%s already names a value, so it cannot name a node", t.text), Hint: "give the node capture another name"}
 	}
+	p.Capture = t.text
+	if !slices.Contains(r.captures, t.text) {
+		r.captures = append(r.captures, t.text)
+	}
+	return nil
+}
+
+func (r *reader) value(t token) error {
+	if slices.Contains(r.captures, t.text) {
+		return &Error{Offset: t.pos, Message: fmt.Sprintf("@%s is already captured; a value capture takes a name of its own", t.text), Hint: fmt.Sprintf("rename one of the @%s captures", t.text)}
+	}
+	r.captures = append(r.captures, t.text)
+	r.values[t.text] = true
+	return nil
 }
 
 func (r *reader) body(p *Pattern, open token) error {
@@ -504,14 +522,17 @@ func (r *reader) body(p *Pattern, open token) error {
 			if err != nil {
 				return err
 			}
+			if c := r.peek(); c.kind == tCapture {
+				r.next()
+				if err := r.value(c); err != nil {
+					return err
+				}
+				attr.Capture, attr.OutPos = c.text, c.pos
+			}
 			p.Attrs = append(p.Attrs, attr)
 			afterPattern = false
 		case tCapture:
-			r.next()
-			if p.Capture != "" {
-				return &Error{Offset: t.pos, Message: "a pattern takes one capture"}
-			}
-			r.name(p, t.text)
+			return &Error{Offset: t.pos, Message: fmt.Sprintf("@%s captures what precedes it, but nothing it can capture does", t.text), Hint: "capture a pattern, as in (skill (code) @c), or a value, as in (skill :id ?s @s)"}
 		case tAnchor:
 			r.next()
 			if connect || firstChild {
@@ -648,8 +669,16 @@ func (r *reader) attr(kind string) (Attr, error) {
 					}
 					attr.Threshold = t
 				}
-				if r.peek().kind == tVar {
-					attr.Score = r.next().text
+				switch t := r.peek(); t.kind {
+				case tCapture:
+					r.next()
+					if err := r.value(t); err != nil {
+						return attr, err
+					}
+					attr.Score, attr.OutPos = t.text, t.pos
+					r.numbers[t.text] = true
+				case tVar:
+					return attr, &Error{Offset: t.pos, Message: fmt.Sprintf("a score is output, so it is a capture: @%s, not ?%s", t.text, t.text), Hint: fmt.Sprintf("e.g. (%s ?t 0.7 @%s)", form.text, t.text)}
 				}
 				r.semantic = r.semantic || form.text == "similar"
 			}

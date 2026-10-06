@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -146,6 +148,10 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 				if name == "" {
 					name = "match"
 				}
+				if cell.Value {
+					record[name] = jsonValues(cell)
+					continue
+				}
 				switch len(cell.Elements) {
 				case 0:
 					record[name] = nil
@@ -160,9 +166,7 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 				}
 			}
 			for name, value := range row.Vars {
-				if n, err := strconv.ParseFloat(value, 64); err == nil && row.Aggregates[name] {
-					record["?"+name] = n
-				} else {
+				if !strings.HasPrefix(name, "@") {
 					record["?"+name] = value
 				}
 			}
@@ -193,6 +197,10 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 			label := ""
 			if cell.Name != "" {
 				label = "@" + cell.Name + "  "
+			}
+			if cell.Value {
+				fmt.Fprintf(&block, "%s%s\n", label, cmp.Or(strings.Join(cell.Values, ", "), "-"))
+				continue
 			}
 			if len(cell.Elements) == 0 {
 				fmt.Fprintf(&block, "%s-\n", label)
@@ -229,6 +237,26 @@ func (o queryOutput) print(out io.Writer, rows []pattern.Row) {
 	case limited:
 		fmt.Fprintf(out, "henia query: %d of %d rows shown\n", shown, total)
 	}
+}
+
+func jsonValues(cell pattern.Cell) any {
+	value := func(v string) any {
+		if n, err := strconv.ParseFloat(v, 64); err == nil && cell.Number && !math.IsNaN(n) && !math.IsInf(n, 0) {
+			return n
+		}
+		return v
+	}
+	switch {
+	case len(cell.Values) == 0:
+		return nil
+	case len(cell.Values) == 1 && !cell.Collected:
+		return value(cell.Values[0])
+	}
+	values := make([]any, len(cell.Values))
+	for i, v := range cell.Values {
+		values[i] = value(v)
+	}
+	return values
 }
 
 func describe(e *markup.Element) string {

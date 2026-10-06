@@ -217,11 +217,11 @@ Frontmatter `params` scalars become `$name` values. `data` maps and lists become
 | Key | Meaning |
 |---|---|
 | `:severity` | `warning` (default) or `error` |
-| `:message` | text with `{@c}` (path:line), `{@c.line}`, `{@c.text}`, `{@c.KEY}`, `{?var}`, `{?var.percent}`, `{?var.3}`, `{$param}` and `{shared}` |
+| `:message` | text with `{@c}` (path:line), `{@c.line}`, `{@c.text}`, `{@c.KEY}`, a value capture `{@n}`, `{@n.percent}` or `{@n.3}`, `{?var}`, `{$param}` and `{shared}` |
 | `:at @a @b` | location: the first of these captures that matched; else the first capture |
 | `:related @c ...` | related location, chosen the same way |
 | `:focus ?var` | moves the location to the variable's first occurrence in the node |
-| `:score ?var` | fills `similarity` |
+| `:score @capture` | fills `similarity` from a score capture |
 | `:method name` | fills `method` |
 | `:shared @a @b` | fills `shared_phrases` and `{shared}` with up to five shared phrases |
 
@@ -243,11 +243,11 @@ Every skill is linked from at least one other skill.
 
 ```hq
 (rule unreferenced-skill
-  :message "{@t.id} has {?n} inbound links; under {$min-inbound}"
+  :message "{@t.id} has {@n} inbound links; under {$min-inbound}"
   :at @t
   (skill :id ?s) @t
   (skill :id (not ?s) (link :target ?s) @l)?
-  (group @t (count @l ?n (< $min-inbound))))
+  (group @t (count @l @n (< $min-inbound))))
 ```
 ````
 
@@ -261,7 +261,7 @@ skills/deploy/SKILL.md:14:4: warning [repeated-usage] Usage repeats; first on li
 Error: lint found 5 diagnostic(s)
 ```
 
-Grouped rows feed `:at`, `:related` and `{?var}` unchanged, and a collected
+Grouped rows feed `:at`, `:related`, `{@n}` and `{?var}` unchanged, and a collected
 capture such as `@l` locates at its first node.
 
 ### Facts lint adds

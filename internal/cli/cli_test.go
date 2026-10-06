@@ -51,7 +51,7 @@ func TestQueryGroupOutput(t *testing.T) {
 		skill.Children = append(skill.Children, file)
 		root.Children = append(root.Children, skill)
 	}
-	q, err := pattern.Read(`(code :lang ?l) @c (group ?l (count @c ?n))`)
+	q, err := pattern.Read(`(code :lang ?l) @c (group ?l (count @c @n))`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,14 +75,14 @@ func TestQueryGroupOutput(t *testing.T) {
 	}
 	counts := map[any]any{}
 	for _, record := range records {
-		counts[record["?l"]] = record["?n"]
+		counts[record["?l"]] = record["n"]
 	}
 	if want := map[any]any{"bash": 3.0, "go": 2.0}; !maps.Equal(counts, want) {
-		t.Errorf("--json ?l -> ?n = %v, want %v", counts, want)
+		t.Errorf("--json ?l -> n = %v, want %v", counts, want)
 	}
 
 	text := render(queryOutput{})
-	for _, line := range []string{"?l=bash  ?n=3", "?l=go  ?n=2"} {
+	for _, line := range []string{"?l=bash", "?l=go", "@n  3", "@n  2"} {
 		if !slices.Contains(strings.Split(text, "\n"), line) {
 			t.Errorf("text output lacks %q:\n%s", line, text)
 		}
@@ -176,7 +176,7 @@ func TestQuerySortReader(t *testing.T) {
 	}{
 		{[]string{"(skill :id ?i (frontmatter :name ?i)) @s", "--sort", "?zz"}, "?zz"},
 		{[]string{"(skill) @s", "--sort", "@x.words"}, "@x"},
-		{[]string{"(skill (code :lang ?l) @c) @s (group @s (count @c ?n))", "--sort", "?l"}, "?l"},
+		{[]string{"(skill (code :lang ?l) @c) @s (group @s (count @c @n))", "--sort", "?l"}, "?l"},
 	} {
 		out := runQuery(t, project, c.args...)
 		if !strings.HasPrefix(out, "henia query:") || !strings.Contains(out, c.name) || len(captureLines(out, "s")) > 0 {
@@ -213,14 +213,17 @@ func TestQuerySortOrder(t *testing.T) {
 	}
 
 	var langs []string
-	grouped := runQuery(t, project, "(skill (code :lang ?l) @c) @s (group ?l (count @s ?n))", "--sort", "-?n")
+	grouped := runQuery(t, project, "(skill (code :lang ?l) @c) @s (group ?l (count @s @n))", "--sort", "-@n")
 	for line := range strings.SplitSeq(grouped, "\n") {
-		if strings.HasPrefix(line, "?l=") {
+		if strings.HasPrefix(line, "?l=") || strings.HasPrefix(line, "@n") {
 			langs = append(langs, line)
 		}
 	}
-	if got, want := strings.Join(langs, " | "), "?l=bash  ?n=3 | ?l=go  ?n=1 | ?l=zsh  ?n=1"; got != want {
-		t.Errorf("grouped --sort -?n = %q, want %q", got, want)
+	if got, want := strings.Join(langs, " | "), "?l=bash | @n  3 | ?l=go | @n  1 | ?l=zsh | @n  1"; got != want {
+		t.Errorf("grouped --sort -@n = %q, want %q", got, want)
+	}
+	if got := runQuery(t, project, "(skill (code :lang ?l) @c) @s (group ?l (count @s @n))", "--sort", "-?n"); !strings.Contains(got, "aggregates are captures") {
+		t.Errorf("--sort -?n on an aggregate should point at -@n:\n%s", got)
 	}
 
 	ungrouped := runQuery(t, project, "(skill :id ?i :words ?w (frontmatter :name ?i)) @s", "--sort", "-?w")
@@ -237,7 +240,7 @@ func TestQuerySortOrder(t *testing.T) {
 
 func TestQueryGroupCellLabels(t *testing.T) {
 	project := sortFixture(t)
-	lines := strings.Split(runQuery(t, project, "(code :lang ?l) @c (group ?l (count @c ?n))"), "\n")
+	lines := strings.Split(runQuery(t, project, "(code :lang ?l) @c (group ?l (count @c @n))"), "\n")
 	if !slices.Contains(lines, "@c  1 node") || slices.Contains(lines, "@c  1 nodes") {
 		t.Errorf("single-node cell should read \"@c  1 node\":\n%s", strings.Join(lines, "\n"))
 	}
