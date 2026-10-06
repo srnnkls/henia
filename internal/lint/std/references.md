@@ -22,6 +22,23 @@ references through it.
   (row :table "sigils" :key ?sigil :value ?kind))
 ```
 
+Rendering rewrites a reference for the harness. A tool in the harness's
+`tools` table takes its mapped name, and a skill the harness serves from the
+library reads it with `henia show`; other references take the harness's
+`references` syntax.
+
+```hq
+(rewrite mapped-tool
+  :output "`{?tool}`"
+  (reference @r tool ?name)
+  (row :table "tools" :key ?name :value ?tool))
+
+(rewrite served-skill
+  :output "`henia show {?name}`"
+  (reference @r skill ?name)
+  (row :table "served" :value ?name))
+```
+
 ## broken-link
 
 Local links, images and `henia show` references must name files and heading

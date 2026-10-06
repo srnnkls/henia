@@ -12,8 +12,10 @@ import (
 )
 
 type recognizer struct {
-	query  *pattern.Query
-	tables map[string]pattern.Table
+	query    *pattern.Query
+	tables   map[string]pattern.Table
+	rewrites []*pattern.Rewrite
+	defines  map[string]pattern.Define
 }
 
 var recognition = sync.OnceValues(func() (*recognizer, error) {
@@ -34,7 +36,7 @@ var recognition = sync.OnceValues(func() (*recognizer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("std/references: %w", err)
 	}
-	r := &recognizer{query: module.Rules[len(module.Rules)-1].Query, tables: map[string]pattern.Table{}}
+	r := &recognizer{query: module.Rules[len(module.Rules)-1].Query, tables: map[string]pattern.Table{}, rewrites: module.Rewrites, defines: module.Defines}
 	raw, _ := art.Frontmatter["data"].(map[string]any)
 	for name, rows := range raw {
 		if r.tables[name], err = pattern.ParseTable(rows); err != nil {

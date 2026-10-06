@@ -54,7 +54,7 @@ a skill preload never aborts.`,
 			var rendering *library.Rendering
 			if !canonical {
 				r := newRenderer(detectHarness(flags.harness), lib)
-				rendering = &library.Rendering{Body: r.body, Reference: r.reference}
+				rendering = &library.Rendering{Body: r.references}
 			}
 			corpus := lib.Corpus(rendering)
 			for _, problem := range corpus.Problems {

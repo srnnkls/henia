@@ -2,12 +2,12 @@ package library
 
 import (
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/pattern"
+	"github.com/srnnkls/henia/internal/reference"
 )
 
 func TestCorpus(t *testing.T) {
@@ -94,8 +94,7 @@ func TestCountsAuthored(t *testing.T) {
 
 func TestCountsRendered(t *testing.T) {
 	corpus := countFixture(t).Corpus(&Rendering{
-		Body:      func(Entry) string { return "# Title\n\nOne two three four five\n\nsix" },
-		Reference: func(Entry) *regexp.Regexp { return nil },
+		Body: func(Entry) (string, []reference.Rendered) { return "# Title\n\nOne two three four five\n\nsix", nil },
 	})
 	for query, want := range map[string]int{
 		`(skill :id "a" (file :path "SKILL.md" :words 7))`:  1,
@@ -176,6 +175,23 @@ func TestCountsMalformedFrontmatterClosedAtEOF(t *testing.T) {
 		`(skill :id "a" (file :path "SKILL.md" :words 0))`:     1,
 		`(skill :id "a" (file :path "SKILL.md" :lines 0))`:     1,
 		`(skill :id "a" (file (problem :kind "frontmatter")))`: 1,
+	} {
+		if got := matches(t, corpus, query); got != want {
+			t.Errorf("%s: %d rows, want %d", query, got, want)
+		}
+	}
+}
+
+func TestRenderedLinksComeFromProvenance(t *testing.T) {
+	body := "Use `/skill:a` and `/skill:a`, then `$a`.\n"
+	corpus := countFixture(t).Corpus(&Rendering{
+		Body: func(Entry) (string, []reference.Rendered) {
+			return body, []reference.Rendered{{Reference: reference.Reference{Type: reference.TypeSkill, Name: "a", Start: 4, End: 14}, Rewrite: "skill-reference"}}
+		},
+	})
+	for query, want := range map[string]int{
+		`(skill :id "a" (link :ref "skill" :target "a" :dest "/skill:a") @l)`: 1,
+		`(skill :id "a" (link) @l)`: 1,
 	} {
 		if got := matches(t, corpus, query); got != want {
 			t.Errorf("%s: %d rows, want %d", query, got, want)

@@ -10,7 +10,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -473,9 +472,23 @@ func (r *renderer) config(path string) []byte {
 func (r *renderer) body(e library.Entry) string { return r.render(e, false) }
 
 func (r *renderer) render(e library.Entry, head bool) string {
+	body, _ := r.rendered(e, head)
+	return body
+}
+
+func (r *renderer) references(e library.Entry) (string, []reference.Rendered) {
+	return r.rendered(e, false)
+}
+
+type renderCache struct {
+	Body       string               `json:"body"`
+	References []reference.Rendered `json:"references"`
+}
+
+func (r *renderer) rendered(e library.Entry, head bool) (string, []reference.Rendered) {
 	canonical, err := os.ReadFile(e.Path)
 	if err != nil {
-		return e.Artifact.Body
+		return e.Artifact.Body, nil
 	}
 	var harness henia.Harness
 	name := ""
@@ -506,37 +519,18 @@ func (r *renderer) render(e library.Entry, head bool) string {
 	}
 	key := hex.EncodeToString(h.Sum(nil))
 	cache := filepath.Join(library.CacheDir(), "render", key[:2], key)
-	if cached, err := os.ReadFile(cache); err == nil {
-		return string(cached)
+	var cached renderCache
+	if data, err := os.ReadFile(cache); err == nil && json.Unmarshal(data, &cached) == nil {
+		return cached.Body, cached.References
 	}
-	rendered, err := build.Render(e.Artifact, name, harness, served, head)
+	rendered, refs, err := build.Render(e.Artifact, name, harness, served, head)
 	if err != nil {
-		return fmt.Sprintf("henia: rendering %s for %q failed (%v); canonical text follows\n\n%s", e.ID, name, err, e.Artifact.Body)
+		return fmt.Sprintf("henia: rendering %s for %q failed (%v); canonical text follows\n\n%s", e.ID, name, err, e.Artifact.Body), nil
 	}
-	if os.MkdirAll(filepath.Dir(cache), 0o755) == nil {
-		_ = os.WriteFile(cache, []byte(rendered.Body), 0o644)
+	if data, err := json.Marshal(renderCache{rendered.Body, refs}); err == nil && os.MkdirAll(filepath.Dir(cache), 0o755) == nil {
+		_ = os.WriteFile(cache, data, 0o644)
 	}
-	return rendered.Body
-}
-
-func (r *renderer) reference(e library.Entry) *regexp.Regexp {
-	if r.harness == "" {
-		return nil
-	}
-	harnesses, err := config.Harnesses(r.config(e.Origin.Config))
-	if err != nil {
-		return nil
-	}
-	template := harnesses[r.harness].References["skill"]
-	prefix, suffix, ok := strings.Cut(template, "{{.Name}}")
-	if !ok || strings.Contains(prefix+suffix, "{{") {
-		return nil
-	}
-	pattern := regexp.QuoteMeta(prefix) + `([a-z0-9][a-z0-9._-]*)` + regexp.QuoteMeta(suffix)
-	if !strings.ContainsAny(template, "*[]") {
-		pattern = "`" + pattern + "`"
-	}
-	return regexp.MustCompile(pattern)
+	return rendered.Body, refs
 }
 
 func executableStamp() string {

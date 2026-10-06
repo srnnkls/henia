@@ -6,7 +6,6 @@ import (
 	"maps"
 	"path"
 	"strings"
-	"sync"
 	"text/template"
 
 	"github.com/srnnkls/henia/internal/artifact"
@@ -101,6 +100,11 @@ func ApplyValueMappings(fm map[string]any, values map[string]map[string]string) 
 }
 
 func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, error) {
+	result, _, err := t.TransformReferences(art)
+	return result, err
+}
+
+func (t *Transformer) TransformReferences(art *artifact.Artifact) (*artifact.Artifact, []reference.Rendered, error) {
 	result := &artifact.Artifact{
 		Name:        art.Name,
 		Namespace:   art.Namespace,
@@ -125,7 +129,7 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	for k, v := range art.Frontmatter {
 		transformed, err := templateValue(v, templateContext)
 		if err != nil {
-			return nil, fmt.Errorf("transform frontmatter %q: %w", k, err)
+			return nil, nil, fmt.Errorf("transform frontmatter %q: %w", k, err)
 		}
 		result.Frontmatter[k] = transformed
 	}
@@ -136,24 +140,24 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	if (art.Type == artifact.TypeSkill || art.Type == artifact.TypeAgent) && t.Profile != "" {
 		can, err := canonical.Parse(result.Frontmatter)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if t.Compiler == nil {
-			return nil, fmt.Errorf("profile %s was not compiled", t.Profile)
+			return nil, nil, fmt.Errorf("profile %s was not compiled", t.Profile)
 		}
 		compiled, err := t.Compiler.Compile(art.FullName(), can.ToMap(), t.Context)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		result.Frontmatter, result.Files, result.Warnings = compiled.Frontmatter, compiled.Files, compiled.Warnings
 		if t.Strict && len(result.Warnings) > 0 {
-			return nil, fmt.Errorf("unsupported skill metadata: %s", strings.Join(result.Warnings, "; "))
+			return nil, nil, fmt.Errorf("unsupported skill metadata: %s", strings.Join(result.Warnings, "; "))
 		}
 	}
 
 	body, err := ExecuteTemplate(art.Body, templateContext)
 	if err != nil {
-		return nil, fmt.Errorf("transform body: %w", err)
+		return nil, nil, fmt.Errorf("transform body: %w", err)
 	}
 	body = slots.Expand(body, slots.Preload)
 	full, head := markup.Unwrap(body, StaticBlock)
@@ -166,16 +170,27 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		body = t.renderLinks(body, art.Name)
 	}
 
-	body, err = markup.Render(body, t.OutputFormat)
+	body, refs, dropped, err := t.renderReferences(body, art.FullName())
 	if err != nil {
-		return nil, fmt.Errorf("render directives: %w", err)
+		return nil, nil, fmt.Errorf("render references: %w", err)
 	}
+	result.Warnings = append(result.Warnings, dropped...)
 
-	body = t.renderReferences(body, art.FullName())
+	body, offsets, err := markup.RenderMapped(body, t.OutputFormat)
+	if err != nil {
+		return nil, nil, fmt.Errorf("render directives: %w", err)
+	}
+	mapped := refs[:0]
+	for _, ref := range refs {
+		if start, end, ok := offsets.Span(ref.Start, ref.End); ok {
+			ref.Start, ref.End = start, end
+			mapped = append(mapped, ref)
+		}
+	}
 
 	result.Body = body
 
-	return result, nil
+	return result, mapped, nil
 }
 
 func templateValue(value any, context map[string]any) (any, error) {
@@ -207,88 +222,22 @@ func templateValue(value any, context map[string]any) (any, error) {
 	}
 }
 
-// RenderReferences rewrites canonical references in body to the configured harness syntax.
-func (t *Transformer) RenderReferences(body string) string { return t.renderReferences(body, "") }
+func (t *Transformer) RenderReferences(body string) (string, error) {
+	body, _, _, err := t.renderReferences(body, "")
+	return body, err
+}
 
-func (t *Transformer) renderReferences(body, self string) string {
+func (t *Transformer) renderReferences(body, self string) (string, []reference.Rendered, []string, error) {
 	if !strings.Contains(body, "`") {
-		return body
+		return body, nil, nil, nil
 	}
-	refs := reference.Parse(body)
-	if len(refs) == 0 {
-		return body
+	served := maps.Clone(t.Served)
+	delete(served, self)
+	references := make(map[string]string, len(t.References))
+	for kind, config := range t.References {
+		references[kind] = config.Output
 	}
-
-	var result strings.Builder
-	end := 0
-	for _, ref := range refs {
-		var replacement string
-
-		if ref.Type == reference.TypeTool {
-			if mapped, ok := t.Tools[ref.Name]; ok {
-				replacement = "`" + mapped + "`"
-			}
-		} else if ref.Type == reference.TypeSkill && t.Served[ref.Name] && ref.Name != self {
-			replacement = "`henia show " + ref.Name + "`"
-		} else {
-			refConfig, ok := t.References[ref.Type.String()]
-			if ok {
-				output, err := t.executeReferenceTemplate(refConfig.Output, ref)
-				if err == nil {
-					replacement = wrapOutput(output)
-				}
-			}
-		}
-
-		if replacement != "" {
-			result.WriteString(body[end:ref.Start])
-			result.WriteString(replacement)
-			end = ref.End
-		}
-	}
-	result.WriteString(body[end:])
-	return result.String()
-}
-
-func wrapOutput(output string) string {
-	if strings.ContainsAny(output, "*[]") {
-		return output
-	}
-	return "`" + output + "`"
-}
-
-var referenceTemplates sync.Map
-
-func referenceTemplate(source string) (*template.Template, error) {
-	if cached, ok := referenceTemplates.Load(source); ok {
-		return cached.(*template.Template), nil
-	}
-	parsed, err := template.New("ref").Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	referenceTemplates.Store(source, parsed)
-	return parsed, nil
-}
-
-func (t *Transformer) executeReferenceTemplate(tmpl string, ref reference.Reference) (string, error) {
-	data := map[string]string{
-		"Name": ref.Name,
-		"Type": ref.Type.String(),
-		"Raw":  ref.Raw,
-	}
-
-	parsed, err := referenceTemplate(tmpl)
-	if err != nil {
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	if err := parsed.Execute(&buf, data); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
+	return reference.Render(body, reference.Rendering{Tools: t.Tools, Served: served, References: references})
 }
 
 func (t *Transformer) renderLinks(body, skill string) string {
