@@ -29,10 +29,18 @@ type Define struct {
 	Body   []token
 }
 
+type Rewrite struct {
+	ID     string
+	Output Template
+	At     string
+	Query  *Query
+}
+
 type Module struct {
-	Rules   []*Rule
-	Defines map[string]Define
-	Imports []string
+	Rules    []*Rule
+	Rewrites []*Rewrite
+	Defines  map[string]Define
+	Imports  []string
 }
 
 var ruleID = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -50,7 +58,7 @@ func ReadModule(src string, imported func(name string) (map[string]Define, error
 		open := r.next()
 		form := r.next()
 		if open.kind != tOpen || form.kind != tSymbol {
-			return nil, &Error{Offset: open.pos, Message: "a module holds (rule ...), (define ...) and (import ...) forms"}
+			return nil, &Error{Offset: open.pos, Message: "a module holds (rule ...), (rewrite ...), (define ...) and (import ...) forms"}
 		}
 		switch form.text {
 		case "import":
@@ -84,8 +92,14 @@ func ReadModule(src string, imported func(name string) (map[string]Define, error
 				return nil, err
 			}
 			module.Rules = append(module.Rules, rule)
+		case "rewrite":
+			rewrite, err := r.rewrite(open)
+			if err != nil {
+				return nil, err
+			}
+			module.Rewrites = append(module.Rewrites, rewrite)
 		default:
-			return nil, &Error{Offset: form.pos, Message: fmt.Sprintf("unknown module form (%s ...)", form.text), Hint: suggest(form.text, []string{"rule", "define", "import"})}
+			return nil, &Error{Offset: form.pos, Message: fmt.Sprintf("unknown module form (%s ...)", form.text), Hint: suggest(form.text, []string{"rule", "rewrite", "define", "import"})}
 		}
 	}
 	return module, nil
@@ -297,6 +311,60 @@ func (r *reader) rule(open token) (*Rule, error) {
 		}
 	}
 	return rule, nil
+}
+
+func (r *reader) rewrite(open token) (*Rewrite, error) {
+	id := r.next()
+	if id.kind != tSymbol || !ruleID.MatchString(id.text) {
+		return nil, &Error{Offset: id.pos, Message: "a rewrite needs an id of lowercase letters, digits and hyphens", Hint: "e.g. (rewrite served-skill ...)"}
+	}
+	rewrite := &Rewrite{ID: id.text}
+	output := ""
+	for r.peek().kind == tKey {
+		key := r.next()
+		value := r.next()
+		switch key.text {
+		case "output":
+			if value.kind != tString {
+				return nil, r.unexpected(value, "an \"output\" template")
+			}
+			output = value.text
+		case "at":
+			if value.kind != tCapture {
+				return nil, r.unexpected(value, "a @capture for :at")
+			}
+			rewrite.At = value.text
+		default:
+			return nil, &Error{Offset: key.pos, Message: fmt.Sprintf("a rewrite has no key :%s", key.text), Hint: suggest(key.text, []string{"output", "at"})}
+		}
+	}
+	r.printed = nil
+	for _, m := range placeholder.FindAllStringSubmatch(output, -1) {
+		if m[1] == "?" {
+			r.printed = append(r.printed, m[2])
+		}
+	}
+	q, err := r.query(tClose)
+	if err != nil {
+		return nil, err
+	}
+	r.next()
+	rewrite.Query, rewrite.Output = q, ParseTemplate(output)
+	if len(q.Captures) == 0 {
+		return nil, &Error{Offset: open.pos, Message: fmt.Sprintf("rewrite %s captures no node to replace", rewrite.ID), Hint: "capture the replaced node, as in (reference @r ?kind ?name)"}
+	}
+	if rewrite.At == "" {
+		rewrite.At = q.Captures[0]
+	}
+	if !slices.Contains(q.Captures, rewrite.At) {
+		return nil, &Error{Offset: open.pos, Message: fmt.Sprintf("rewrite %s replaces @%s, which its query does not capture", rewrite.ID, rewrite.At)}
+	}
+	for _, m := range placeholder.FindAllStringSubmatch(output, -1) {
+		if m[1] == "@" && !slices.Contains(q.Captures, m[2]) {
+			return nil, &Error{Offset: open.pos, Message: fmt.Sprintf("rewrite %s's output uses @%s, which its query does not capture", rewrite.ID, m[2])}
+		}
+	}
+	return rewrite, nil
 }
 
 func (rule *Rule) Params() map[string]bool {

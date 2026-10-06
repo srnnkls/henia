@@ -125,6 +125,11 @@ The module name is its path relative to the layer, without `.md`, as in
   the variables and captures it binds, and every other variable stays local to
   each use. A parameter bound by a regexp group takes a `?variable` or a value
   to compare with.
+- `(rewrite id :output "template" [:at @c] pattern...)` replaces
+  the captured node, the first capture unless `:at` names one, with the
+  interpolated output when Henia renders a skill. Rewrites apply in module
+  order; where two overlap, the earlier one wins and the build warns about the
+  other. Lint ignores rewrites.
 - `(import module)` brings in a module's defines. Names that would collide are
   an error.
 
