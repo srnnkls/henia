@@ -141,7 +141,6 @@ $ henia show code#runtime-context
 …
 Slot providers:
 
-
 ```text
 $ henia slots code.style code.validation test.conventions review.criteria
 code.style.go	project	henia show project:house-go

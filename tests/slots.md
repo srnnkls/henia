@@ -207,7 +207,6 @@ $ skill "$G/tropos/skills/review" 'henia:\n  slots:\n    review.lenses:\n' '\nCr
 
 Criteria:
 
-
 ```text
 $ henia slots review.criteria review.lenses
 review.criteria project henia show project:criteria

@@ -117,7 +117,10 @@ func (r *Runner) Expand(ctx context.Context, body string, c Context) string {
 			b.WriteString(fence(p.Indent, p.Command, output))
 			continue
 		}
-		b.WriteString("\n" + fence(p.Indent, p.Command, output))
+		if b.Len() > 0 && !strings.HasSuffix(b.String(), "\n") {
+			b.WriteString("\n")
+		}
+		b.WriteString(fence(p.Indent, p.Command, output))
 		for last < len(body) && (body[last] == ' ' || body[last] == '\t') {
 			last++
 		}

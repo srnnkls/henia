@@ -176,7 +176,10 @@ func TestExpand(t *testing.T) {
 	if got := r.Expand(context.Background(), body, Context{Dir: t.TempDir()}); got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
-	if got := r.Expand(context.Background(), "!`echo '```'`\n", Context{Dir: t.TempDir()}); got != "\n````text\n$ echo '```'\n```\n````\n" {
+	if got := r.Expand(context.Background(), "!`echo '```'`\n", Context{Dir: t.TempDir()}); got != "````text\n$ echo '```'\n```\n````\n" {
 		t.Fatalf("fence: %q", got)
+	}
+	if got := r.Expand(context.Background(), "Slot providers:\n\n!`echo a`\n\n# Next\n", Context{Dir: t.TempDir()}); got != "Slot providers:\n\n```text\n$ echo a\na\n```\n\n# Next\n" {
+		t.Fatalf("own paragraph: %q", got)
 	}
 }
