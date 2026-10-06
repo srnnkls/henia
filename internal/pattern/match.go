@@ -72,6 +72,7 @@ type matcher struct {
 	linkers  map[*markup.Element][]*markup.Element
 	incoming map[*markup.Element][]*markup.Element
 	root     *markup.Element
+	kinds    map[string][]*markup.Element
 	produced int
 }
 
@@ -105,10 +106,12 @@ func (q *Query) Run(root *markup.Element, env Environment) ([]Row, error) {
 		env.Now = time.Now()
 	}
 	m := &matcher{env: env, resolve: env.Resolve, embed: env.Embed, memo: map[memoKey][]binding{}, reached: map[relationKey][]*markup.Element{}, root: root, shingles: map[string]map[string]bool{}, vectors: map[string][]float64{}}
+	m.kinds = map[string][]*markup.Element{}
 	order := 0
 	root.Walk(func(e *markup.Element) bool {
 		e.Order = order
 		order++
+		m.kinds[e.Type] = append(m.kinds[e.Type], e)
 		return true
 	})
 	seen := map[string]bool{}
@@ -144,7 +147,7 @@ func (q *Query) Run(root *markup.Element, env Environment) ([]Row, error) {
 func (m *matcher) everywhere(p *Pattern, implicit bool) ([]binding, error) {
 	var out []binding
 	var failure error
-	m.root.Walk(func(e *markup.Element) bool {
+	visit := func(e *markup.Element) bool {
 		bindings, err := m.at(p, e)
 		if err != nil {
 			failure = err
@@ -157,8 +160,44 @@ func (m *matcher) everywhere(p *Pattern, implicit bool) ([]binding, error) {
 			out = append(out, b)
 		}
 		return true
-	})
+	}
+	types, typed := patternTypes(p)
+	if !typed {
+		m.root.Walk(visit)
+		return out, failure
+	}
+	var candidates []*markup.Element
+	for _, kind := range types {
+		candidates = append(candidates, m.kinds[kind]...)
+	}
+	if len(types) > 1 {
+		slices.SortFunc(candidates, func(a, b *markup.Element) int { return a.Order - b.Order })
+	}
+	for _, e := range candidates {
+		if !visit(e) {
+			break
+		}
+	}
 	return out, failure
+}
+
+func patternTypes(p *Pattern) ([]string, bool) {
+	if len(p.Alts) == 0 {
+		return []string{p.Type}, p.Type != ""
+	}
+	var types []string
+	for _, alt := range p.Alts {
+		kinds, typed := patternTypes(alt)
+		if !typed {
+			return nil, false
+		}
+		for _, kind := range kinds {
+			if !slices.Contains(types, kind) {
+				types = append(types, kind)
+			}
+		}
+	}
+	return types, true
 }
 
 func (m *matcher) join(members, absent []*Pattern) ([]binding, error) {
