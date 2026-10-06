@@ -432,10 +432,8 @@ func transformerFor(name, output string, h henia.Harness, kind artifact.Type) (h
 		Tools: h.Tools, References: convertReferences(h.References),
 	}
 	if h.Profile != "" {
-		profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot)
-		if err == nil {
-			tr.Compiler, err = vendor.NewCompiler(profile)
-		}
+		_, compiler, err := vendor.LoadCompiler(h.Profile, h.ProjectRoot, h.UserRoot)
+		tr.Compiler = compiler
 		if err != nil {
 			return h, nil, fmt.Errorf("harness %s: %w", name, err)
 		}

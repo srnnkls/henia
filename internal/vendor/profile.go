@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/expr-lang/expr/vm"
 	"github.com/pelletier/go-toml/v2"
@@ -75,8 +76,37 @@ func Load(name, project, user string) (Profile, error) {
 	if !filepath.IsLocal(name) || filepath.Base(name) != name || name == "." {
 		return Profile{}, fmt.Errorf("invalid profile name %q", name)
 	}
-	merged := map[string]any{}
-	found := false
+	layers, key, err := profileLayers(name, project, user)
+	if err != nil {
+		return Profile{}, err
+	}
+	if cached, ok := profiles.Load(key); ok {
+		return cached.(loaded).profile, nil
+	}
+	p, err := decodeLayers(layers)
+	if err != nil {
+		return Profile{}, err
+	}
+	profiles.Store(key, loaded{profile: p})
+	return p, nil
+}
+
+type loaded struct {
+	profile  Profile
+	compiler *Compiler
+	err      error
+}
+
+var profiles sync.Map
+
+type layer struct {
+	path string
+	data []byte
+}
+
+func profileLayers(name, project, user string) ([]layer, string, error) {
+	var layers []layer
+	key := name
 	paths := []string{"profiles/" + name + ".toml", filepath.Join(user, "harnesses", name, "transform.toml"), filepath.Join(project, ".henia", "harnesses", name, "transform.toml")}
 	for i, path := range paths {
 		if i == 1 && user == "" {
@@ -93,17 +123,43 @@ func Load(name, project, user string) (Profile, error) {
 			continue
 		}
 		if err != nil {
-			return Profile{}, err
+			return nil, "", err
 		}
-		found = true
-		var layer map[string]any
-		if err := toml.Unmarshal(data, &layer); err != nil {
-			return Profile{}, fmt.Errorf("%s: %w", path, err)
-		}
-		merged = Merge(merged, layer)
+		layers = append(layers, layer{path, data})
+		key += "\x00" + path + "\x00" + string(data)
 	}
-	if !found {
-		return Profile{}, fmt.Errorf("unknown profile %q", name)
+	if len(layers) == 0 {
+		return nil, "", fmt.Errorf("unknown profile %q", name)
+	}
+	return layers, key, nil
+}
+
+func LoadCompiler(name, project, user string) (Profile, *Compiler, error) {
+	layers, key, err := profileLayers(name, project, user)
+	if err != nil {
+		return Profile{}, nil, err
+	}
+	if cached, ok := profiles.Load(key); ok && (cached.(loaded).compiler != nil || cached.(loaded).err != nil) {
+		c := cached.(loaded)
+		return c.profile, c.compiler, c.err
+	}
+	p, err := decodeLayers(layers)
+	if err != nil {
+		return Profile{}, nil, err
+	}
+	compiler, err := NewCompiler(p)
+	profiles.Store(key, loaded{p, compiler, err})
+	return p, compiler, err
+}
+
+func decodeLayers(layers []layer) (Profile, error) {
+	merged := map[string]any{}
+	for _, l := range layers {
+		var values map[string]any
+		if err := toml.Unmarshal(l.data, &values); err != nil {
+			return Profile{}, fmt.Errorf("%s: %w", l.path, err)
+		}
+		merged = Merge(merged, values)
 	}
 	data, err := toml.Marshal(merged)
 	if err != nil {
