@@ -243,24 +243,45 @@ type edit struct {
 
 // Render transforms directives only. Source spans from Goldmark's AST let all
 // other Markdown survive byte-for-byte, including code, escapes and whitespace.
-func Render(source, format string) (string, error) { return render(source, format, 0) }
+func Render(source, format string) (string, error) {
+	out, _, err := render(source, format, 0)
+	return out, err
+}
 
-func render(input, format string, depth int) (string, error) {
+type Copy struct{ Source, Output, Length int }
+
+type Offsets []Copy
+
+func RenderMapped(source, format string) (string, Offsets, error) {
+	return render(source, format, 0)
+}
+
+func (o Offsets) Span(start, end int) (int, int, bool) {
+	for _, c := range o {
+		if c.Source <= start && end <= c.Source+c.Length {
+			return c.Output + start - c.Source, c.Output + end - c.Source, true
+		}
+	}
+	return 0, 0, false
+}
+
+func render(input, format string, depth int) (string, Offsets, error) {
 	if format != "" && format != "directives" && format != "xml" && format != "markdown" {
-		return "", fmt.Errorf("unsupported markup format %q", format)
+		return "", nil, fmt.Errorf("unsupported markup format %q", format)
 	}
 	if depth > 100 {
-		return "", fmt.Errorf("directive nesting exceeds 100 levels")
+		return "", nil, fmt.Errorf("directive nesting exceeds 100 levels")
 	}
 	if !strings.Contains(input, ":") {
-		return input, nil
+		return input, Offsets{{0, 0, len(input)}}, nil
 	}
 	source := []byte(input)
 	doc, err := parse(source, depth > 0)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var edits []edit
+	nested := map[int]Offsets{}
 	err = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		switch n := node.(type) {
 		case *blockNode:
@@ -274,7 +295,7 @@ func render(input, format string, depth int) (string, error) {
 			if !entering {
 				return ast.WalkContinue, nil
 			}
-			content, err := render(string(source[n.content.start:n.content.stop]), format, depth+1)
+			content, offsets, err := render(string(source[n.content.start:n.content.stop]), format, depth+1)
 			if err != nil {
 				if location, ok := errors.AsType[*Error](err); ok {
 					return ast.WalkStop, locate(source, n.content.start+location.Column-1, location.Message)
@@ -282,25 +303,34 @@ func render(input, format string, depth int) (string, error) {
 				return ast.WalkStop, err
 			}
 			open, close := delimiters(n.directive, format, true)
+			for _, c := range offsets {
+				nested[n.open.start] = append(nested[n.open.start], Copy{c.Source + n.content.start, c.Output + len(open), c.Length})
+			}
 			edits = append(edits, edit{span{n.open.start, n.close.stop}, open + content + close})
 		}
 		return ast.WalkContinue, nil
 	})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var out strings.Builder
+	var offsets Offsets
 	position := 0
 	for _, e := range edits {
 		if e.start < position || e.stop > len(source) {
-			return "", fmt.Errorf("overlapping directive source spans")
+			return "", nil, fmt.Errorf("overlapping directive source spans")
 		}
+		offsets = append(offsets, Copy{position, out.Len(), e.start - position})
 		out.Write(source[position:e.start])
+		for _, c := range nested[e.start] {
+			offsets = append(offsets, Copy{c.Source, c.Output + out.Len(), c.Length})
+		}
 		out.WriteString(e.value)
 		position = e.stop
 	}
+	offsets = append(offsets, Copy{position, out.Len(), len(source) - position})
 	out.Write(source[position:])
-	return out.String(), nil
+	return out.String(), offsets, nil
 }
 
 func delimiters(d directive, format string, inline bool) (string, string) {
