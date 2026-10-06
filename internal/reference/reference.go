@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/srnnkls/henia/internal/markup"
-	"github.com/yuin/goldmark/ast"
 )
 
 type Type string
@@ -34,74 +33,13 @@ type Reference struct {
 	End   int
 }
 
-var referencePattern = regexp.MustCompile(`^([$/@#!])([a-zA-Z0-9._/-]+)$`)
-
-var artifactName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
-
-func Parse(body string) []Reference {
-	var refs []Reference
-	source := []byte(body)
-	root := markup.ParseHTMLAsText(source)
-	ast.Walk(root, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
-		span, ok := node.(*ast.CodeSpan)
-		if !entering || !ok || span.ChildCount() != 1 {
-			return ast.WalkContinue, nil
-		}
-		segment := span.FirstChild().(*ast.Text).Segment
-		start, end := segment.Start-1, segment.Stop+1
-		if start < 0 || end > len(source) || source[start] != '`' || source[end-1] != '`' ||
-			(start > 0 && source[start-1] == '`') || (end < len(source) && source[end] == '`') {
-			return ast.WalkSkipChildren, nil
-		}
-		content := string(segment.Value(source))
-		refMatch := referencePattern.FindStringSubmatch(content)
-		if refMatch == nil {
-			return ast.WalkSkipChildren, nil
-		}
-
-		sigil := refMatch[1]
-		name := refMatch[2]
-		if strings.Contains("$/@", sigil) && !artifactName.MatchString(name) {
-			return ast.WalkSkipChildren, nil
-		}
-		if sigil == "#" && !strings.ContainsAny(name, "./") {
-			return ast.WalkSkipChildren, nil
-		}
-
-		var refType Type
-		switch sigil {
-		case "$":
-			refType = TypeSkill
-		case "/":
-			refType = TypeCommand
-		case "@":
-			refType = TypeAgent
-		case "#":
-			refType = TypeFile
-		case "!":
-			refType = TypeTool
-		default:
-			return ast.WalkSkipChildren, nil
-		}
-
-		refs = append(refs, Reference{
-			Type:  refType,
-			Name:  name,
-			Raw:   content,
-			Start: start,
-			End:   end,
-		})
-		return ast.WalkSkipChildren, nil
-	})
-
-	return refs
-}
-
 var shown = regexp.MustCompile("`henia show ([a-z0-9][a-z0-9._:-]*)(?:/([^`#\\s]+))?(?:#([^`\\s]+))?")
 
 func Skills(body string) []Reference {
 	var refs []Reference
-	for _, ref := range Parse(body) {
+	tree, _ := markup.Tree([]byte(body))
+	recognized, _ := Recognize(tree)
+	for _, ref := range recognized {
 		if ref.Type == TypeSkill {
 			refs = append(refs, ref)
 		}

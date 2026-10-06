@@ -21,7 +21,7 @@ func BenchmarkParse(b *testing.B) {
 		{"links", func() { markup.Links(source) }},
 		{"inspect", func() { _, _ = markup.Inspect(source) }},
 		{"sections", func() { _, _ = markup.Sections(source) }},
-		{"references", func() { reference.Parse(body) }},
+		{"references", func() { tree, _ := markup.Tree(source); _, _ = reference.Recognize(tree) }},
 		{"preloads", func() { preload.Find(source) }},
 		{"slots", func() { slots.Applications(body) }},
 	}
