@@ -28,6 +28,14 @@ skills but each needs its own house rules.
 
 ## Installation
 
+### Go
+
+```sh
+go install github.com/srnnkls/henia/cmd/henia@latest
+```
+
+This needs Go 1.26.5 or newer.
+
 ### Prebuilt binaries
 
 Download an archive from the [releases page](https://github.com/srnnkls/henia/releases).
@@ -40,8 +48,6 @@ with its SHA-256 in `checksums.txt`.
 git clone https://github.com/srnnkls/henia && cd henia
 go build -o henia ./cmd/henia
 ```
-
-This needs Go 1.26.5 or newer.
 
 Henia fetches packages with Phora. It uses a `phora` on `PATH`, else downloads
 the release it pins, once, and checks it against a checksum built into Henia.
