@@ -269,6 +269,10 @@ var applicationText = regexp.MustCompile(`^:slot\[([^\]]*)\]`)
 
 func Applications(body string) []Application {
 	root, _ := markup.Tree([]byte(body))
+	return ApplicationsIn(root)
+}
+
+func ApplicationsIn(root *markup.Element) []Application {
 	var found []Application
 	root.Walk(func(e *markup.Element) bool {
 		if e.Type == "directive" && e.Attrs["name"] == "slot" && e.Attrs["inline"] == "true" {
@@ -283,16 +287,4 @@ func Applications(body string) []Application {
 
 func Preload(slots []string) string {
 	return "!`henia slots " + strings.Join(slots, " ") + "`"
-}
-
-func Expand(body string, render func(slots []string) string) string {
-	if !strings.Contains(body, ":slot[") {
-		return body
-	}
-	applications := Applications(body)
-	for i := len(applications) - 1; i >= 0; i-- {
-		a := applications[i]
-		body = body[:a.Start] + render(a.Slots) + body[a.End:]
-	}
-	return body
 }

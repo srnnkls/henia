@@ -2,11 +2,14 @@ package reference
 
 import (
 	"testing"
+
+	"github.com/srnnkls/henia/internal/markup"
 )
 
 func TestRenderPrecedenceAndProvenance(t *testing.T) {
 	body := "Use `$own`, `$lib`, `!read`, `!other` and `@scout`.\n"
-	out, rendered, dropped, err := Render(body, Rendering{
+	tree, _ := markup.Tree([]byte(body))
+	edits, sources, err := Rewrites(tree, Rendering{
 		Tools:      map[string]string{"read": "Read"},
 		Served:     map[string]bool{"lib": true},
 		References: map[string]string{"skill": "/{?name}", "tool": "{{.Name}}!"},
@@ -14,6 +17,8 @@ func TestRenderPrecedenceAndProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	applied := markup.Apply(body, edits)
+	out, rendered, dropped := applied.Text, Locate(applied, sources), applied.Dropped
 	if want := "Use `/own`, `henia show lib`, `Read`, `other!` and `@scout`.\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
 	}

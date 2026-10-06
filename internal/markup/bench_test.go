@@ -18,7 +18,6 @@ func BenchmarkParse(b *testing.B) {
 		parse func()
 	}{
 		{"tree", func() { _, _ = markup.Tree(source) }},
-		{"links", func() { markup.Links(source) }},
 		{"inspect", func() { _, _ = markup.Inspect(source) }},
 		{"sections", func() { _, _ = markup.Sections(source) }},
 		{"references", func() { tree, _ := markup.Tree(source); _, _ = reference.Recognize(tree) }},

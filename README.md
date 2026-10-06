@@ -42,7 +42,11 @@ and interpolation. The template context starts with frontmatter, then
 `henia.variables`, then harness variables (highest precedence). Nested frontmatter
 strings are also templated. Input files are never modified by compilation.
 
-Body processing runs *templates → references → Goldmark directives*.
+Body processing runs the templates, then one pass over the Markdown tree that
+expands slot applications, unwraps static blocks, rewrites library links and
+references, and renders directives. Edits apply in that order of precedence; an
+edit inside an earlier one is superseded, and a partial overlap is dropped with
+a build warning.
 
 A harness's `references` table gives each kind of reference its syntax, as
 either a Go template or hq interpolation:

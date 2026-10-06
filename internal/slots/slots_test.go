@@ -69,13 +69,6 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func TestExpand(t *testing.T) {
-	body := "Providers:\n\n:slot[code.style code.check]\n\n`:slot[literal]`\n"
-	if got := Expand(body, Preload); got != "Providers:\n\n!`henia slots code.style code.check`\n\n`:slot[literal]`\n" {
-		t.Fatalf("Expand = %q", got)
-	}
-}
-
 func TestWithin(t *testing.T) {
 	for _, c := range []struct {
 		name, slot string

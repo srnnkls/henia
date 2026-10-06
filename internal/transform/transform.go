@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"path"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -159,38 +160,105 @@ func (t *Transformer) TransformReferences(art *artifact.Artifact) (*artifact.Art
 	if err != nil {
 		return nil, nil, fmt.Errorf("transform body: %w", err)
 	}
-	body = slots.Expand(body, slots.Preload)
-	full, head := markup.Unwrap(body, StaticBlock)
-	if t.Head {
-		body = strings.Join(head, "\n")
-	} else {
-		body = full
-	}
-	if art.Type == artifact.TypeSkill {
-		body = t.renderLinks(body, art.Name)
-	}
-
-	body, refs, dropped, err := t.renderReferences(body, art.FullName())
+	body, refs, warnings, err := t.renderBody(body, art)
 	if err != nil {
-		return nil, nil, fmt.Errorf("render references: %w", err)
+		return nil, nil, err
 	}
-	result.Warnings = append(result.Warnings, dropped...)
-
-	body, offsets, err := markup.RenderMapped(body, t.OutputFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("render directives: %w", err)
-	}
-	mapped := refs[:0]
-	for _, ref := range refs {
-		if start, end, ok := offsets.Span(ref.Start, ref.End); ok {
-			ref.Start, ref.End = start, end
-			mapped = append(mapped, ref)
-		}
-	}
-
+	result.Warnings = append(result.Warnings, warnings...)
 	result.Body = body
 
-	return result, mapped, nil
+	return result, refs, nil
+}
+
+func (t *Transformer) renderBody(body string, art *artifact.Artifact) (string, []reference.Rendered, []string, error) {
+	tree, err := markup.Tree([]byte(body))
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("render directives: %w", err)
+	}
+	var edits []markup.Edit
+	for _, a := range slots.ApplicationsIn(tree) {
+		edits = append(edits, markup.Edit{Start: a.Start, End: a.End, Text: slots.Preload(a.Slots), Rule: "slot"})
+	}
+	statics := staticBlocks(tree, body)
+	if !t.Head {
+		for _, s := range statics {
+			edits = append(edits, markup.Edit{Start: s.start, End: s.inner, Rule: "static"}, markup.Edit{Start: max(s.inner, s.innerEnd-1), End: s.end, Rule: "static"})
+		}
+	}
+	var links []libraryLink
+	if art.Type == artifact.TypeSkill {
+		var linkEdits []markup.Edit
+		linkEdits, links = t.linkEdits(tree, body, art.Name)
+		edits = append(edits, linkEdits...)
+	}
+	rewrites, sources, err := t.rewrites(tree, art.FullName())
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("render references: %w", err)
+	}
+	edits = append(edits, rewrites...)
+	directives, err := markup.DirectiveEdits(tree, t.OutputFormat)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("render directives: %w", err)
+	}
+	edits = append(edits, directives...)
+	applied := markup.Apply(body, edits)
+	warnings := reference.Warnings(body, applied.Dropped)
+	refs := reference.Locate(applied, sources)
+	for _, link := range links {
+		if start, _, rule, ok := applied.Span(link.source.Start, link.source.End); ok && rule == "library-link" {
+			ref := link.source
+			ref.Start = start + link.offset
+			ref.End = ref.Start + 1 + len(ref.Raw)
+			refs = append(refs, ref)
+		}
+	}
+	slices.SortFunc(refs, func(a, b reference.Rendered) int { return a.Start - b.Start })
+	if !t.Head {
+		return applied.Text, refs, warnings, nil
+	}
+	var head strings.Builder
+	var located []reference.Rendered
+	for i, s := range statics {
+		if i > 0 {
+			head.WriteString("\n")
+		}
+		from, _ := applied.Offset(s.inner)
+		to, _ := applied.Offset(s.innerEnd)
+		for _, ref := range refs {
+			if from <= ref.Start && ref.End <= to {
+				ref.Start, ref.End = ref.Start-from+head.Len(), ref.End-from+head.Len()
+				located = append(located, ref)
+			}
+		}
+		head.WriteString(applied.Text[from:to])
+	}
+	return head.String(), located, warnings, nil
+}
+
+type static struct{ start, inner, innerEnd, end int }
+
+func staticBlocks(tree *markup.Element, body string) []static {
+	var blocks []static
+	var visit func(*markup.Element)
+	visit = func(e *markup.Element) {
+		if e.Type != "directive" || e.Attrs["name"] != StaticBlock || e.Attrs["inline"] == "true" {
+			for _, child := range e.Children {
+				visit(child)
+			}
+			return
+		}
+		block := static{start: e.Start, end: e.End, inner: e.End, innerEnd: e.End}
+		if newline := strings.IndexByte(body[e.Start:e.End], '\n'); newline >= 0 {
+			block.inner = e.Start + newline + 1
+			block.innerEnd = block.inner
+			if last := strings.LastIndexByte(body[block.inner:e.End], '\n'); last >= 0 {
+				block.innerEnd = block.inner + last + 1
+			}
+		}
+		blocks = append(blocks, block)
+	}
+	visit(tree)
+	return blocks
 }
 
 func templateValue(value any, context map[string]any) (any, error) {
@@ -223,79 +291,100 @@ func templateValue(value any, context map[string]any) (any, error) {
 }
 
 func (t *Transformer) RenderReferences(body string) (string, error) {
-	body, _, _, err := t.renderReferences(body, "")
+	if !strings.Contains(body, "`") {
+		return body, nil
+	}
+	body, _, err := reference.Render(body, t.rendering(""))
 	return body, err
 }
 
-func (t *Transformer) renderReferences(body, self string) (string, []reference.Rendered, []string, error) {
-	if !strings.Contains(body, "`") {
-		return body, nil, nil, nil
-	}
+func (t *Transformer) rendering(self string) reference.Rendering {
 	served := maps.Clone(t.Served)
 	delete(served, self)
 	references := make(map[string]string, len(t.References))
 	for kind, config := range t.References {
 		references[kind] = config.Output
 	}
-	return reference.Render(body, reference.Rendering{Tools: t.Tools, Served: served, References: references})
+	return reference.Rendering{Tools: t.Tools, Served: served, References: references}
 }
 
-func (t *Transformer) renderLinks(body, skill string) string {
-	if !strings.Contains(body, "](") {
-		return body
-	}
-	var out strings.Builder
-	end := 0
-	for _, link := range markup.Links([]byte(body)) {
-		target, ok := t.libraryTarget(skill, link.Dest)
+func (t *Transformer) rewrites(tree *markup.Element, self string) ([]markup.Edit, []reference.Rendered, error) {
+	return reference.Rewrites(tree, t.rendering(self))
+}
+
+type libraryLink struct {
+	source reference.Rendered
+	offset int
+}
+
+func (t *Transformer) linkEdits(tree *markup.Element, body, skill string) ([]markup.Edit, []libraryLink) {
+	var edits []markup.Edit
+	var links []libraryLink
+	tree.Walk(func(e *markup.Element) bool {
+		if e.Type != "link" {
+			return true
+		}
+		link, ok := markup.LinkSyntax(body, e)
 		if !ok {
-			continue
+			return true
 		}
-		command := "`henia show " + target + "`"
+		ref, ok := t.libraryTarget(skill, link.Dest)
+		if !ok {
+			return true
+		}
+		target := strings.TrimPrefix(ref.Raw, "henia show ")
+		command := "`" + ref.Raw + "`"
 		text := strings.Trim(link.Text, "`*_~")
-		replacement := link.Text + " (" + command + ")"
 		file := strings.SplitN(link.Dest, "#", 2)[0]
-		if text == link.Dest || text == file || text == strings.TrimPrefix(path.Clean(file), "../") || text == strings.SplitN(target, "#", 2)[0] {
-			replacement = command
+		edit, offset := markup.Edit{Start: link.Start, End: link.End, Text: command, Rule: "library-link"}, 0
+		if !(text == link.Dest || text == file || text == strings.TrimPrefix(path.Clean(file), "../") || text == strings.SplitN(target, "#", 2)[0]) {
+			edits = append(edits, markup.Edit{Start: link.Start, End: link.Start + 1, Rule: "library-link"})
+			edit, offset = markup.Edit{Start: link.Start + 1 + len(link.Text), End: link.End, Text: " (" + command + ")", Rule: "library-link"}, 2
 		}
-		out.WriteString(body[end:link.Start])
-		out.WriteString(replacement)
-		end = link.End
-	}
-	if end == 0 {
-		return body
-	}
-	out.WriteString(body[end:])
-	return out.String()
+		edits = append(edits, edit)
+		ref.Start, ref.End = edit.Start, edit.End
+		links = append(links, libraryLink{reference.Rendered{Reference: ref, Address: true}, offset})
+		return true
+	})
+	return edits, links
 }
 
-func (t *Transformer) libraryTarget(skill, dest string) (string, bool) {
+func (t *Transformer) libraryTarget(skill, dest string) (reference.Reference, bool) {
 	if dest == "" || strings.Contains(dest, "://") || strings.HasPrefix(dest, "/") || strings.HasPrefix(dest, "mailto:") {
-		return "", false
+		return reference.Reference{}, false
 	}
-	file, anchor, anchored := strings.Cut(dest, "#")
-	suffix := ""
-	if anchored && anchor != "" {
-		suffix = "#" + anchor
+	file, anchor, _ := strings.Cut(dest, "#")
+	target := func(owner, module, resource string) reference.Reference {
+		address := owner
+		if module != "" {
+			address += "." + module
+		}
+		if resource != "" {
+			address += "/" + resource
+		}
+		if anchor != "" {
+			address += "#" + anchor
+		}
+		return reference.Reference{Type: reference.TypeSkill, Name: owner, Module: module, Resource: resource, Anchor: anchor, Raw: "henia show " + address}
 	}
 	if file == "" {
-		return skill + suffix, t.Head
+		return target(skill, "", ""), t.Head
 	}
 	clean := path.Clean(file)
 	owner, rest := skill, clean
 	if other, ok := strings.CutPrefix(clean, "../"); ok {
 		owner, rest, _ = strings.Cut(other, "/")
 		if owner == "" || owner == ".." || !t.LibraryLinks && !t.Served[owner] {
-			return "", false
+			return reference.Reference{}, false
 		}
 	} else if !t.LibraryLinks || strings.HasPrefix(clean, "..") {
-		return "", false
+		return reference.Reference{}, false
 	}
 	if rest == "" || rest == "SKILL.md" {
-		return owner + suffix, true
+		return target(owner, "", ""), true
 	}
 	if module, ok := library.Module(rest); ok {
-		return owner + "." + module + suffix, true
+		return target(owner, module, ""), true
 	}
-	return owner + "/" + rest + suffix, true
+	return target(owner, "", rest), true
 }
