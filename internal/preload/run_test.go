@@ -46,6 +46,7 @@ func TestRunFAS(t *testing.T) {
 		{"rewrite", `echo '{"decision":"allow","command":"echo rewritten"}'`, "echo ran", "rewritten\n"},
 		{"rewrite is checked again", `echo '{"decision":"allow","command":"git push"}'`, "echo ran", "henia: blocked by henia/git: git push changes the repository or a remote (after fas rewrote it)"},
 		{"failure blocks", `echo boom >&2; exit 3`, "echo ran", "henia: blocked: fas failed: exit status 3: boom"},
+		{"fas without the henia harness is skipped", `echo 'unknown harness "henia"; supported: claude, codex, pi' >&2; exit 2`, "echo ran", "henia: fas cannot check henia preloads; update it to apply its rules\nran\n"},
 		{"garbage blocks", `echo nope`, "echo ran", `henia: blocked: fas failed: unreadable response "nope"`},
 		{"builtin refusal skips fas", `echo '{"decision":"allow"}'`, "git push", "henia: blocked by henia/git: git push changes the repository or a remote"},
 	} {

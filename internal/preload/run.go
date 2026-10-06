@@ -152,7 +152,10 @@ func (r *Runner) Run(ctx context.Context, command string, c Context) string {
 		return "henia: " + refusal.String()
 	}
 	command, refusal, err := r.consultFAS(ctx, command, c)
+	notice := ""
 	switch {
+	case errors.Is(err, errFASWithoutHenia):
+		notice = "henia: fas cannot check henia preloads; update it to apply its rules\n"
 	case err != nil:
 		return "henia: blocked: fas failed: " + err.Error()
 	case refusal != nil:
@@ -172,7 +175,7 @@ func (r *Runner) Run(ctx context.Context, command string, c Context) string {
 		}
 		argv = []string{shell, "-c", command}
 	}
-	return r.execute(ctx, argv, c.Dir)
+	return notice + r.execute(ctx, argv, c.Dir)
 }
 
 func (r *Runner) execute(ctx context.Context, argv []string, dir string) string {
@@ -225,6 +228,8 @@ func (l *limited) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+var errFASWithoutHenia = errors.New("fas predates its henia harness")
+
 type fasResponse struct {
 	Decision string `json:"decision"`
 	Command  string `json:"command"`
@@ -257,6 +262,9 @@ func (r *Runner) consultFAS(ctx context.Context, command string, c Context) (str
 		return "", nil, fmt.Errorf("timed out after %s", r.FASTimeout)
 	}
 	if err != nil {
+		if strings.Contains(stderr.String(), `unknown harness "henia"`) {
+			return command, nil, errFASWithoutHenia
+		}
 		return "", nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	var resp fasResponse
