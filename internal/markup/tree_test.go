@@ -3,6 +3,7 @@ package markup_test
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/srnnkls/henia/internal/markup"
@@ -95,4 +96,21 @@ func TestPlainTree(t *testing.T) {
 	if strings.Join(got, " ") != `"a\nb" L1-2 "c" L5-5` {
 		t.Errorf("got %v", got)
 	}
+}
+
+func TestConcurrentParsesKeepTheirOwnErrors(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := range 16 {
+		wg.Go(func() {
+			source, broken := "::: note\nbody\n:::\n", i%2 == 0
+			if broken {
+				source = "::: note\nbody\n"
+			}
+			_, err := markup.Tree([]byte(source))
+			if (err != nil) != broken {
+				t.Errorf("source %q: err = %v", source, err)
+			}
+		})
+	}
+	wg.Wait()
 }
