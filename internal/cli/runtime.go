@@ -57,6 +57,7 @@ func newLsCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			lib := flags.open(cmd)
 			if asJSON {
+				lib.Index()
 				encoder := json.NewEncoder(cmd.OutOrStdout())
 				encoder.SetIndent("", "  ")
 				return encoder.Encode(lib.Entries)

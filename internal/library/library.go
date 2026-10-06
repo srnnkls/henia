@@ -98,6 +98,7 @@ type Entry struct {
 	Sections    []markup.Section   `json:"sections"`
 	Artifact    *artifact.Artifact `json:"-"`
 	Origin      Package            `json:"-"`
+	physical    string
 }
 
 type Library struct {
@@ -193,12 +194,18 @@ func (l *Library) add(pkg Package) {
 		name := filepath.Base(filepath.Dir(f.Path))
 		f.Artifact.Name, f.Artifact.Type = name, artifact.TypeSkill
 		description, _ := f.Artifact.Frontmatter["description"].(string)
-		sections, _ := markup.Sections([]byte(f.Artifact.Body))
 		l.Entries = append(l.Entries, Entry{
 			ID: pkg.Name + ":" + name, Name: name, Package: pkg.Name, Tier: pkg.Tier, Path: f.Path,
-			Description: strings.TrimSpace(description), Digest: digest(filepath.Dir(f.Physical)),
-			Sections: sections, Artifact: f.Artifact, Origin: pkg,
+			Description: strings.TrimSpace(description), Artifact: f.Artifact, Origin: pkg, physical: f.Physical,
 		})
+	}
+}
+
+func (l *Library) Index() {
+	for i := range l.Entries {
+		e := &l.Entries[i]
+		e.Digest = digest(filepath.Dir(e.physical))
+		e.Sections, _ = markup.Sections([]byte(e.Artifact.Body))
 	}
 }
 
