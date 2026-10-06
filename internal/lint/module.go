@@ -282,6 +282,7 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 	if err != nil {
 		return nil, fmt.Errorf("lint rule %s: %w", rule.ID, err)
 	}
+	message := pattern.ParseTemplate(rule.Message)
 	var out []Diagnostic
 	for _, row := range rows {
 		at := first(row, append(slices.Clone(rule.At), ""))
@@ -307,11 +308,11 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 			d.Model = options.Semantic.ModelPath
 		}
 		if len(rule.Shared) == 2 {
-			if a, b := capture(row, rule.Shared[0]), capture(row, rule.Shared[1]); a != nil && b != nil {
+			if a, b := pattern.Captured(row, rule.Shared[0]), pattern.Captured(row, rule.Shared[1]); a != nil && b != nil {
 				d.SharedPhrases = similarity.Shared(similarity.Shingles(a.Text, 3), similarity.Shingles(b.Text, 3), 5)
 			}
 		}
-		d.Message = strings.ReplaceAll(render(rule.Message, row, s.params), "{shared}", strings.Join(d.SharedPhrases, "; "))
+		d.Message = strings.ReplaceAll(message.Render(row, s.params, field), "{shared}", strings.Join(d.SharedPhrases, "; "))
 		out = append(out, d)
 	}
 	return out, nil
@@ -334,21 +335,13 @@ func focus(e *markup.Element, at Location, value string) Location {
 
 func first(row pattern.Row, names []string) *markup.Element {
 	for _, name := range names {
-		if e := capture(row, name); e != nil {
+		if e := pattern.Captured(row, name); e != nil {
 			return e
 		}
 	}
 	return nil
 }
 
-func capture(row pattern.Row, name string) *markup.Element {
-	for _, cell := range row.Cells {
-		if (name == "" || cell.Name == name) && len(cell.Elements) > 0 {
-			return cell.Elements[0]
-		}
-	}
-	return nil
-}
 
 func locate(e *markup.Element) Location {
 	file := e.Enclosing("file")
@@ -371,48 +364,23 @@ func disabledHere(e *markup.Element, rule string) bool {
 	})
 }
 
-func render(message string, row pattern.Row, params map[string]pattern.Value) string {
-	for _, m := range pattern.Placeholders(message) {
-		value := ""
-		switch m[1] {
-		case "$":
-			value = params[m[2]].String()
-		case "?":
-			value = row.Vars[m[2]]
-			if n, err := strconv.ParseFloat(value, 64); err == nil && m[3] != "" {
-				if m[3] == "percent" {
-					value = strconv.FormatFloat(n*100, 'f', 1, 64) + "%"
-				} else if digits, err := strconv.Atoi(m[3]); err == nil {
-					value = strconv.FormatFloat(n, 'f', digits, 64)
-				}
-			}
-		case "@":
-			e := capture(row, m[2])
-			if e == nil {
-				break
-			}
-			if m[3] == "shared" {
-				break
-			}
-			switch m[3] {
-			case "":
-				l := locate(e)
-				value = fmt.Sprintf("%s:%d", l.Path, l.Line)
-			case "line":
-				value = strconv.Itoa(e.Line)
-			case "column":
-				value = strconv.Itoa(e.Column)
-			case "text":
-				value = strings.TrimSpace(e.Text)
-			case "lines":
-				value = strconv.Itoa(e.EndLine - e.Line + 1)
-			default:
-				value = e.Attrs[m[3]]
-			}
-		}
-		message = strings.Replace(message, m[0], value, 1)
+func field(e *markup.Element, key string) string {
+	switch key {
+	case "":
+		l := locate(e)
+		return fmt.Sprintf("%s:%d", l.Path, l.Line)
+	case "line":
+		return strconv.Itoa(e.Line)
+	case "column":
+		return strconv.Itoa(e.Column)
+	case "text":
+		return strings.TrimSpace(e.Text)
+	case "lines":
+		return strconv.Itoa(e.EndLine - e.Line + 1)
+	case "shared":
+		return ""
 	}
-	return message
+	return e.Attrs[key]
 }
 
 type ExampleFailure struct {
