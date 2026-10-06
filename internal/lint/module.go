@@ -310,7 +310,8 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 			d.Related = []Location{locate(related)}
 		}
 		if rule.Score != "" {
-			if score, err := strconv.ParseFloat(row.Vars[rule.Score], 64); err == nil {
+			value, _ := row.Value(rule.Score)
+			if score, err := strconv.ParseFloat(value, 64); err == nil {
 				d.Similarity = &score
 			}
 		}
@@ -390,15 +391,12 @@ func render(message string, row pattern.Row, params map[string]pattern.Value) st
 		case "$":
 			value = params[m[2]].String()
 		case "?":
-			value = row.Vars[m[2]]
-			if n, err := strconv.ParseFloat(value, 64); err == nil && m[3] != "" {
-				if m[3] == "percent" {
-					value = strconv.FormatFloat(n*100, 'f', 1, 64) + "%"
-				} else if digits, err := strconv.Atoi(m[3]); err == nil {
-					value = strconv.FormatFloat(n, 'f', digits, 64)
-				}
-			}
+			value = format(row.Vars[m[2]], m[3])
 		case "@":
+			if v, ok := row.Value(m[2]); ok {
+				value = format(v, m[3])
+				break
+			}
 			e := capture(row, m[2])
 			if e == nil {
 				break
@@ -425,6 +423,20 @@ func render(message string, row pattern.Row, params map[string]pattern.Value) st
 		message = strings.Replace(message, m[0], value, 1)
 	}
 	return message
+}
+
+func format(value, spec string) string {
+	n, err := strconv.ParseFloat(value, 64)
+	switch {
+	case err != nil || spec == "":
+		return value
+	case spec == "percent":
+		return strconv.FormatFloat(n*100, 'f', 1, 64) + "%"
+	}
+	if digits, err := strconv.Atoi(spec); err == nil {
+		return strconv.FormatFloat(n, 'f', digits, 64)
+	}
+	return value
 }
 
 type ExampleFailure struct {

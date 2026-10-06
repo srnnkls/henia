@@ -2,19 +2,23 @@
 
 `henia query '<pattern>...'` matches S-expression patterns against every library
 skill and its resources. It prints one row per match, with one line per capture.
+A `?variable` constrains or joins; an `@capture` names what a row prints.
 
 Here is how many code blocks each language has in a library holding Tropos, largest first:
 
 ```console
-$ henia query '(code :lang ?l) @c (group ?l (count @c ?n))' --sort '-?n' --limit 3
-?l=bash  ?n=230
+$ henia query '(code :lang ?l @lang) @c (group @lang (count @c @n))' --sort '-@n' --limit 3
+@lang  bash
 @c  230 nodes
+@n  230
 
-?l=elisp  ?n=152
+@lang  elisp
 @c  152 nodes
+@n  152
 
-?l=python  ?n=95
+@lang  python
 @c  95 nodes
+@n  95
 henia query: 3 of 17 rows shown
 ```
 
@@ -46,9 +50,11 @@ henia query '(skill :id "gestalt" > (file :main true (heading :level 1..2) @h))'
 henia query '(section > (heading) @title (code :lang "bash") @c)'
 henia query '[(code :lang "toml") (code :lang "yaml")] @c'
 henia query '(code :lang ?l) @c (group ?l)'
-henia query '(skill (code :lang "bash")? @c) @s (group @s (count @c ?n))'
-henia query '(skill :id ?s) @t (skill :id (not ?s) (link :target ?s) @l)? (group @t (count @l ?n))'
-henia query '(skill (code)? @c) @s (group @s (count @c ?n (>= 3)) (sum :lines @c ?l))' --sort '-?n'
+henia query '(skill (code :lang "bash")? @c) @s (group @s (count @c @n))'
+henia query '(skill :id ?s) @t (skill :id (not ?s) (link :target ?s) @l)? (group @t (count @l @n))'
+henia query '(skill (code)? @c) @s (group @s (count @c @n (>= 3)) (sum :lines @c @l))' --sort '-@n'
+henia query '(skill :id ?s @s (code) @c) (group ?s (count @c @n))'
+henia query '(code :lang "bash" @l :words ?w @w) @c' --sort '-@w'
 ```
 
 ## Types
@@ -107,31 +113,49 @@ Compared with a variable:
 - `(similar ?t 0.85)` has at least that cosine similarity under a local
   Model2Vec model: `--model DIR`, else `[lint.semantic] model_path`.
 
-`near`, `overlap` and `similar` take an optional score variable, as in
-`(near ?t 0.6 ?score)`. In lint modules, numbers and thresholds may be
+`near`, `overlap` and `similar` take an optional score capture, as in
+`(near ?t 0.6 @score)`. In lint modules, numbers and thresholds may be
 `$params`.
+
+## Captures
+
+A capture applies to what immediately precedes it, as in tree-sitter:
+
+- After a pattern, it captures the node: `(code) @c`, `(link)? @l`.
+- After a `?variable`, it captures the variable's value and prints it as a
+  column: `(skill :id ?s @s (code) @c)`. The capture counts as a use of the
+  variable. `?` and `@` names never collide, so `?s @s` is fine, and
+  `:lang ?l @lang` names the column.
+- After any other value, it captures the node's value for that key:
+  `:lang "bash" @l`, `:url /^https:/ @u`, `:words (> 100) @w`.
+- After a similarity threshold or an aggregate, it captures the result:
+  `(near ?t 0.6 @score)`, `(count @c @n)`.
+
+A capture cannot follow nothing: `(skill @s (code))` is an error. A value
+capture takes a name of its own, holds one value per match, so it cannot sit
+under `*` or `+` or inside `(not ...)`.
 
 ## Grammar
 
 ```
 query    := (pattern | "(" "not" pattern ")")+ group?  ; patterns join on shared variables
-pattern  := "(" type item* ")" quant? capture?
+pattern  := "(" type item* ")" quant? capture?  ; captures the node
           | "[" pattern+ "]" quant? capture?  ; alternatives
 value    := "string" | word | number | range | /regexp/ | ?variable
           | $param | "(" "not" value ")" | "(" comparison (number | $param) ")"
           | "(" ("after" | "before" | "contains" | "covers") ?variable ")"
-          | "(" ("near" | "overlap" | "similar") ?variable threshold ?score? ")"
+          | "(" ("near" | "overlap" | "similar") ?variable threshold capture? ")"
 comparison := ">" | ">=" | "<" | "<=" | "older"
-item     := :key value | capture | pattern | ">" pattern | "."
+item     := :key value capture? | pattern | ">" pattern | "."  ; captures the value
           | "(" "not" (pattern | relation) ")" | relation
 relation := "(" ("reaches" | "inbound" | "to" | "from") pattern ")"
 quant    := "?" | "*" | "+"  ; only "?" on a top-level pattern
 capture  := "@" name
 group    := "(" "group" key* aggregate* ")"
 key      := ?variable | @capture
-aggregate := "(" "count" (@capture | ?variable) ?out? filter? ")"
-          | "(" "sum" measure @capture ?out? filter? ")"
-          | "(" ("min" | "max") (measure @capture | :level @capture | ?variable) ?out? filter? ")"
+aggregate := "(" "count" (@capture | ?variable) capture? filter? ")"
+          | "(" "sum" measure @capture capture? filter? ")"
+          | "(" ("min" | "max") (measure @capture | :level @capture | ?variable | @value) capture? filter? ")"
 measure  := ":words" | ":lines" | ":chars"
 filter   := "(" (">" | ">=" | "<" | "<=") (number | $param) ")"
 comment  := ";" to the end of the line
@@ -183,33 +207,35 @@ print their captures.
 combination of keys:
 
 ```console
-$ henia query '(skill :id ?s) @t (skill :id (not ?s) (link :target ?s) @l)? (group @t (count @l ?n))' --sort '-?n' --limit 2
-?n=50
+$ henia query '(skill :id ?s) @t (skill :id (not ?s) (link :target ?s) @l)? (group @t (count @l @n))' --sort '-@n' --limit 2
 @t  review  skill
 @l  50 nodes
+@n  50
 
-?n=29
 @t  peer  skill
 @l  29 nodes
+@n  29
 henia query: 2 of 26 rows shown
 ```
 
-- A `?variable` key groups by its value. A `@capture` key groups by its nodes,
-  so one node per `@s` gives one row per skill. Rows where the key is unbound
-  or empty form one group.
+- A `?variable` key groups by its value, as does a value capture. A node
+  capture key groups by its nodes, so one node per `@s` gives one row per
+  skill. Rows where the key is unbound or empty form one group.
 - Without keys, the whole result is one group, even when nothing matches. With
   keys, no match means no rows. Without aggregates, the rows are the distinct
   keys.
 - `(count @c)` counts the distinct nodes of `@c` in the group, and
-  `(count ?x)` the distinct values of `?x`. Empty captures count 0, so
+  `(count ?x)` or `(count @x)` the distinct values of a variable or value
+  capture. Empty captures count 0, so
   `(skill (code)? @c) @s` reports skills without code as 0.
 - `sum`, `min` and `max` read `:words`, `:lines` or `:chars` from the distinct
   nodes of a capture; `min` and `max` also read `:level`, or the numeric values
-  of a `?variable`. With no operand, the result is unbound.
+  of a `?variable` or value capture. With no operand, the result is unbound.
 - A filter such as `(>= 3)` or `(< $min-inbound)` drops the groups that fail
   it, and those whose result is unbound.
-- `?out` names the result. It must be fresh: no pattern, key or other aggregate
-  uses it. Other variables are dropped.
+- A capture after the aggregate names its result, as in `(count @c @n)`.
+  Variables other than the keys are dropped; every capture stays, a value
+  capture with the distinct values of its group.
 
 ## Rejected queries
 
@@ -222,7 +248,12 @@ The reader rejects:
   match, and a top-level `(not P)` that shares none, since it would drop every
   row or none;
 - alternatives that bind different variables, and captures inside `(not ...)`;
-- `*` or `+` on a top-level pattern, and a group key captured under `*` or `+`;
+- a capture that follows no pattern or value, and two captures of one name
+  where either is a value;
+- `*` or `+` on a top-level pattern, a group key captured under `*` or `+`, and
+  a value capture under `*` or `+`;
+- a variable after an aggregate or a similarity threshold, which takes a
+  capture, as in `(count @c @n)`;
 - `(group ...)` inside a pattern, `sum` over a variable, and an aggregate `:key`
   other than those above;
 - a `--sort` name that no pattern binds or that `(group ...)` drops.
@@ -233,20 +264,21 @@ Each capture prints `@name  address  lines  type  first line`. The address
 reads the enclosing section with `henia show`, as in `skill/path#section  L12-14`.
 
 - `--text` prints whole nodes.
-- `--json` prints rows keyed by capture.
+- `--json` prints rows keyed by capture; a value capture is a string, or a
+  number for scores and aggregates.
 - `--count` prints the number of rows.
 - `--limit N` caps the rows.
 
-A grouped row prints its keys and named aggregates on one line, as
-`?l=bash  ?n=41`. Each node of a key capture follows as above, and every other
-capture prints as `@c  N nodes`, or `N matches` for an unnamed pattern.
+A value capture prints as `@name  value`. A grouped row prints its variable
+keys on one line, as `?l=bash`, then its captures: each node of a key capture
+as above, every other node capture as `@c  N nodes` (or `N matches` for an
+unnamed pattern), and each value capture and aggregate as `@n  41`.
 `--text` prints every node of every capture. `--json` adds each variable of a
-row under a `"?name"` key, aggregates as numbers and the rest as strings.
-`--count` counts the groups.
+row under a `"?name"` key. `--count` counts the groups.
 
-`--sort KEY` orders the rows by `?var` or `@capture.key`, descending with a
-leading `-`: `--sort '-?n'` or `--sort @s.words`. Quote it, since shells expand
-`?`.
+`--sort KEY` orders the rows by a `?var`, a value capture `@n` or a key of a
+node capture `@capture.key`, descending with a leading `-`: `--sort '-@n'`,
+`--sort '?l'` or `--sort @s.words`. Quote it, since shells expand `?`.
 
 - A capture holding several nodes sorts by its first.
 - Rows without a value sort last.

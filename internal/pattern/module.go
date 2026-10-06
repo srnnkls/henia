@@ -223,15 +223,16 @@ func (r *reader) rule(open token) (*Rule, error) {
 			} else {
 				rule.At = captures
 			}
-		case "focus", "score":
+		case "focus":
 			if value.kind != tVar {
-				return nil, r.unexpected(value, fmt.Sprintf("a ?variable for :%s", key.text))
+				return nil, r.unexpected(value, "a ?variable for :focus")
 			}
-			if key.text == "focus" {
-				rule.Focus = value.text
-			} else {
-				rule.Score = value.text
+			rule.Focus = value.text
+		case "score":
+			if value.kind != tCapture {
+				return nil, r.unexpected(value, "a @capture for :score, as in :score @score")
 			}
+			rule.Score = value.text
 		case "method":
 			if value.kind != tSymbol && value.kind != tString {
 				return nil, r.unexpected(value, "a method name for :method")
@@ -256,6 +257,9 @@ func (r *reader) rule(open token) (*Rule, error) {
 	}
 	r.next()
 	rule.Query = q
+	if rule.Score != "" && !q.Values[rule.Score] {
+		return nil, &Error{Offset: open.pos, Message: fmt.Sprintf("rule %s scores with @%s, which its query does not capture as a value", rule.ID, rule.Score), Hint: "capture the score, as in (near ?t 0.7 @score)"}
+	}
 	for _, capture := range slices.Concat(rule.At, rule.Related, rule.Shared) {
 		if capture != "" && !slices.Contains(q.Captures, capture) {
 			return nil, &Error{Offset: open.pos, Message: fmt.Sprintf("rule %s points at @%s, which its query does not capture", rule.ID, capture)}

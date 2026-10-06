@@ -19,11 +19,13 @@ type Group struct {
 type GroupKey struct {
 	Var, Capture string
 	Pos          int
+	value        bool
 }
 
 type Aggregate struct {
 	Op, Key      string
 	Var, Capture string
+	value        bool
 	Out          string
 	OutPos       int
 	Filter       string
@@ -54,7 +56,7 @@ func (r *reader) group(open token) (*Group, error) {
 			return nil, &Error{Offset: open.pos, Message: "unclosed (group", Hint: "add the matching )"}
 		case tVar, tCapture:
 			if len(g.Aggregates) > 0 {
-				return nil, &Error{Offset: t.pos, Message: "group keys precede the aggregates", Hint: "e.g. (group ?l (count @c ?n))"}
+				return nil, &Error{Offset: t.pos, Message: "group keys precede the aggregates", Hint: "e.g. (group ?l (count @c @n))"}
 			}
 			key := GroupKey{Pos: t.pos}
 			if t.kind == tVar {
@@ -70,7 +72,7 @@ func (r *reader) group(open token) (*Group, error) {
 			}
 			g.Aggregates = append(g.Aggregates, a)
 		default:
-			return nil, r.unexpected(t, "a ?variable, a @capture, an aggregate such as (count @c ?n) or )")
+			return nil, r.unexpected(t, "a ?variable, a @capture, an aggregate such as (count @c @n) or )")
 		}
 	}
 }
@@ -98,22 +100,29 @@ func (r *reader) aggregate() (Aggregate, error) {
 	case tCapture:
 		a.Capture = operand.text
 		if a.Key == "" && op.text != "count" {
-			return a, &Error{Offset: operand.pos, Message: fmt.Sprintf("(%s @%s) needs a :key", op.text, operand.text), Hint: fmt.Sprintf("e.g. (%s :%s @%s ?n)", op.text, keys[0], operand.text)}
+			return a, &Error{Offset: operand.pos, Message: fmt.Sprintf("(%s @%s) needs a :key", op.text, operand.text), Hint: fmt.Sprintf("e.g. (%s :%s @%s @n)", op.text, keys[0], operand.text)}
 		}
 	case tVar:
 		if op.text == "sum" {
-			return a, &Error{Offset: operand.pos, Message: fmt.Sprintf("(sum ...) takes a @capture, not ?%s", operand.text), Hint: "equal values of distinct nodes would collapse; sum a key over a capture, as in (sum :words @p ?n)"}
+			return a, &Error{Offset: operand.pos, Message: fmt.Sprintf("(sum ...) takes a @capture, not ?%s", operand.text), Hint: "equal values of distinct nodes would collapse; sum a key over a capture, as in (sum :words @p @n)"}
 		}
 		if a.Key != "" {
 			return a, &Error{Offset: operand.pos, Message: fmt.Sprintf("(%s :%s ...) reads the key from a @capture, not ?%s", op.text, a.Key, operand.text), Hint: fmt.Sprintf("drop :%s to compare the values of ?%s", a.Key, operand.text)}
 		}
 		a.Var = operand.text
 	default:
-		return a, r.unexpected(operand, fmt.Sprintf("a @capture or ?variable, as in (%s @c ?n)", op.text))
+		return a, r.unexpected(operand, fmt.Sprintf("a @capture or ?variable, as in (%s @c @n)", op.text))
 	}
-	if t := r.peek(); t.kind == tVar {
+	switch t := r.peek(); t.kind {
+	case tCapture:
 		r.next()
+		if err := r.value(t); err != nil {
+			return a, err
+		}
 		a.Out, a.OutPos = t.text, t.pos
+		r.numbers[t.text] = true
+	case tVar:
+		return a, &Error{Offset: t.pos, Message: fmt.Sprintf("the result of (%s ...) is output, so it is a capture: @%s, not ?%s", op.text, t.text, t.text), Hint: fmt.Sprintf("e.g. (%s @c @%s)", op.text, t.text)}
 	}
 	if r.peek().kind == tOpen {
 		r.next()
@@ -122,7 +131,7 @@ func (r *reader) aggregate() (Aggregate, error) {
 			form.text = ">"
 		}
 		if !slices.Contains([]string{">", ">=", "<", "<="}, form.text) {
-			return a, &Error{Offset: form.pos, Message: fmt.Sprintf("an aggregate filters with >, >=, < or <=, not %q", form.text), Hint: fmt.Sprintf("e.g. (%s @c ?n (>= 3))", op.text)}
+			return a, &Error{Offset: form.pos, Message: fmt.Sprintf("an aggregate filters with >, >=, < or <=, not %q", form.text), Hint: fmt.Sprintf("e.g. (%s @c @n (>= 3))", op.text)}
 		}
 		a.Filter = form.text
 		limit := r.next()
@@ -177,27 +186,12 @@ func (g *Group) check(q *Query, mentions []mention) error {
 		}
 		return nil
 	}
-	named := map[string]bool{}
-	for _, k := range g.Keys {
-		if k.Var != "" {
-			named[k.Var] = true
-		}
-	}
+	outputs := map[string]bool{}
 	for _, a := range g.Aggregates {
-		if a.Var != "" {
-			named[a.Var] = true
-		}
+		outputs[a.Out] = a.Out != ""
 	}
-	for _, a := range g.Aggregates {
-		if a.Out == "" {
-			continue
-		}
-		if named[a.Out] || slices.ContainsFunc(mentions, func(m mention) bool { return m.name == a.Out }) {
-			return &Error{Offset: a.OutPos, Message: fmt.Sprintf("?%s is already used, but the output of (%s ...) must be fresh", a.Out, a.Op), Hint: fmt.Sprintf("name the output of (%s ...) with a variable no pattern, key or other aggregate uses", a.Op)}
-		}
-		named[a.Out] = true
-	}
-	for _, k := range g.Keys {
+	for i := range g.Keys {
+		k := &g.Keys[i]
 		if k.Var != "" && !binds(k.Var) {
 			return &Error{Offset: k.Pos, Message: fmt.Sprintf("?%s is a group key but no pattern binds it", k.Var), Hint: fmt.Sprintf("bind it with :key ?%s in a pattern of the query", k.Var)}
 		}
@@ -207,17 +201,29 @@ func (g *Group) check(q *Query, mentions []mention) error {
 		if err := captured(k.Capture, k.Pos); err != nil {
 			return err
 		}
+		if outputs[k.Capture] {
+			return &Error{Offset: k.Pos, Message: fmt.Sprintf("@%s is an aggregate of the group, so it cannot key it", k.Capture), Hint: "key the group on a ?variable or a capture of a pattern"}
+		}
+		k.value = q.Values[k.Capture]
 		if repeated[k.Capture] {
 			return &Error{Offset: k.Pos, Message: fmt.Sprintf("@%s is captured under * or +, so it cannot key a group", k.Capture), Hint: fmt.Sprintf("key the group on a capture that holds one node per match, or aggregate @%s", k.Capture)}
 		}
 	}
-	for _, a := range g.Aggregates {
+	for i := range g.Aggregates {
+		a := &g.Aggregates[i]
 		if a.Var != "" && !binds(a.Var) {
 			return &Error{Offset: a.Pos, Message: fmt.Sprintf("?%s is aggregated but no pattern binds it", a.Var), Hint: fmt.Sprintf("bind it with :key ?%s in a pattern of the query", a.Var)}
 		}
 		if a.Capture != "" {
 			if err := captured(a.Capture, a.Pos); err != nil {
 				return err
+			}
+			if outputs[a.Capture] {
+				return &Error{Offset: a.Pos, Message: fmt.Sprintf("@%s is an aggregate of the group, so (%s ...) cannot read it", a.Capture, a.Op), Hint: "aggregate a capture or ?variable of the patterns"}
+			}
+			a.value = q.Values[a.Capture]
+			if a.value && (a.Op == "sum" || a.Key != "") {
+				return &Error{Offset: a.Pos, Message: fmt.Sprintf("@%s captures a value, so (%s ...) cannot read a key from it", a.Capture, a.Op), Hint: fmt.Sprintf("count it or take its min or max, as in (max @%s @m)", a.Capture)}
 			}
 		}
 	}
@@ -231,6 +237,13 @@ func repeatedCaptures(members []*Pattern) map[string]bool {
 		under = under || p.Quant == '*' || p.Quant == '+'
 		if under && p.Capture != "" {
 			repeated[p.Capture] = true
+		}
+		for _, a := range p.Attrs {
+			for _, name := range []string{a.Capture, a.Score} {
+				if under && name != "" {
+					repeated[name] = true
+				}
+			}
 		}
 		for _, alt := range p.Alts {
 			walk(alt, under)
@@ -285,7 +298,13 @@ func (g *Group) key(b binding) string {
 				key.WriteByte('-')
 			}
 		}
-		if k.Capture != "" {
+		if k.value {
+			if value, ok := b.vars["@"+k.Capture]; ok {
+				key.WriteString(strconv.Quote(value))
+			} else {
+				key.WriteByte('-')
+			}
+		} else if k.Capture != "" {
 			for _, e := range distinct(b.captures[k.Capture]) {
 				key.WriteString(strconv.Itoa(e.Order) + ",")
 			}
@@ -303,11 +322,16 @@ func (g *Group) row(q *Query, members []binding, params map[string]Value) (Row, 
 		}
 		return distinct(all)
 	}
-	row := Row{Cells: make([]Cell, 0, len(q.Captures)), Vars: map[string]string{}, Aggregates: map[string]bool{}}
-	for _, name := range q.Captures {
-		keyed := slices.ContainsFunc(g.Keys, func(k GroupKey) bool { return k.Capture != "" && k.Capture == name })
-		row.Cells = append(row.Cells, Cell{Name: name, Elements: nodes(name), Collected: !keyed})
+	values := func(name string) []string {
+		var all []string
+		for _, b := range members {
+			if value, ok := b.vars["@"+name]; ok && !slices.Contains(all, value) {
+				all = append(all, value)
+			}
+		}
+		return all
 	}
+	row := Row{Cells: make([]Cell, 0, len(q.Captures)), Vars: map[string]string{}}
 	for _, k := range g.Keys {
 		if k.Var == "" {
 			continue
@@ -319,26 +343,38 @@ func (g *Group) row(q *Query, members []binding, params map[string]Value) (Row, 
 			}
 		}
 	}
+	results := map[string]string{}
 	for _, a := range g.Aggregates {
 		value, ok := a.evaluate(members, nodes)
 		if a.Filter != "" && (!ok || !a.passes(value, params)) {
 			return Row{}, false
 		}
-		if a.Out == "" {
-			continue
+		if a.Out != "" && ok {
+			results[a.Out] = strconv.FormatFloat(value, 'f', -1, 64)
 		}
-		row.Shown = append(row.Shown, a.Out)
-		row.Aggregates[a.Out] = true
-		if ok {
-			row.Vars[a.Out] = strconv.FormatFloat(value, 'f', -1, 64)
+	}
+	for _, name := range q.Captures {
+		keyed := slices.ContainsFunc(g.Keys, func(k GroupKey) bool { return k.Capture != "" && k.Capture == name })
+		cell := Cell{Name: name, Collected: !keyed}
+		switch {
+		case slices.ContainsFunc(g.Aggregates, func(a Aggregate) bool { return a.Out == name }):
+			cell.Value, cell.Number, cell.Collected = true, true, false
+			if value, ok := results[name]; ok {
+				cell.Values = []string{value}
+			}
+		case q.Values[name]:
+			cell.Value, cell.Number, cell.Values = true, q.numbers[name], values(name)
+		default:
+			cell.Elements = nodes(name)
 		}
+		row.Cells = append(row.Cells, cell)
 	}
 	return row, true
 }
 
 func (a Aggregate) evaluate(members []binding, nodes func(string) []*markup.Element) (float64, bool) {
 	var operands []float64
-	if a.Capture != "" {
+	if a.Capture != "" && !a.value {
 		elements := nodes(a.Capture)
 		if a.Op == "count" {
 			return float64(len(elements)), true
@@ -351,9 +387,13 @@ func (a Aggregate) evaluate(members []binding, nodes func(string) []*markup.Elem
 			}
 		}
 	} else {
+		name := a.Var
+		if a.value {
+			name = "@" + a.Capture
+		}
 		seen := map[string]bool{}
 		for _, b := range members {
-			if value, ok := b.vars[a.Var]; ok && !seen[value] {
+			if value, ok := b.vars[name]; ok && !seen[value] {
 				seen[value] = true
 				if n, ok := finite(value); ok {
 					operands = append(operands, n)

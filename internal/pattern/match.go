@@ -30,14 +30,25 @@ type Resolver interface {
 type Cell struct {
 	Name      string
 	Elements  []*markup.Element
+	Values    []string
+	Value     bool
+	Number    bool
 	Collected bool
 }
 
 type Row struct {
-	Cells      []Cell
-	Vars       map[string]string
-	Shown      []string
-	Aggregates map[string]bool
+	Cells []Cell
+	Vars  map[string]string
+	Shown []string
+}
+
+func (r Row) Value(name string) (string, bool) {
+	for _, cell := range r.Cells {
+		if cell.Value && cell.Name == name && len(cell.Values) > 0 {
+			return cell.Values[0], true
+		}
+	}
+	return "", false
 }
 
 type binding struct {
@@ -361,6 +372,16 @@ func (q *Query) row(b binding) (Row, string) {
 	row := Row{Cells: make([]Cell, 0, len(q.Captures)), Vars: b.vars}
 	var key strings.Builder
 	for _, name := range q.Captures {
+		if q.Values[name] {
+			cell := Cell{Name: name, Value: true, Number: q.numbers[name]}
+			if value, ok := b.vars["@"+name]; ok {
+				cell.Values = []string{value}
+				key.WriteString(strconv.Quote(value))
+			}
+			row.Cells = append(row.Cells, cell)
+			key.WriteByte(';')
+			continue
+		}
 		row.Cells = append(row.Cells, Cell{Name: name, Elements: b.captures[name]})
 		for _, e := range b.captures[name] {
 			key.WriteString(strconv.Itoa(e.Order) + ",")
@@ -418,6 +439,10 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 			if m.test(a, e) == a.Negate {
 				return nil, nil
 			}
+			if a.Capture != "" {
+				value, _ := a.value(e)
+				seed, _ = m.unify(seed, binding{vars: map[string]string{"@" + a.Capture: value}})
+			}
 			continue
 		}
 		value, ok := a.value(e)
@@ -429,7 +454,18 @@ func (m *matcher) match(p *Pattern, e *markup.Element) ([]binding, error) {
 		case a.Negate:
 			bound = binding{unequal: []constraint{{name: a.Var, value: value, relate: "not"}}}
 		case a.Relate != "":
-			bound = binding{unequal: []constraint{{name: a.Var, value: value, relate: a.Relate, threshold: a.Threshold, limit: a.Limit, score: a.Score}}}
+			score := ""
+			if a.Score != "" {
+				score = "@" + a.Score
+			}
+			bound = binding{unequal: []constraint{{name: a.Var, value: value, relate: a.Relate, threshold: a.Threshold, limit: a.Limit, score: score}}}
+		}
+		if a.Capture != "" {
+			bound.vars = maps.Clone(bound.vars)
+			if bound.vars == nil {
+				bound.vars = map[string]string{}
+			}
+			bound.vars["@"+a.Capture] = value
 		}
 		if seed, ok = m.unify(seed, bound); !ok {
 			return nil, nil

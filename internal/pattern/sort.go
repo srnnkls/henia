@@ -28,13 +28,16 @@ func parseSort(text string, at int) (sortKey, error) {
 		s.variable = rest[1:]
 		return s, nil
 	case strings.HasPrefix(rest, "@"):
-		i := strings.LastIndexByte(rest, '.')
-		if i > 1 && validName(rest[1:i]) && validName(rest[i+1:]) {
+		if i := strings.LastIndexByte(rest, '.'); i > 1 && validName(rest[1:i]) && validName(rest[i+1:]) {
 			s.capture, s.attribute = rest[1:i], rest[i+1:]
 			return s, nil
 		}
+		if validName(rest[1:]) {
+			s.capture = rest[1:]
+			return s, nil
+		}
 	}
-	return s, &Error{Offset: at, Message: fmt.Sprintf("--sort %s is neither ?var nor @capture.key", text), Hint: "e.g. --sort -?n or --sort @s.words"}
+	return s, &Error{Offset: at, Message: fmt.Sprintf("--sort %s is neither ?var, @value nor @capture.key", text), Hint: "e.g. --sort -@n, --sort ?l or --sort @s.words"}
 }
 
 func validName(name string) bool {
@@ -52,13 +55,21 @@ func (q *Query) checkSorts(mentions []mention) error {
 			if !slices.Contains(q.Captures, s.capture) {
 				return &Error{Offset: s.pos, Message: fmt.Sprintf("--sort %s names @%s, which no pattern captures", s.text, s.capture), Hint: suggest(s.capture, q.Captures)}
 			}
+			value := q.Values[s.capture] || q.Group != nil && slices.ContainsFunc(q.Group.Aggregates, func(a Aggregate) bool { return a.Out == s.capture })
+			switch {
+			case value && s.attribute != "":
+				return &Error{Offset: s.pos, Message: fmt.Sprintf("--sort %s reads a key, but @%s captures a value", s.text, s.capture), Hint: fmt.Sprintf("sort by the value itself: --sort @%s", s.capture)}
+			case !value && s.attribute == "":
+				return &Error{Offset: s.pos, Message: fmt.Sprintf("--sort %s names @%s, which captures nodes", s.text, s.capture), Hint: fmt.Sprintf("sort by a key of its nodes, as in --sort @%s.words", s.capture)}
+			}
 			continue
 		}
 		bound := slices.ContainsFunc(mentions, func(m mention) bool { return m.name == s.variable && m.binds && !m.negated })
 		if g := q.Group; g != nil {
-			kept := slices.ContainsFunc(g.Keys, func(k GroupKey) bool { return k.Var == s.variable }) ||
-				slices.ContainsFunc(g.Aggregates, func(a Aggregate) bool { return a.Out == s.variable })
-			if !kept {
+			if slices.ContainsFunc(g.Aggregates, func(a Aggregate) bool { return a.Out == s.variable }) {
+				return &Error{Offset: s.pos, Message: fmt.Sprintf("--sort %s names ?%s, but aggregates are captures", s.text, s.variable), Hint: fmt.Sprintf("sort by --sort %s@%s", map[bool]string{true: "-"}[s.desc], s.variable)}
+			}
+			if !slices.ContainsFunc(g.Keys, func(k GroupKey) bool { return k.Var == s.variable }) {
 				if bound {
 					return &Error{Offset: s.pos, Message: fmt.Sprintf("--sort %s names ?%s, which (group ...) drops", s.text, s.variable), Hint: fmt.Sprintf("key the group on ?%s, or sort by a key or aggregate of the group", s.variable)}
 				}
@@ -152,6 +163,9 @@ func (s sortKey) value(row Row) (string, bool) {
 	if s.variable != "" {
 		value, ok := row.Vars[s.variable]
 		return value, ok
+	}
+	if s.attribute == "" {
+		return row.Value(s.capture)
 	}
 	for _, cell := range row.Cells {
 		if cell.Name != s.capture || len(cell.Elements) == 0 {

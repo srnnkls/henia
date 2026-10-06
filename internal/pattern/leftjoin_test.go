@@ -125,9 +125,10 @@ func TestImpossibleIgnoresOptionalMembers(t *testing.T) {
 	}
 }
 
-func TestOptionalMayReuseScoreBoundByRequiredMember(t *testing.T) {
-	query := `(paragraph :text ?t) @a (paragraph :text (near ?t 0.6 ?score)) @b (paragraph :text ?score)? @c`
-	if _, err := Read(query); err != nil {
-		t.Errorf("%s: err = %v, want nil", query, err)
+func TestScoreIsNotAVariable(t *testing.T) {
+	query := `(paragraph :text ?t) @a (paragraph :text (near ?t 0.6 @score)) @b (paragraph :text ?score)? @c`
+	var pe *Error
+	if _, err := Read(query); !errors.As(err, &pe) || !strings.Contains(pe.Message, "?score appears only once") {
+		t.Errorf("%s: err = %v, want ?score to stay a separate, single-use variable", query, err)
 	}
 }

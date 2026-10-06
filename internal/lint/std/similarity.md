@@ -25,19 +25,19 @@ earlier paragraph above the threshold; exact copies are left to
 
 ```hq
 (rule similar-content
-  :message "paragraph has {?score.percent} word-shingle jaccard with {@original}; shared phrases: {shared}"
-  :at @copy :related @original :score ?score :method jaccard :shared @copy @original
+  :message "paragraph has {@score.percent} word-shingle jaccard with {@original}; shared phrases: {shared}"
+  :at @copy :related @original :score @score :method jaccard :shared @copy @original
   (paragraph-at @original ?text ?norm ?position)
-  (paragraph :text ?copy :text (near ?text $similarity ?score) :norm ?copy-norm :position ?at :position (after ?position)
+  (paragraph :text ?copy :text (near ?text $similarity @score) :norm ?copy-norm :position ?at :position (after ?position)
     :words (>= $min-words) :dynamic (not "true")) @copy
   (not (paragraph :norm ?copy-norm :position (before ?at) :words (>= $min-words) :dynamic (not "true")))
   (not (paragraph :text (near ?copy $similarity) :position (before ?position) :words (>= $min-words) :dynamic (not "true"))))
 
 (rule similar-content
-  :message "paragraph has {?score.percent} word-shingle containment with {@original}; shared phrases: {shared}"
-  :at @copy :related @original :score ?score :method containment :shared @copy @original
+  :message "paragraph has {@score.percent} word-shingle containment with {@original}; shared phrases: {shared}"
+  :at @copy :related @original :score @score :method containment :shared @copy @original
   (paragraph-at @original ?text ?norm ?position)
-  (paragraph :text ?copy :text (overlap ?text $containment ?score) :norm ?copy-norm :position ?at :position (after ?position)
+  (paragraph :text ?copy :text (overlap ?text $containment @score) :norm ?copy-norm :position ?at :position (after ?position)
     :words (>= $min-words) :dynamic (not "true")) @copy
   (not (paragraph :norm ?copy-norm :position (before ?at) :words (>= $min-words) :dynamic (not "true")))
   (not (paragraph :text (near ?copy $similarity) :position (before ?at) :words (>= $min-words) :dynamic (not "true")))
@@ -67,10 +67,10 @@ that already match lexically are left out.
 
 ```hq
 (rule semantic-content
-  :message "paragraph may express similar instructions to {@original} (cosine {?score.3}); review meaning and constraints"
-  :at @copy :related @original :score ?score :method cosine
+  :message "paragraph may express similar instructions to {@original} (cosine {@score.3}); review meaning and constraints"
+  :at @copy :related @original :score @score :method cosine
   (paragraph-at @original ?text ?norm ?position)
-  (paragraph :text ?copy :text (similar ?text $threshold ?score) :norm ?copy-norm :position ?at :position (after ?position)
+  (paragraph :text ?copy :text (similar ?text $threshold @score) :norm ?copy-norm :position ?at :position (after ?position)
     :words (>= $min-words) :dynamic (not "true")) @copy
   (not (paragraph :norm ?copy-norm :position (before ?at) :words (>= $min-words) :dynamic (not "true")))
   (not (paragraph :text (near ?copy $similarity) :position (before ?at) :words (>= $min-words) :dynamic (not "true")))

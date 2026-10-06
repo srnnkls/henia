@@ -1,6 +1,7 @@
 package pattern
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -54,11 +55,11 @@ func (q *Query) check() error {
 			fail(&Error{Offset: p.Pos, Message: fmt.Sprintf("@%s is inside (not ...), so it never prints", p.Capture), Hint: "capture a node outside the negation"})
 		}
 		for _, a := range p.Attrs {
-			if a.Var != "" {
-				mentions = append(mentions, mention{name: a.Var, pos: a.Pos, scope: s, binds: !a.Negate && a.Relate == "", optional: optional, member: member, negated: negated, absent: member < 0, prior: prior})
+			if negated && (a.Capture != "" || a.Score != "") {
+				fail(&Error{Offset: a.OutPos, Message: fmt.Sprintf("@%s is inside (not ...), so it never prints", cmp.Or(a.Capture, a.Score)), Hint: "capture a value outside the negation"})
 			}
-			if a.Score != "" {
-				mentions = append(mentions, mention{name: a.Score, pos: a.Pos, scope: s, binds: true, output: true, optional: optional, member: member, negated: negated, absent: member < 0, prior: prior})
+			if a.Var != "" {
+				mentions = append(mentions, mention{name: a.Var, pos: a.Pos, scope: s, binds: !a.Negate && a.Relate == "", output: a.Capture != "", optional: optional, member: member, negated: negated, absent: member < 0, prior: prior})
 			}
 		}
 		if len(p.Alts) > 1 {
@@ -106,6 +107,11 @@ func (q *Query) check() error {
 	}
 	if problem != nil {
 		return problem
+	}
+	for _, name := range q.Captures {
+		if q.Values[name] && repeatedCaptures(q.Members)[name] {
+			return &Error{Offset: q.Members[0].Pos, Message: fmt.Sprintf("@%s captures a value under * or +, which holds one value per match", name), Hint: "capture the value outside the repeated pattern"}
+		}
 	}
 	if err := q.Group.check(q, mentions); err != nil {
 		return err

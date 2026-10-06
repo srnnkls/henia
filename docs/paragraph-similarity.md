@@ -27,13 +27,13 @@ EOF
 ```
 
 ```console
-$ henia query '(paragraph :node ?n :text ?t) @a (paragraph :node (after ?n) :text (near ?t 0.3 ?s)) @b' --sort '-?s'
-?s=0.3684210526315789
+$ henia query '(paragraph :node ?n :text ?t) @a (paragraph :node (after ?n) :text (near ?t 0.3 @s)) @b' --sort '-@s'
 @a  review#review  L3  paragraph  Inspect every changed function and report concrete failures with enough context…
+@s  0.3684210526315789
 @b  review#checklist  L7  paragraph  Inspect every changed function and report each concrete failure with enough con…
-$ henia query '(paragraph :node ?n :text ?t) @a (paragraph :node (after ?n) :text (overlap ?t 0.3 ?s)) @b' --sort '-?s'
-?s=0.5384615384615384
+$ henia query '(paragraph :node ?n :text ?t) @a (paragraph :node (after ?n) :text (overlap ?t 0.3 @s)) @b' --sort '-@s'
 @a  review#review  L3  paragraph  Inspect every changed function and report concrete failures with enough context…
+@s  0.5384615384615384
 @b  review#checklist  L7  paragraph  Inspect every changed function and report each concrete failure with enough con…
 ```
 
