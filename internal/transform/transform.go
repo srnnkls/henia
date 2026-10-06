@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"text/template/parse"
 
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/canonical"
@@ -40,10 +41,17 @@ type Transformer struct {
 	LibraryLinks bool
 }
 
+const absent = "henia_absent"
+
 func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
-	tmpl, err := template.New("content").Parse(content)
+	tmpl, err := template.New("content").Funcs(template.FuncMap{absent: blankAbsent}).Parse(content)
 	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
+	}
+	for _, t := range tmpl.Templates() {
+		if t.Tree != nil {
+			printAbsentBlank(t.Tree.Root)
+		}
 	}
 
 	var buf bytes.Buffer
@@ -52,6 +60,41 @@ func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+func blankAbsent(v any) any {
+	if v == nil {
+		return ""
+	}
+	return v
+}
+
+func printAbsentBlank(node parse.Node) {
+	switch n := node.(type) {
+	case *parse.ListNode:
+		if n != nil {
+			for _, child := range n.Nodes {
+				printAbsentBlank(child)
+			}
+		}
+	case *parse.ActionNode:
+		if len(n.Pipe.Decl) == 0 {
+			n.Pipe.Cmds = append(n.Pipe.Cmds, &parse.CommandNode{
+				NodeType: parse.NodeCommand,
+				Pos:      n.Pos,
+				Args:     []parse.Node{parse.NewIdentifier(absent).SetPos(n.Pos)},
+			})
+		}
+	case *parse.IfNode:
+		printAbsentBlank(n.List)
+		printAbsentBlank(n.ElseList)
+	case *parse.RangeNode:
+		printAbsentBlank(n.List)
+		printAbsentBlank(n.ElseList)
+	case *parse.WithNode:
+		printAbsentBlank(n.List)
+		printAbsentBlank(n.ElseList)
+	}
 }
 
 func ApplyMappings(fm map[string]any, mappings map[string]string) map[string]any {

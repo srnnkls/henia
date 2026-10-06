@@ -61,6 +61,19 @@ func TestExecuteTemplateConditional(t *testing.T) {
 	}
 }
 
+func TestExecuteTemplateMissingVariable(t *testing.T) {
+	content := `{{define "note"}}[{{.absent}}]{{end}}A{{.absent}}B{{if .flag}}{{.absent}}{{end}}{{range .items}}<{{.}}{{$.absent}}>{{end}}{{with .flag}}{{$.absent}}{{end}}{{template "note" .}}{{.flag | printf "%s"}}`
+	vars := map[string]any{"flag": "on", "items": []string{"x"}}
+
+	result, err := ExecuteTemplate(content, vars)
+	if err != nil {
+		t.Fatalf("ExecuteTemplate() error = %v", err)
+	}
+	if want := "AB<x>[]on"; result != want {
+		t.Errorf("ExecuteTemplate() = %q, want %q", result, want)
+	}
+}
+
 func TestApplyMappings(t *testing.T) {
 	fm := map[string]any{
 		"name":          "code-test",

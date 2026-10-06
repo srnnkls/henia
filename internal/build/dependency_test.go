@@ -20,7 +20,7 @@ func TestDependencyHarnessDefaults(t *testing.T) {
 		project  map[string]string
 		own, dep string
 	}{
-		{"dependency defaults", map[string]string{}, "Flavor: <no value>.", "Flavor: dependency, mode: strict."},
+		{"dependency defaults", map[string]string{}, "Flavor: .", "Flavor: dependency, mode: strict."},
 		{"project overrides", map[string]string{"flavor": "project"}, "Flavor: project.", "Flavor: project, mode: strict."},
 	} {
 		t.Run(test.name, func(t *testing.T) {
