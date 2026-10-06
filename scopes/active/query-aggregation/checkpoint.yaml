@@ -2,14 +2,14 @@ checkpoint:
   scope_name: query-aggregation
   scope_path: scopes/active/query-aggregation
   branch: feat/query-aggregation
-  last_commit: 520d9fd
-  updated_at: "2026-10-06T06:02:25Z"
+  last_commit: 86fe9d2
+  updated_at: "2026-10-06T06:03:13Z"
   batch:
     number: 7
     tasks:
       - QAG-007
-    phase: integration
-    status: in_progress
+    phase: complete
+    status: completed
   routing_snapshot:
     epoch_id: 20261005T203329Z-45e93b
     tester: {agent: inherit, effort: inherit, class: native}
@@ -19,8 +19,5 @@ checkpoint:
         - {agent: peer-gpt6.1-sol, effort: high, class: peer}
         - {agent: claude-opus, effort: high, class: native}
         - {agent: peer-gpt6-astra, effort: high, class: peer}
-  reports:
-    fix:
-      integration: .peer/scope-query-aggregation/20261005T203329Z-45e93b/integration-fix
-    rereview: .peer/scope-query-aggregation/20261005T203329Z-45e93b/integration-rereview
+  reports: {}
   in_flight_mutations: []
