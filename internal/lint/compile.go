@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/srnnkls/henia/internal/library"
-	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/pattern"
 )
 
@@ -18,12 +17,6 @@ type Plan struct {
 	files    map[string]moduleFile
 	disabled map[string]bool
 	options  Options
-}
-
-type table struct {
-	keys   []string
-	values []string
-	list   bool
 }
 
 func Compile(options Options) (*Plan, error) {
@@ -79,7 +72,7 @@ func Compile(options Options) (*Plan, error) {
 	return &Plan{specs: specs, files: registry.files, disabled: disabled, options: options}, nil
 }
 
-func defaults(rawParams, rawData map[string]any, origin string) (map[string]pattern.Value, map[string]table, error) {
+func defaults(rawParams, rawData map[string]any, origin string) (map[string]pattern.Value, map[string]pattern.Table, error) {
 	params := map[string]pattern.Value{}
 	for key, raw := range rawParams {
 		switch v := raw.(type) {
@@ -97,52 +90,15 @@ func defaults(rawParams, rawData map[string]any, origin string) (map[string]patt
 			return nil, nil, fmt.Errorf("%s: param %s must be a number, string or boolean", origin, key)
 		}
 	}
-	data := map[string]table{}
+	data := map[string]pattern.Table{}
 	for key, raw := range rawData {
-		t, err := parseTable(raw)
+		t, err := pattern.ParseTable(raw)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%s: data %s: %w", origin, key, err)
 		}
 		data[key] = t
 	}
 	return params, data, nil
-}
-
-func parseTable(raw any) (table, error) {
-	scalar := func(v any) (string, error) {
-		switch v := v.(type) {
-		case string:
-			return v, nil
-		case int, int64, float64, bool:
-			return fmt.Sprint(v), nil
-		}
-		return "", fmt.Errorf("rows must be strings, numbers or booleans, not %T", v)
-	}
-	switch rows := raw.(type) {
-	case map[string]any:
-		t := table{}
-		for _, key := range slices.Sorted(maps.Keys(rows)) {
-			value, err := scalar(rows[key])
-			if err != nil {
-				return table{}, err
-			}
-			t.keys, t.values = append(t.keys, key), append(t.values, value)
-		}
-		return t, nil
-	case []any:
-		t := table{list: true}
-		for _, row := range rows {
-			value, err := scalar(row)
-			if err != nil {
-				return table{}, err
-			}
-			t.values = append(t.values, value)
-		}
-		return t, nil
-	case []string:
-		return table{list: true, values: rows}, nil
-	}
-	return table{}, fmt.Errorf("must be a table or a list, not %T", raw)
 }
 
 func (s *spec) apply(config map[string]any, origin string) error {
@@ -172,13 +128,13 @@ func (s *spec) apply(config map[string]any, origin string) error {
 			continue
 		}
 		if current, ok := data[key]; ok {
-			t, err := parseTable(raw)
+			t, err := pattern.ParseTable(raw)
 			if err != nil {
 				return fmt.Errorf("%s.%s: %w", origin, key, err)
 			}
-			if t.list != current.list {
+			if t.List != current.List {
 				shape := map[bool]string{true: "a list", false: "a table"}
-				return fmt.Errorf("%s.%s must be %s", origin, key, shape[current.list])
+				return fmt.Errorf("%s.%s must be %s", origin, key, shape[current.List])
 			}
 			data[key] = t
 			continue
@@ -213,26 +169,6 @@ func parseParam(raw any, current pattern.Value) (pattern.Value, error) {
 		}
 	}
 	return pattern.Value{}, fmt.Errorf("%q is not a number", fmt.Sprint(raw))
-}
-
-func dataRoot(tables map[string]table) *markup.Element {
-	if len(tables) == 0 {
-		return nil
-	}
-	root := &markup.Element{Type: "data", Attrs: map[string]string{}}
-	for _, name := range slices.Sorted(maps.Keys(tables)) {
-		t := tables[name]
-		for i, value := range t.values {
-			attrs := map[string]string{"table": name, "value": value}
-			if t.list {
-				attrs["index"] = strconv.Itoa(i)
-			} else {
-				attrs["key"] = t.keys[i]
-			}
-			root.Children = append(root.Children, &markup.Element{Type: "row", Attrs: attrs, Parent: root, Index: len(root.Children)})
-		}
-	}
-	return root
 }
 
 func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {

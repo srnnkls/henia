@@ -8,7 +8,7 @@ import (
 )
 
 func TestTransformParseCount(t *testing.T) {
-	const parsesPerSkill = 5
+	const parsesPerSkill = 7
 	tr := Transformer{
 		OutputFormat: "xml",
 		References:   map[string]ReferenceConfig{"skill": {Output: "/{{.Name}}"}},

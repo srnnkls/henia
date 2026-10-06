@@ -37,11 +37,20 @@ func Tree(source []byte, extra ...*Element) (*Element, error) {
 	root := b.file()
 	b.blocks(root, doc, true)
 	b.finish(root)
+	Graft(root, extra...)
+	return root, err
+}
+
+func Graft(root *Element, extra ...*Element) {
+	if len(extra) == 0 {
+		return
+	}
 	for _, e := range extra {
 		place(root, e)
 	}
+	b := &builder{source: []byte(root.Body)}
+	b.file()
 	b.finish(root)
-	return root, err
 }
 
 func PlainTree(source []byte) *Element {
@@ -148,12 +157,12 @@ func (b *builder) block(node ast.Node) *Element {
 		e.Type = "paragraph"
 		b.inlines(e, v)
 	case *ast.FencedCodeBlock:
-		e.Type, e.Attrs["lang"] = "code", string(v.Language(b.source))
+		e.Type, e.Attrs["lang"], e.Attrs["inline"] = "code", string(v.Language(b.source)), "false"
 		if v.Info != nil {
 			e.Attrs["info"] = strings.TrimSpace(string(v.Info.Segment.Value(b.source)))
 		}
 	case *ast.CodeBlock:
-		e.Type = "code"
+		e.Type, e.Attrs["inline"] = "code", "false"
 	case *ast.List:
 		e.Type, e.Attrs["ordered"] = "list", strconv.FormatBool(v.IsOrdered())
 		b.blocks(e, v, false)
@@ -221,6 +230,11 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 			e = &Element{Type: "image", Attrs: map[string]string{"url": string(v.Destination)}}
 		case *ast.AutoLink:
 			e = &Element{Type: "link", Attrs: map[string]string{"url": string(v.URL(b.source))}}
+		case *ast.CodeSpan:
+			if code := b.code(v); code != nil {
+				parent.add(code)
+			}
+			return ast.WalkSkipChildren, nil
 		case *inlineNode:
 			e = &Element{Type: "directive", Attrs: map[string]string{"name": v.name, "inline": "true"}}
 			for _, a := range v.attrs {
@@ -228,14 +242,60 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 			}
 			e.Start, e.End = v.open.start, v.close.stop
 			parent.add(e)
+			b.content(e, v.content)
 			return ast.WalkSkipChildren, nil
 		default:
 			return ast.WalkContinue, nil
 		}
 		e.Start, e.End = extent(n)
 		parent.add(e)
+		b.inlines(e, n)
 		return ast.WalkSkipChildren, nil
 	})
+}
+
+func (b *builder) code(span *ast.CodeSpan) *Element {
+	first, firstOK := span.FirstChild().(*ast.Text)
+	last, lastOK := span.LastChild().(*ast.Text)
+	if !firstOK || !lastOK {
+		return nil
+	}
+	open, inner := first.Segment.Start, first.Segment.Start
+	if open > 0 && b.source[open-1] != '`' {
+		open--
+		inner--
+	}
+	for open > 0 && b.source[open-1] == '`' {
+		open--
+	}
+	ticks := inner - open
+	end := last.Segment.Stop
+	if end < len(b.source) && b.source[end] != '`' {
+		end++
+	}
+	close := end + ticks
+	if ticks == 0 || close > len(b.source) || strings.Count(string(b.source[end:close]), "`") != ticks {
+		return nil
+	}
+	return &Element{Type: "code", Attrs: map[string]string{"inline": "true", "ticks": strconv.Itoa(ticks)}, Text: string(b.source[inner:end]), Start: open, End: close}
+}
+
+func (b *builder) content(directive *Element, content span) {
+	if !bytes.ContainsAny(b.source[content.start:content.stop], "`[<:") {
+		return
+	}
+	nested := &builder{source: b.source[content.start:content.stop]}
+	doc, _ := run(inlineDirectiveParser, nested.source)
+	for block := doc.FirstChild(); block != nil; block = block.NextSibling() {
+		nested.inlines(directive, block)
+	}
+	for _, child := range directive.Children {
+		child.Walk(func(e *Element) bool {
+			e.Start += content.start
+			e.End += content.start
+			return true
+		})
+	}
 }
 
 func extent(node ast.Node) (int, int) {

@@ -57,6 +57,11 @@ func (q *Query) check() error {
 			if a.Var != "" {
 				mentions = append(mentions, mention{name: a.Var, pos: a.Pos, scope: s, binds: !a.Negate && a.Relate == "", optional: optional, member: member, negated: negated, absent: member < 0, prior: prior})
 			}
+			for _, g := range a.Groups {
+				if g.Var != "" {
+					mentions = append(mentions, mention{name: g.Var, pos: a.Pos, scope: s, binds: true, optional: optional, member: member, negated: negated, absent: member < 0, prior: prior})
+				}
+			}
 			if a.Score != "" {
 				mentions = append(mentions, mention{name: a.Score, pos: a.Pos, scope: s, binds: true, output: true, optional: optional, member: member, negated: negated, absent: member < 0, prior: prior})
 			}
@@ -114,7 +119,7 @@ func (q *Query) check() error {
 		return err
 	}
 	uses := q.Group.uses()
-	q.sortUses(uses)
+	q.outputUses(uses)
 	count := map[string]int{}
 	for _, m := range mentions {
 		count[m.name]++
@@ -183,8 +188,8 @@ func optionalPattern(p *Pattern) bool { return p.Quant == '?' || p.Quant == '*' 
 func before(p *Pattern, chains, relations int) map[string]bool {
 	vars := map[string]bool{}
 	for _, a := range p.Attrs {
-		if a.Var != "" && !a.Negate && a.Relate == "" {
-			vars[a.Var] = true
+		for _, v := range a.bindings() {
+			vars[v] = true
 		}
 		if a.Score != "" && !a.Negate {
 			vars[a.Score] = true
@@ -217,8 +222,8 @@ func bound(p *Pattern) map[string]bool {
 	var walk func(*Pattern)
 	walk = func(p *Pattern) {
 		for _, a := range p.Attrs {
-			if a.Var != "" && !a.Negate && a.Relate == "" {
-				vars[a.Var] = true
+			for _, v := range a.bindings() {
+				vars[v] = true
 			}
 		}
 		for _, alt := range p.Alts {

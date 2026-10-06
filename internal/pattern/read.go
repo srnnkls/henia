@@ -18,6 +18,7 @@ type Query struct {
 	Group    *Group
 	params   map[string]bool
 	sorts    []sortKey
+	printed  []string
 }
 
 type Pattern struct {
@@ -74,6 +75,11 @@ type Attr struct {
 	Number    float64
 	Limit     string
 	Score     string
+	Groups    []Submatch
+}
+
+type Submatch struct {
+	Name, Var, Value string
 }
 
 type Error struct {
@@ -109,7 +115,7 @@ var types = map[string][]string{
 	"item":        nil,
 	"quote":       nil,
 	"table":       nil,
-	"code":        {"lang"},
+	"code":        {"lang", "inline", "ticks"},
 	"row":         {"table", "key", "value", "index"},
 	"link":        {"target", "path", "anchor", "url", "ref", "name", "artifact", "dest", "exists", "valid", "anchored", "problem"},
 	"image":       {"url", "dest", "exists", "valid", "anchored", "problem"},
@@ -154,6 +160,7 @@ type token struct {
 	text   string
 	pos    int
 	lo, hi int
+	groups map[string]string
 }
 
 func isName(c byte, first bool) bool {
@@ -313,6 +320,7 @@ type reader struct {
 	defines  map[string]Define
 	expanded int
 	sorts    []sortKey
+	printed  []string
 }
 
 func Read(src string, sort ...string) (*Query, error) {
@@ -384,7 +392,7 @@ func (r *reader) query(end tokenKind) (*Query, error) {
 	if len(q.Members) == 0 {
 		return nil, &Error{Offset: start, Message: "a query needs a pattern outside (not ...)", Hint: `try (skill :id "NAME" (heading) @h)`}
 	}
-	q.Captures, q.Semantic, q.params, q.sorts = r.captures, r.semantic, r.params, r.sorts
+	q.Captures, q.Semantic, q.params, q.sorts, q.printed = r.captures, r.semantic, r.params, r.sorts, r.printed
 	if len(q.Captures) == 0 {
 		if len(q.Members) > 1 || len(q.Absent) > 0 {
 			return nil, &Error{Offset: start, Message: "a query of several patterns prints its captures; name one with @", Hint: `e.g. (link :target ?s) @l (skill :id ?s)`}
@@ -686,7 +694,7 @@ func (r *reader) attr(kind string) (Attr, error) {
 			return attr, &Error{Offset: value.pos, Message: "invalid regular expression: " + err.Error()}
 		}
 		attr.Re = re
-		return attr, nil
+		return attr, bindSubmatches(&attr, value)
 	default:
 		return attr, r.unexpected(value, fmt.Sprintf("a value for :%s", key.text))
 	}
@@ -706,8 +714,45 @@ func (r *reader) attr(kind string) (Attr, error) {
 			return attr, &Error{Offset: value.pos, Message: "invalid regular expression: " + err.Error()}
 		}
 		attr.Re = re
+		return attr, bindSubmatches(&attr, value)
 	}
 	return attr, nil
+}
+
+func bindSubmatches(attr *Attr, value token) error {
+	for _, name := range attr.Re.SubexpNames() {
+		if name == "" {
+			continue
+		}
+		if attr.Negate {
+			return &Error{Offset: value.pos, Message: fmt.Sprintf("(not /regexp/) cannot bind ?%s from a group", name), Hint: "drop the group name, as in (?:...)"}
+		}
+		group := Submatch{Name: name, Var: name}
+		if bound, ok := value.groups[name]; ok {
+			group.Var = ""
+			if v, isVar := strings.CutPrefix(bound, "?"); isVar {
+				group.Var = v
+			} else {
+				group.Value = strings.TrimPrefix(bound, "=")
+			}
+		}
+		attr.Groups = append(attr.Groups, group)
+	}
+	attr.Pos = value.pos
+	return nil
+}
+
+func (a Attr) bindings() []string {
+	var vars []string
+	if a.Var != "" && !a.Negate && a.Relate == "" {
+		vars = append(vars, a.Var)
+	}
+	for _, g := range a.Groups {
+		if g.Var != "" {
+			vars = append(vars, g.Var)
+		}
+	}
+	return vars
 }
 
 func (r *reader) unexpected(t token, want string) error {

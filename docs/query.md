@@ -20,6 +20,7 @@ henia query '(file :path /\.md$/ (paragraph :words 100..) @p)'
 henia query '(skill :id "gestalt" > (file :main true (heading :level 1..2) @h))'
 henia query '(section > (heading) @title (code :lang "bash") @c)'
 henia query '[(code :lang "toml") (code :lang "yaml")] @c'
+henia query '(code :inline true :matches /^\$(?<name>[a-z-]+)$/) @c (skill :id ?name) @s'
 henia query '(code :lang ?l) @c (group ?l)'
 henia query '(skill (code :lang "bash")? @c) @s (group @s (count @c ?n))'
 henia query '(skill :id ?s) @t (skill :id (not ?s) (link :target ?s) @l)? (group @t (count @l ?n))'
@@ -36,7 +37,7 @@ henia query '(skill (code)? @c) @s (group @s (count @c ?n (>= 3)) (sum :lines @c
 | `heading` | `:level` |
 | `paragraph`, `item`, `quote`, `table` | |
 | `list` | `:ordered` |
-| `code` | `:lang` |
+| `code` | `:lang`; `:inline` (`true` for a code span, `false` for a block) and, on a span, `:ticks` (its backtick count) |
 | `link` | `:url`; for links into a skill also `:target` (skill name), `:path` (file in it) and `:anchor` (section id), from `` `$name` ``, `` `henia show name/path#anchor` ``, relative paths and `#anchor` |
 | `directive` | `:name` and its attributes |
 | `frontmatter` | its scalar keys |
@@ -60,6 +61,8 @@ both stays empty.
 `(< n)` or `(<= n)`, and a date takes `(older days)`.
 Other values compare exactly; quote them with `"`, or leave single words bare.
 A `/regexp/` value matches any key, as in `:url /^https:/` or `:title /^Phase/`.
+A named group binds the variable of its name, as `:matches /^\$(?<name>[a-z-]+)$/`
+binds `?name`. `:text` compares trimmed text, `:matches` the text as written.
 A `?variable` value binds the key's value; every other use of the variable must
 be equal, which joins the patterns that share it. `(not value)` negates a
 value, as in `:lang (not "go")` or `:id (not ?x)`. Compared with a variable:

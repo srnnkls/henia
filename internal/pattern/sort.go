@@ -73,11 +73,14 @@ func (q *Query) checkSorts(mentions []mention) error {
 	return nil
 }
 
-func (q *Query) sortUses(uses map[string]int) {
+func (q *Query) outputUses(uses map[string]int) {
 	for _, s := range q.sorts {
 		if s.variable != "" {
 			uses[s.variable]++
 		}
+	}
+	for _, name := range q.printed {
+		uses[name]++
 	}
 }
 

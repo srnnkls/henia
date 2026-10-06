@@ -114,3 +114,29 @@ func TestConcurrentParsesKeepTheirOwnErrors(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestInlineCode(t *testing.T) {
+	source := "Use `$x`, ``a`b``, ` pad `, [see `$y`](u) and :term[`$z`].\n\n```\nblock\n```\n"
+	root, err := markup.Tree([]byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	root.Walk(func(e *markup.Element) bool {
+		if e.Type == "code" {
+			got = append(got, fmt.Sprintf("%s ticks=%s inline=%s %q %q", e.Parent.Type, e.Attrs["ticks"], e.Attrs["inline"], e.Text, source[e.Start:e.End]))
+		}
+		return true
+	})
+	want := []string{
+		"paragraph ticks=1 inline=true \"$x\" \"`$x`\"",
+		"paragraph ticks=2 inline=true \"a`b\" \"``a`b``\"",
+		"paragraph ticks=1 inline=true \" pad \" \"` pad `\"",
+		"link ticks=1 inline=true \"$y\" \"`$y`\"",
+		"directive ticks=1 inline=true \"$z\" \"`$z`\"",
+		"file ticks= inline=false \"block\\n\" \"```\\nblock\\n```\"",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}

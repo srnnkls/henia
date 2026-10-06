@@ -2,9 +2,25 @@
 description: Links and references that point nowhere or at outdated names.
 data:
   outdated: {}
+  sigils: {"$": skill, "/": command, "@": agent, "#": file, "!": tool}
 ---
 
 # References
+
+## reference
+
+A single-backtick code span names an artifact by its sigil: `$skill`,
+`/command`, `@agent`, `!tool` and `#path`, where a file path holds a `.` or
+`/`. `(reference @r ?kind ?name)` matches each one; lint and rendering read
+references through it.
+
+```hq
+(define (reference @r ?kind ?name)
+  [(code :ticks 1 :matches /^(?<sigil>[$\/@])(?<name>[a-z0-9][a-z0-9._-]*)$/)
+   (code :ticks 1 :matches /^(?<sigil>!)(?<name>[a-zA-Z0-9._\/-]+)$/)
+   (code :ticks 1 :matches /^(?<sigil>#)(?<name>[a-zA-Z0-9._\/-]*[.\/][a-zA-Z0-9._\/-]*)$/)] @r
+  (row :table "sigils" :key ?sigil :value ?kind))
+```
 
 ## broken-link
 
