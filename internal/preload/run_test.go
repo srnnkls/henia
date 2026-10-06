@@ -182,4 +182,24 @@ func TestExpand(t *testing.T) {
 	if got := r.Expand(context.Background(), "Slot providers:\n\n!`echo a`\n\n# Next\n", Context{Dir: t.TempDir()}); got != "Slot providers:\n\n```text\n$ echo a\na\n```\n\n# Next\n" {
 		t.Fatalf("own paragraph: %q", got)
 	}
+	resolve := Context{Dir: t.TempDir(), Resolve: func(command string) (string, bool) {
+		switch command {
+		case "henia slots a":
+			return "- `a`: `henia show 'x#a'`\n", true
+		case "henia context x":
+			return "", true
+		}
+		return "", false
+	}}
+	body = "# S\n\nSlots:\n\n!`henia slots a`\n\n- Item: !`henia slots a`\n\nNone:\n\n!`henia context x`\n\n```!\nhenia slots a\n```\n\nEnd !`echo e`\n"
+	want = "# S\n\nSlots:\n\n- `a`: `henia show 'x#a'`\n\n- Item: `a`: `henia show 'x#a'`\n\nNone:\n\n- `a`: `henia show 'x#a'`\n\nEnd\n```text\n$ echo e\ne\n```\n"
+	if got := r.Expand(context.Background(), body, resolve); got != want {
+		t.Fatalf("resolved:\n%s\nwant:\n%s", got, want)
+	}
+	if got := r.Block(context.Background(), "henia slots a", resolve); got != "- `a`: `henia show 'x#a'`\n" {
+		t.Fatalf("block: %q", got)
+	}
+	if got := Substitute("A !`henia slots a` and !`date`\n", resolve.Resolve); got != "A `a`: `henia show 'x#a'` and !`date`\n" {
+		t.Fatalf("substitute: %q", got)
+	}
 }

@@ -16,11 +16,11 @@ func TestRenderLinks(t *testing.T) {
 	}{
 		{"library", Transformer{LibraryLinks: true},
 			"See `henia show scope.reference.review`, the protocol (`henia show dispatch.protocol`), " +
-				"`worktree` (`henia show git.reference.worktree#steps`), slots (`henia show git#slots`), [up](#routes), " +
+				"`worktree` (`henia show 'git.reference.worktree#steps'`), slots (`henia show 'git#slots'`), [up](#routes), " +
 				"[site](https://example.test/x), ![img](reference/a.png) and `[code](reference/x.md)`.\n"},
 		{"head", Transformer{LibraryLinks: true, Head: true},
 			"See `henia show scope.reference.review`, the protocol (`henia show dispatch.protocol`), " +
-				"`worktree` (`henia show git.reference.worktree#steps`), slots (`henia show git#slots`), up (`henia show scope#routes`), " +
+				"`worktree` (`henia show 'git.reference.worktree#steps'`), slots (`henia show 'git#slots'`), up (`henia show 'scope#routes'`), " +
 				"[site](https://example.test/x), ![img](reference/a.png) and `[code](reference/x.md)`.\n"},
 		{"static", Transformer{Served: map[string]bool{"dispatch": true}},
 			"See [reference/review.md](reference/review.md), the protocol (`henia show dispatch.protocol`), " +

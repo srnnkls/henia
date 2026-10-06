@@ -99,14 +99,16 @@ the command always exits successfully so a skill preload never aborts.`,
 			lib := flags.open(cmd)
 			harness := detectHarness(flags.harness)
 			settings, err := loadRuntime(flags.project)
+			r := newRenderer(harness, lib)
+			resolve := newResolver(lib, r, flags.project).resolve
 			expand := func(e library.Entry, text string) string {
 				if err != nil {
-					return fmt.Sprintf("henia: preloads not run: %v\n\n%s", err, text)
+					return fmt.Sprintf("henia: preloads not run: %v\n\n%s", err, preload.Substitute(text, resolve))
 				}
-				return settings.runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, Skill: e.Name, Package: e.Package, Tier: e.Tier, Caller: harness})
+				return settings.runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, Skill: e.Name, Package: e.Package, Tier: e.Tier, Caller: harness, Resolve: resolve})
 			}
 			disclose := func(e library.Entry) bool { return discloses(settings.disclosure, e) }
-			show(cmd.OutOrStdout(), lib, newRenderer(harness, lib), args[0], mode, expand, disclose)
+			show(cmd.OutOrStdout(), lib, r, args[0], mode, expand, disclose)
 			return nil
 		},
 	}
@@ -141,17 +143,22 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string, mode 
 		if stale(r.harness, entry) {
 			fmt.Fprintf(out, "henia: the %s copy of %s was installed from an older revision of the skill; run henia install to update it\n\n", r.harness, name)
 		}
+		placedContents, placedRelated := false, false
 		if mode.head {
-			if static := strings.TrimSpace(r.render(entry, true)); static != "" {
+			static := strings.TrimSpace(r.render(entry, true))
+			placedContents, placedRelated = places(static, tocPreload, entry.Name, name), places(static, contextPreload, entry.Name, name)
+			if static != "" {
 				fmt.Fprint(out, expand(entry, static+"\n\n"))
 			}
 		}
-		fmt.Fprintf(out, "Read the sections of %s as the task needs them:\n\n", name)
-		contents(out, name, body)
+		if !placedContents {
+			fmt.Fprintf(out, "Read the sections of %s as the task needs them:\n\n", name)
+			contents(out, name, body)
+		}
 		if disclose(entry) {
 			resourceList(out, name, filepath.Dir(entry.Path), "")
 		}
-		if mode.head {
+		if mode.head && !placedRelated {
 			related(out, lib, r, entry)
 		}
 		return
@@ -162,7 +169,7 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string, mode 
 				fmt.Fprint(out, expand(entry, text))
 				return
 			}
-			fmt.Fprintf(out, "%s#%s exceeds the output budget; read its subsections with henia show:\n", name, anchor)
+			fmt.Fprintf(out, "%s#%s exceeds the output budget; read its subsections:\n\n", name, anchor)
 			contents(out, name, body)
 			return
 		}
@@ -177,7 +184,7 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string, mode 
 		}
 		return
 	}
-	fmt.Fprintf(out, "%s exceeds the output budget; read its sections with henia show %s#<section>:\n", name, name)
+	fmt.Fprintf(out, "%s exceeds the output budget; read its sections:\n\n", name)
 	contents(out, name, body)
 }
 
@@ -187,9 +194,23 @@ func contents(out io.Writer, name, body string) {
 		fmt.Fprintf(out, "henia: %v\n", err)
 		return
 	}
+	var open []int
 	for _, section := range sections {
-		fmt.Fprintf(out, "%s%s#%s  %s\n", strings.Repeat("  ", max(section.Level-1, 0)), name, section.Anchor, section.Title)
+		for len(open) > 0 && open[len(open)-1] >= section.Level {
+			open = open[:len(open)-1]
+		}
+		fmt.Fprintf(out, "%s- %s: `%s`\n", strings.Repeat("  ", len(open)), section.Title, library.ShowCommand(name+"#"+section.Anchor))
+		open = append(open, section.Level)
 	}
+}
+
+func places(static string, command *regexp.Regexp, names ...string) bool {
+	for _, p := range preload.Find([]byte(static)) {
+		if m := command.FindStringSubmatch(p.Command); m != nil && slices.Contains(names, m[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 func newPreloadCommand() *cobra.Command {
@@ -216,7 +237,8 @@ exits successfully so a skill preload never aborts.`,
 				fmt.Fprint(out, preload.Show(args[0], fmt.Sprintf("henia: blocked by henia/not-a-preload: %s declares no such preload", lib.Reference(entry))))
 				return nil
 			}
-			c := preload.Context{Dir: flags.project, Skill: entry.Name, Package: entry.Package, Tier: entry.Tier, Caller: detectHarness(flags.harness)}
+			harness := detectHarness(flags.harness)
+			c := preload.Context{Dir: flags.project, Skill: entry.Name, Package: entry.Package, Tier: entry.Tier, Caller: harness, Resolve: newResolver(lib, newRenderer(harness, lib), flags.project).resolve}
 			runner, err := preloadRunner(flags.project)
 			if err != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "henia: preload not run: %v\n", err)
@@ -360,7 +382,7 @@ func showResource(out io.Writer, name, skillDir, path, anchor string, sectioned,
 		text = section
 	}
 	if len(text) > outputBudget {
-		fmt.Fprintf(out, "%s exceeds the output budget; read its sections with henia show %s#<section>:\n", address, address)
+		fmt.Fprintf(out, "%s exceeds the output budget; read its sections:\n\n", address)
 		contents(out, address, text)
 		return
 	}
@@ -410,7 +432,7 @@ preload never aborts.`,
 			if b.Len() == 0 {
 				fmt.Fprintf(&b, "%s references no other library skills\n", lib.Reference(entry))
 			}
-			text := b.String()
+			text := strings.TrimLeft(b.String(), "\n")
 			if len(text) > outputBudget {
 				text = text[:strings.LastIndexByte(text[:outputBudget], '\n')+1] + "henia: context truncated at the budget\n"
 			}

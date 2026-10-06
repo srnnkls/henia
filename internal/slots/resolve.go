@@ -52,10 +52,11 @@ func Discover(lib *library.Library) []Skill {
 }
 
 type Row struct {
-	Slot  string `json:"slot"`
-	Kind  string `json:"kind"`
-	Path  string `json:"path"`
-	Value string `json:"value,omitempty"`
+	Slot     string    `json:"slot"`
+	Kind     string    `json:"kind"`
+	Path     string    `json:"path"`
+	Value    string    `json:"value,omitempty"`
+	provider *Provider `json:"-"`
 }
 
 const (
@@ -216,7 +217,7 @@ func (r *Resolution) Rows(requested []string, check bool) []Row {
 		for _, tier := range tiers {
 			for _, p := range r.Providers {
 				if p.Tier == tier && p.Status == Selected && relevant(p.Slot, requested) {
-					rows = append(rows, Row{Slot: p.Slot, Kind: string(p.Tier), Path: p.location(), Value: p.Value})
+					rows = append(rows, Row{Slot: p.Slot, Kind: string(p.Tier), Path: p.location(), Value: p.Value, provider: p})
 				}
 			}
 		}
@@ -286,12 +287,14 @@ func (p *Provider) assign(r *Resolution, s Skill, o Offer) error {
 	return nil
 }
 
-func (p *Provider) location() string {
+func (p *Provider) address() string {
 	if p.Section != "" {
-		return "henia show " + p.Ref + "#" + p.Section
+		return p.Ref + "#" + p.Section
 	}
-	return "henia show " + p.Ref
+	return p.Ref
 }
+
+func (p *Provider) location() string { return library.ShowCommand(p.address()) }
 
 func (p *Provider) competes() bool { return p.Status == Selected || p.Status == Shadowed }
 
@@ -321,4 +324,73 @@ func (r Row) Line() string {
 
 func (r Row) Problem() bool {
 	return r.Kind != None && !slices.Contains(tiers, Tier(r.Kind))
+}
+
+func (r *Resolution) Inline(requested []string, content func(p *Provider, kind Value) string) string {
+	var parts []string
+	for _, row := range r.ordered(requested) {
+		switch {
+		case row.Kind == None:
+		case row.Problem():
+			parts = append(parts, "henia: slot `"+row.Slot+"`: "+r.pointer(row))
+		default:
+			owner, _ := r.Owner(row.provider.Slot)
+			if text := strings.TrimSpace(content(row.provider, owner.Type.Value)); text != "" {
+				parts = append(parts, text)
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\n\n") + "\n"
+}
+
+func (r *Resolution) Markdown(requested []string) string {
+	var b strings.Builder
+	for _, row := range r.ordered(requested) {
+		fmt.Fprintf(&b, "- `%s`: %s\n", row.Slot, r.pointer(row))
+	}
+	return b.String()
+}
+
+func (r *Resolution) pointer(row Row) string {
+	switch {
+	case row.Kind == None:
+		return "no provider"
+	case row.Problem():
+		if row.Path == "-" {
+			return row.Kind
+		}
+		return row.Kind + " in `" + row.Path + "`"
+	}
+	p := row.provider
+	owner, _ := r.Owner(p.Slot)
+	switch owner.Type.Value {
+	case CommandValue:
+		return "`" + p.Value + "`"
+	case TextValue:
+		return p.Value
+	case PathValue:
+		if rel, err := filepath.Rel(filepath.Dir(p.Path), p.Value); err == nil && filepath.IsLocal(rel) {
+			return "`" + library.ShowCommand(library.Address(p.Ref, rel)) + "`"
+		}
+		return "`" + p.Value + "`"
+	}
+	return "`" + row.Path + "`"
+}
+
+func (r *Resolution) ordered(requested []string) []Row {
+	rows := r.Rows(requested, false)
+	slices.SortStableFunc(rows, func(a, b Row) int {
+		return request(a.Slot, requested) - request(b.Slot, requested)
+	})
+	return rows
+}
+
+func request(slot string, requested []string) int {
+	if i := slices.IndexFunc(requested, func(request string) bool { return related(slot, request) }); i >= 0 {
+		return i
+	}
+	return len(requested)
 }

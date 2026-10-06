@@ -54,6 +54,48 @@ code.style
 exit 0
 ```
 
+`--markdown` lists each provider as the pointer it offers: a command or text
+as itself, a path as the `henia show` command that reads it. `--inline` prints
+the content instead.
+
+```scrut
+$ slots --markdown docs.template code.check git.style
+- `docs.template`: `henia show acme:tpl.template`
+- `code.check.go`: `go vet ./...`
+- `code.check.python`: invalid in `acme/skills/pycheck/SKILL.md`
+- `git.style`: conventional
+exit 0
+```
+
+````scrut
+$ slots --inline git.style docs.template code.check
+conventional
+
+# Template
+
+```bash
+go vet ./...
+```
+
+henia: slot `code.check.python`: invalid in `acme/skills/pycheck/SKILL.md`
+exit 0
+````
+
+A `:slot[...]` directive renders as `--markdown`; `{.inline}` opts it into
+content. A single-line result inside a sentence stays in the sentence.
+
+```scrut
+$ mk "$G/user/SKILL.md" '---\nname: user\ndescription: Uses slots.\n---\n\n# User\n\nCommits are :slot[git.style]{.inline} here.\n\nTemplate:\n\n:slot[docs.template]\n'
+> (cd "$P" && henia show user)
+# User
+
+Commits are conventional here.
+
+Template:
+
+- `docs.template`: `henia show acme:tpl.template`
+```
+
 A path that does not exist is invalid.
 
 ```scrut

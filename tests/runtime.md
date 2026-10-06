@@ -32,9 +32,9 @@ lists the dynamic ones.
 ```scrut
 $ grep -h -e '^Follow' -e 'henia slots' "$T/build/claude/skills/code/SKILL.md" "$T/build/pi/skills/code/SKILL.md"
 Follow `henia show style-guide` and `henia show checks`.
-!`henia preload --skill code -- 'henia slots code.style code.check'`
+!`henia preload --skill code -- 'henia slots --markdown code.style code.check'`
 Follow `/skill:style-guide` and `/skill:checks`.
-run first: `henia preload --skill code -- 'henia slots code.style code.check'`
+run first: `henia preload --skill code -- 'henia slots --markdown code.style code.check'`
 ```
 
 The catalog skill names each dynamic skill with its description and the
@@ -99,10 +99,10 @@ Wrap with %w.
 ```scrut
 $ henia show style-guide#nope
 henia: style-guide has no section "nope"
-style-guide#style-guide  Style guide
-  style-guide#go  Go
-    style-guide#errors  Errors
-  style-guide#python  Python
+- Style guide: `henia show 'style-guide#style-guide'`
+  - Go: `henia show 'style-guide#go'`
+    - Errors: `henia show 'style-guide#errors'`
+  - Python: `henia show 'style-guide#python'`
 ```
 
 ```scrut
@@ -217,15 +217,14 @@ never repeats the skill's own text.
 ```scrut
 $ rm -rf "$L/extra" "$P/.henia"
 > henia context code | sed "s|$T/||g"
-
 Skill style-guide: House style by language.
-style-guide#style-guide  Style guide
-  style-guide#go  Go
-    style-guide#errors  Errors
-  style-guide#python  Python
+- Style guide: `henia show 'style-guide#style-guide'`
+  - Go: `henia show 'style-guide#go'`
+    - Errors: `henia show 'style-guide#errors'`
+  - Python: `henia show 'style-guide#python'`
 
 Skill checks: Validation commands.
-checks#checks  Checks
+- Checks: `henia show 'checks#checks'`
 ```
 
 ```scrut
@@ -404,7 +403,7 @@ henia: exit status 3
 Henia refuses commands that change state the sandbox cannot see, or that it
 cannot inspect, before anything runs.
 
-````scrut
+```scrut
 $ : > "$T/config/henia/henia.toml"
 > pre "rm -rf build" | sed -n 3p
 > pre "echo hi > notes.txt" | sed -n 3p
@@ -436,7 +435,7 @@ henia: blocked by henia/uninspectable: bash reads commands Henia cannot inspect
 henia: blocked by henia/uninspectable: eval runs a command that is not literal
 henia: blocked by henia/dynamic-command: the command name is not literal
 henia: blocked by henia/unparseable: cannot parse the command: 1:6: reached EOF without closing quote `'`
-````
+```
 
 POST reads: GraphQL queries and search endpoints run; GraphQL mutations do not.
 
@@ -462,7 +461,7 @@ curl -s -X POST https://search.example.com/logs/_search -d {"query":{"match_all"
 `[preload] refuse` in a user or project `henia.toml` adds refusals; nothing
 removes a built-in, and a project cannot allow unsandboxed runs.
 
-````scrut
+```scrut
 $ printf '[[preload.refuse]]\ncommand = "kubectl"\nsubcommands = ["get"]\nreason = "cluster reads stay out of skills"\n\n[[preload.refuse]]\npattern = "api\\\\.example\\\\.com/admin"\nreason = "admin endpoints change state"\n' > "$P/henia.toml"
 > pre "kubectl get pods" | sed -n 3p; pre "curl https://api.example.com/admin/users" | sed -n 3p
 > printf '[preload]\nunsandboxed = "run"\n' > "$P/henia.toml"; pre "echo hi" | head -n 1
@@ -470,31 +469,31 @@ $ printf '[[preload.refuse]]\ncommand = "kubectl"\nsubcommands = ["get"]\nreason
 henia: blocked by henia.toml: cluster reads stay out of skills
 henia: blocked by henia.toml: admin endpoints change state
 henia: preloads not run: preload.unsandboxed = "run" is honoured only in the user henia.toml
-````
+```
 
 `[preload] policy` in the user `henia.toml` names a command Henia asks after
 its own check; a deny names the command and the rule. Without it, Henia asks
 no one, whatever is on PATH.
 
-````scrut
+```scrut
 $ printf '#!/bin/sh\ncat > /dev/null\necho "{\\"decision\\":\\"deny\\",\\"rule\\":\\"no-uname\\",\\"reason\\":\\"uname stays private\\"}"\n' > "$B/gate"; chmod +x "$B/gate"
 > pre "uname -s" | sed -n 3p
 > printf '[preload]\npolicy = "gate check --caller henia"\n' > "$T/config/henia/henia.toml"
 > pre "uname -s" | sed -n 3p
 Darwin|Linux (regex)
 henia: blocked by gate/no-uname: uname stays private
-````
+```
 
 `preload.policy_timeout` bounds the policy call; a policy that does not answer
 in time blocks the preload. A project `henia.toml` cannot set a policy.
 
-````scrut
+```scrut
 $ printf '#!/bin/sh\nsleep 5; echo late\n' > "$B/gate"; printf '[preload]\npolicy = "gate check --caller henia"\npolicy_timeout = "1s"\n' > "$T/config/henia/henia.toml"
 > pre "uname -s" | sed -n 3p; : > "$T/config/henia/henia.toml"
 > printf '[preload]\npolicy = "gate check"\n' > "$P/henia.toml"; pre "echo hi" | head -n 1; rm "$P/henia.toml"
 henia: blocked: gate failed: timed out after 1s
 henia: preloads not run: preload.policy is honoured only in the user henia.toml
-````
+```
 
 ### Projection
 
@@ -700,12 +699,12 @@ Use `henia show checks` first.
 
 Read the sections of route as the task needs them:
 
-route#route  Route
-  route#routes  Routes
-  route#detail  Detail
+- Route: `henia show 'route#route'`
+  - Routes: `henia show 'route#routes'`
+  - Detail: `henia show 'route#detail'`
 
 Skill checks: Validation commands.
-checks#checks  Checks
+- Checks: `henia show 'checks#checks'`
 ```
 
 Read in full, a hybrid skill keeps its blocks' content without the markers, and
@@ -714,8 +713,31 @@ its head commands run as its preloads.
 ```scrut
 $ henia show route | grep -c ':::'; henia preload --skill route -- 'henia show route --toc' | sed -n 2,3p
 0
-$ henia show route --toc
-Read the sections of route as the task needs them:
+  - Routes: `henia show 'route#routes'`
+  - Detail: `henia show 'route#detail'`
+```
+
+A skill places its contents and related skills with `{{.contents}}` and
+`{{.related}}`; `--head` then appends neither.
+
+```scrut
+$ mk "$L/hybrid/skills/route/SKILL.md" '---\nname: route\ndescription: Routed work.\n---\n\n# Route\n\n:::static\n## Routes\n\nSections:\n\n{{.contents}}\n\nRelated:\n\n{{.related}}\n\nUse `$checks` first.\n:::\n\n## Detail\n\nReference.\n'
+> henia show route --head
+## Routes
+
+Sections:
+
+- Route: `henia show 'route#route'`
+  - Routes: `henia show 'route#routes'`
+  - Detail: `henia show 'route#detail'`
+
+Related:
+
+Skill checks: Validation commands.
+- Checks: `henia show 'checks#checks'`
+
+Use `henia show checks` first.
+
 ```
 
 ```scrut

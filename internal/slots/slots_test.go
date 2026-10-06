@@ -71,7 +71,7 @@ func TestRead(t *testing.T) {
 
 func TestExpand(t *testing.T) {
 	body := "Providers:\n\n:slot[code.style code.check]\n\n`:slot[literal]`\n"
-	if got := Expand(body, Preload); got != "Providers:\n\n!`henia slots code.style code.check`\n\n`:slot[literal]`\n" {
+	if got := Expand(body, Preload); got != "Providers:\n\n!`henia slots --markdown code.style code.check`\n\n`:slot[literal]`\n" {
 		t.Fatalf("Expand = %q", got)
 	}
 }
@@ -104,7 +104,7 @@ func TestTiersRank(t *testing.T) {
 		provider("tropos:git", Global, Offer{Slot: "git.commits", Priority: Global.priority()}),
 	}
 	rows := Evaluate(skills, nil).Rows([]string{"git.commits"}, false)
-	if len(rows) != 1 || rows[0] != (Row{Slot: "git.commits", Kind: "project", Path: "henia show project:mine"}) {
+	if len(rows) != 1 || rows[0].Line() != "git.commits\tproject\thenia show project:mine" {
 		t.Fatalf("rows = %+v", rows)
 	}
 	rows = Evaluate(skills[1:], nil).Rows([]string{"git.commits"}, false)
@@ -134,7 +134,7 @@ func TestDisabledProviders(t *testing.T) {
 	for _, r := range rows {
 		got = append(got, r.Line())
 	}
-	want := "code.style.python\tglobal\thenia show tropos:loqui#python\ncode.style.go\tglobal\thenia show tropos:other"
+	want := "code.style.python\tglobal\thenia show 'tropos:loqui#python'\ncode.style.go\tglobal\thenia show tropos:other"
 	if strings.Join(got, "\n") != want {
 		t.Fatalf("rows:\n%s\nwant:\n%s", strings.Join(got, "\n"), want)
 	}
@@ -174,5 +174,31 @@ func TestValueOffers(t *testing.T) {
 	}
 	if got := strings.Join(invalid, "; "); got != "code.check.rust: code.check needs a command; code.style.go: code.style takes a skill, not a text" {
 		t.Fatalf("invalid = %s", got)
+	}
+}
+
+func TestMarkdown(t *testing.T) {
+	r := Evaluate([]Skill{
+		{Path: "/lib/house/SKILL.md", Ref: "project:house", Tier: Project, Metadata: Metadata{
+			Declared: []Declaration{{Slot: "code.validation", Type: Type{Keyed: true, Value: CommandValue}}, {Slot: "git.commits"}, {Slot: "review.criteria"}},
+			Offered:  []Offer{{Slot: "code.validation.go", Priority: Normal, Value: "go test ./...", Kind: CommandValue}, {Slot: "git.commits", Priority: Normal, Section: "commits"}},
+		}},
+	}, nil)
+	want := "- `code.validation.go`: `go test ./...`\n- `git.commits`: `henia show 'project:house#commits'`\n- `review.criteria`: no provider\n- `lint.rules`: undeclared\n"
+	if got := r.Markdown([]string{"code.validation", "git.commits", "review.criteria", "lint.rules"}); got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+	inline := r.Inline([]string{"git.commits", "code.validation", "review.criteria"}, func(p *Provider, kind Value) string {
+		return string(kind) + ":" + p.address() + ":" + p.Value
+	})
+	if inline != ":project:house#commits:\n\ncommand:project:house:go test ./...\n" {
+		t.Fatalf("inline: %q", inline)
+	}
+}
+
+func TestApplicationsInline(t *testing.T) {
+	got := Expand("A :slot[a b]\n\n:slot[c]{.inline}\n", Preload)
+	if got != "A !`henia slots --markdown a b`\n\n!`henia slots --inline c`\n" {
+		t.Fatalf("expand: %q", got)
 	}
 }

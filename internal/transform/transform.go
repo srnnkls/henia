@@ -164,6 +164,10 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	for k, v := range t.Variables {
 		templateContext[k] = v
 	}
+	if art.Type == artifact.TypeSkill {
+		templateContext["contents"] = "!`henia show " + art.Name + " --toc`"
+		templateContext["related"] = "!`henia context " + art.Name + "`"
+	}
 
 	for k, v := range art.Frontmatter {
 		transformed, err := templateValue(v, templateContext)
@@ -272,7 +276,7 @@ func (t *Transformer) renderReferences(body, self string) string {
 				replacement = "`" + mapped + "`"
 			}
 		} else if ref.Type == reference.TypeSkill && t.Served[ref.Name] && ref.Name != self {
-			replacement = "`henia show " + ref.Name + "`"
+			replacement = "`" + library.ShowCommand(ref.Name) + "`"
 		} else {
 			refConfig, ok := t.References[ref.Type.String()]
 			if ok {
@@ -345,7 +349,7 @@ func (t *Transformer) renderLinks(body, skill string) string {
 		if !ok {
 			continue
 		}
-		command := "`henia show " + target + "`"
+		command := "`" + library.ShowCommand(target) + "`"
 		text := strings.Trim(link.Text, "`*_~")
 		replacement := link.Text + " (" + command + ")"
 		file := strings.SplitN(link.Dest, "#", 2)[0]
