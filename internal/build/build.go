@@ -13,6 +13,7 @@ import (
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/preload"
+	"github.com/srnnkls/henia/internal/reference"
 	"github.com/srnnkls/henia/internal/target"
 	"github.com/srnnkls/henia/internal/transform"
 	"github.com/srnnkls/henia/internal/vendor"
@@ -334,13 +335,13 @@ func projectPreloads(art *artifact.Artifact, h henia.Harness) {
 	}
 }
 
-func Render(art *artifact.Artifact, name string, h henia.Harness, served map[string]bool, head bool) (*artifact.Artifact, error) {
+func Render(art *artifact.Artifact, name string, h henia.Harness, served map[string]bool, head bool) (*artifact.Artifact, []reference.Rendered, error) {
 	_, tr, err := transformerFor(name, "", h, art.Type)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	tr.Served, tr.Head, tr.LibraryLinks = served, head, true
-	return tr.Transform(art)
+	return tr.TransformReferences(art)
 }
 
 func Served(all, projected []*artifact.Artifact) map[string]bool {
@@ -473,7 +474,9 @@ func supportFiles(sources []string, files map[string]henia.File, references *tra
 			}
 			text := string(data)
 			if strings.EqualFold(filepath.Ext(file.Source), ".md") {
-				text = references.RenderReferences(text)
+				if text, err = references.RenderReferences(text); err != nil {
+					return nil, fmt.Errorf("supporting file %s: %w", file.Source, err)
+				}
 			}
 			replacements := make([]string, 0, 2*len(file.Replace))
 			for _, old := range slices.Sorted(maps.Keys(file.Replace)) {

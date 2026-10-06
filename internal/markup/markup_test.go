@@ -78,3 +78,21 @@ func FuzzRender(f *testing.F) {
 		}
 	})
 }
+
+func TestRenderMappedSpans(t *testing.T) {
+	source := ":::note{a=1}\nUse `$x` and :term[see `$y`].\n:::\n"
+	out, offsets, err := markup.RenderMapped(source, "xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, span := range []string{"`$x`", "`$y`"} {
+		start := strings.Index(source, span)
+		from, to, ok := offsets.Span(start, start+len(span))
+		if !ok || out[from:to] != span {
+			t.Errorf("%s maps to %d-%d (%v) in %q", span, from, to, ok, out)
+		}
+	}
+	if _, _, ok := offsets.Span(0, 3); ok {
+		t.Error("a directive delimiter mapped into the output")
+	}
+}

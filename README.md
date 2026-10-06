@@ -42,7 +42,21 @@ and interpolation. The template context starts with frontmatter, then
 `henia.variables`, then harness variables (highest precedence). Nested frontmatter
 strings are also templated. Input files are never modified by compilation.
 
-Body processing remains *templates → Goldmark directives → references*.
+Body processing runs *templates → references → Goldmark directives*.
+
+A harness's `references` table gives each kind of reference its syntax, as
+either a Go template or hq interpolation:
+
+```toml
+[harness.pi.references]
+skill = "/skill:{?name}"      # or "/skill:{{.Name}}"
+agent = "@{?name}"            # {?kind} and {@r.text} also available
+```
+
+The output is wrapped in backticks unless it holds `*`, `[` or `]`. A template
+that fails to parse or execute fails the build. Mapped tools and skills served
+from the library take precedence; [std/references](internal/lint/std/references.md)
+defines both as `(rewrite ...)` forms.
 Metadata expressions receive the templated canonical frontmatter independently.
 
 ## Vendor profiles

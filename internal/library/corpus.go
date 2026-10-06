@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -32,8 +31,7 @@ type Corpus struct {
 }
 
 type Rendering struct {
-	Body      func(Entry) string
-	Reference func(Entry) *regexp.Regexp
+	Body func(Entry) (string, []reference.Rendered)
 }
 
 type Document struct {
@@ -54,9 +52,9 @@ func (l *Library) Corpus(rendering *Rendering) *Corpus {
 		skill := c.skills[e.ID]
 		dir := filepath.Dir(e.Path)
 		entry := e
-		var render func() (string, *regexp.Regexp)
+		var render func() (string, []reference.Rendered)
 		if rendering != nil {
-			render = func() (string, *regexp.Regexp) { return rendering.Body(entry), rendering.Reference(entry) }
+			render = func() (string, []reference.Rendered) { return rendering.Body(entry) }
 		}
 		c.file(skill, e.Path, "SKILL.md", "skill", render)
 		for _, path := range resourceFiles(dir) {
@@ -132,7 +130,7 @@ func (c *Corpus) Skill(ref string) *markup.Element {
 	return c.skills[ref]
 }
 
-func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render func() (string, *regexp.Regexp)) {
+func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render func() (string, []reference.Rendered)) {
 	data, err := os.ReadFile(physical)
 	if err != nil || len(data) > maxCorpusFile || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
 		return
@@ -157,13 +155,13 @@ func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render
 	}
 	offset := len(data) - len(art.Body)
 	body, shift := art.Body, bytes.Count(data[:offset], []byte{'\n'})
-	var syntax *regexp.Regexp
+	var rendered []reference.Rendered
 	if render != nil {
-		body, syntax = render()
+		body, rendered = render()
 		shift = 0
 	}
 	file, _ := markup.Tree([]byte(body))
-	links, err := c.references(file, body, syntax, render != nil)
+	links, err := c.references(file, body, rendered, render != nil)
 	if err != nil {
 		c.Problems = append(c.Problems, fmt.Sprintf("%s: %v", physical, err))
 	}
@@ -221,7 +219,7 @@ func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render
 	c.adopt(parent, file)
 }
 
-func (c *Corpus) stub(parent *markup.Element, physical, rel, kind string, _ func() (string, *regexp.Regexp)) {
+func (c *Corpus) stub(parent *markup.Element, physical, rel, kind string, _ func() (string, []reference.Rendered)) {
 	data, err := os.ReadFile(physical)
 	if err != nil {
 		return
@@ -297,15 +295,27 @@ func frontmatter(values map[string]any, header []byte, lines int) *markup.Elemen
 	return head
 }
 
-func (c *Corpus) references(file *markup.Element, body string, syntax *regexp.Regexp, rendered bool) ([]*markup.Element, error) {
+func (c *Corpus) references(file *markup.Element, body string, rendered []reference.Rendered, isRendered bool) ([]*markup.Element, error) {
 	var links []*markup.Element
 	add := func(start, end int, attrs map[string]string) {
 		links = append(links, &markup.Element{Type: "link", Attrs: attrs, Start: start + 1, End: end - 1})
 	}
 	var refs []reference.Reference
 	var err error
-	if rendered {
-		refs = reference.Parse(body)
+	if isRendered {
+		for _, r := range rendered {
+			if r.Rewrite == "served-skill" {
+				continue
+			}
+			ref := r.Reference
+			if strings.HasPrefix(body[ref.Start:ref.End], "`") && strings.HasSuffix(body[ref.Start:ref.End], "`") {
+				ref.Raw = body[ref.Start+1 : ref.End-1]
+			} else {
+				ref.Raw = body[ref.Start:ref.End]
+				ref.Start, ref.End = ref.Start-1, ref.End+1
+			}
+			refs = append(refs, ref)
+		}
 	} else {
 		refs, err = reference.Recognize(file)
 	}
@@ -336,13 +346,6 @@ func (c *Corpus) references(file *markup.Element, body string, syntax *regexp.Re
 			c.inspect(attrs, filepath.Join(skill.Attrs["dir"], filepath.FromSlash(attrs["path"])), ref.Anchor)
 		}
 		add(ref.Start, ref.End+1, attrs)
-	}
-	if syntax != nil {
-		for _, m := range syntax.FindAllStringSubmatchIndex(body, -1) {
-			attrs := c.skillLink(reference.Reference{Name: body[m[2]:m[3]], Raw: body[m[0]+1 : m[1]-1]})
-			attrs["ref"] = "skill"
-			add(m[0], m[1], attrs)
-		}
 	}
 	return links, err
 }
