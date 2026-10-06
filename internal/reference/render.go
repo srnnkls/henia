@@ -22,6 +22,7 @@ type Rendering struct {
 type Rendered struct {
 	Reference
 	Rewrite string
+	Address bool `json:",omitempty"`
 }
 
 type harnessRule struct {
@@ -97,6 +98,10 @@ func Render(body string, rendering Rendering) (string, []Rendered, []string, err
 	if err != nil {
 		return "", nil, nil, err
 	}
+	addresses, err := Addresses(tree)
+	if err != nil {
+		return "", nil, nil, err
+	}
 	tables := maps.Clone(r.tables)
 	tools := pattern.Table{Keys: slices.Sorted(maps.Keys(rendering.Tools))}
 	for _, name := range tools.Keys {
@@ -155,8 +160,16 @@ func Render(body string, rendering Rendering) (string, []Rendered, []string, err
 		kept = append(kept, e)
 	}
 	out.WriteString(body[position:])
-	rendered := make([]Rendered, 0, len(refs))
+	rendered := make([]Rendered, 0, len(refs)+len(addresses))
+	sources := make([]Rendered, 0, len(refs)+len(addresses))
 	for _, ref := range refs {
+		sources = append(sources, Rendered{Reference: ref})
+	}
+	for _, address := range addresses {
+		sources = append(sources, Rendered{Reference: address, Address: true})
+	}
+	for _, source := range sources {
+		ref := source.Reference
 		start, end := ref.Start, ref.End
 		delta, rule, inside := 0, "", false
 		for _, e := range kept {
@@ -176,7 +189,8 @@ func Render(body string, rendering Rendering) (string, []Rendered, []string, err
 		if rule == "" {
 			ref.Start, ref.End = start+delta, end+delta
 		}
-		rendered = append(rendered, Rendered{ref, rule})
+		rendered = append(rendered, Rendered{ref, rule, source.Address})
 	}
+	slices.SortFunc(rendered, func(a, b Rendered) int { return a.Start - b.Start })
 	return out.String(), rendered, dropped, nil
 }

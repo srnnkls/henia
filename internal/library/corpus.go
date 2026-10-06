@@ -300,24 +300,30 @@ func (c *Corpus) references(file *markup.Element, body string, rendered []refere
 	add := func(start, end int, attrs map[string]string) {
 		links = append(links, &markup.Element{Type: "link", Attrs: attrs, Start: start + 1, End: end - 1})
 	}
-	var refs []reference.Reference
+	var refs, addresses []reference.Reference
 	var err error
 	if isRendered {
 		for _, r := range rendered {
-			if r.Rewrite == "served-skill" {
-				continue
-			}
 			ref := r.Reference
-			if strings.HasPrefix(body[ref.Start:ref.End], "`") && strings.HasSuffix(body[ref.Start:ref.End], "`") {
+			switch {
+			case r.Address:
+				addresses = append(addresses, ref)
+				continue
+			case strings.HasPrefix(body[ref.Start:ref.End], "`") && strings.HasSuffix(body[ref.Start:ref.End], "`"):
 				ref.Raw = body[ref.Start+1 : ref.End-1]
-			} else {
+			default:
 				ref.Raw = body[ref.Start:ref.End]
 				ref.Start, ref.End = ref.Start-1, ref.End+1
 			}
+			if r.Rewrite == "served-skill" {
+				ref.Name, ref.End = strings.TrimPrefix(ref.Raw, "henia show "), ref.End-1
+				addresses = append(addresses, ref)
+				continue
+			}
 			refs = append(refs, ref)
 		}
-	} else {
-		refs, err = reference.Recognize(file)
+	} else if refs, err = reference.Recognize(file); err == nil {
+		addresses, err = reference.Addresses(file)
 	}
 	for _, ref := range refs {
 		switch ref.Type {
@@ -331,7 +337,7 @@ func (c *Corpus) references(file *markup.Element, body string, rendered []refere
 			add(ref.Start, ref.End, map[string]string{"ref": "file", "url": ref.Name, "dest": ref.Name})
 		}
 	}
-	for _, ref := range reference.Shown(body) {
+	for _, ref := range addresses {
 		attrs := c.skillLink(ref)
 		attrs["ref"] = "show"
 		if skill := c.Skill(ref.Name); skill != nil && skill.Attrs["dir"] != "" && ref.Module != "" {

@@ -22,6 +22,16 @@ references through it.
   (row :table "sigils" :key ?sigil :value ?kind))
 ```
 
+A `henia show` code span addresses a library skill, module, resource or
+section. `(show-address @r ?command ?address ?resource ?anchor)` matches it,
+binding the command as written, the skill address and the optional resource
+path and anchor.
+
+```hq
+(define (show-address @r ?command ?address ?resource ?anchor)
+  (code :inline true :matches /^(?<command>henia show (?<address>[a-z0-9][a-z0-9._:-]*)(?:\/(?<resource>[^`#\s]+))?(?:#(?<anchor>[^`\s]+))?)/) @r)
+```
+
 Rendering rewrites a reference for the harness. A tool in the harness's
 `tools` table takes its mapped name, and a skill the harness serves from the
 library reads it with `henia show`; other references take the harness's
