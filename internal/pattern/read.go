@@ -645,7 +645,7 @@ func (r *reader) attr(kind string) (Attr, error) {
 				return attr, r.unexpected(c, fmt.Sprintf(") closing (%s", form.text))
 			}
 			return attr, nil
-		case "contains", "covers":
+		case "contains", "covers", "within":
 			attr.Relate = form.text
 			value = r.next()
 			if value.kind != tVar {

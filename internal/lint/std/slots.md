@@ -56,6 +56,61 @@ henia:
 # Example
 ```
 
+## unused-slot
+
+A declared slot needs a `:slot[...]` directive in a scanned skill that applies
+it, a sub-slot of it or an enclosing slot.
+
+```hq
+(rule unused-slot
+  :severity warning
+  :message "slot {?name} is declared but no scanned skill applies it"
+  (slot :role declare :slot ?name) @slot
+  (not (slot :role apply :slot (covers ?name)))
+  (not (slot :role apply :slot (within ?name))))
+```
+
+### Matches
+
+```md
+---
+name: example
+description: An example skill.
+henia:
+  slots:
+    review.lenses:
+---
+# Example
+```
+
+### Passes
+
+```md
+---
+name: example
+description: An example skill.
+henia:
+  slots:
+    review.lenses:
+---
+# Example
+
+:slot[review.lenses.go]
+```
+
+```md
+---
+name: example
+description: An example skill.
+henia:
+  slots:
+    review.lenses:
+---
+# Example
+
+:slot[review]
+```
+
 ## unknown-slot
 
 A provided or applied slot must lie within a slot that a scanned skill or a
