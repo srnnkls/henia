@@ -545,8 +545,9 @@ Read the sections of release as the task needs them:
   - Checklist: `henia show 'release#checklist'`
 ```
 
-A skill places these lists itself with the `{{.contents}}` and `{{.related}}`
-template values, and `--head` then appends neither:
+A skill places these lists itself with the `:contents[]` and `:related[]`
+directives, and `--head` then appends neither. A skill name in the brackets,
+as in `:contents[tropos:git]`, lists that skill instead:
 
 ```md
 :::static
@@ -556,7 +557,7 @@ template values, and `--head` then appends neither:
 
 Sections:
 
-{{.contents}}
+:contents[]
 :::
 ```
 

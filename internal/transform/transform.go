@@ -2,9 +2,11 @@ package transform
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"maps"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"text/template"
@@ -164,10 +166,6 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	for k, v := range t.Variables {
 		templateContext[k] = v
 	}
-	if art.Type == artifact.TypeSkill {
-		templateContext["contents"] = "!`henia show " + art.Name + " --toc`"
-		templateContext["related"] = "!`henia context " + art.Name + "`"
-	}
 
 	for k, v := range art.Frontmatter {
 		transformed, err := templateValue(v, templateContext)
@@ -203,6 +201,9 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		return nil, fmt.Errorf("transform body: %w", err)
 	}
 	body = slots.Expand(body, slots.Preload)
+	if art.Type == artifact.TypeSkill {
+		body = expandListings(body, art.Name)
+	}
 	full, head := markup.Unwrap(body, StaticBlock)
 	if t.Head {
 		body = strings.Join(head, "\n")
@@ -396,4 +397,38 @@ func (t *Transformer) libraryTarget(skill, dest string) (string, bool) {
 		return owner + "." + module + suffix, true
 	}
 	return owner + "/" + rest + suffix, true
+}
+
+var listings = map[string]func(skill string) string{
+	"contents": func(skill string) string { return "!`henia show " + skill + " --toc`" },
+	"related":  func(skill string) string { return "!`henia context " + skill + "`" },
+}
+
+var listingText = regexp.MustCompile(`^:[a-z]+\[([^\]]*)\]`)
+
+func expandListings(body, self string) string {
+	if !strings.Contains(body, ":contents[") && !strings.Contains(body, ":related[") {
+		return body
+	}
+	root, _ := markup.Tree([]byte(body))
+	type listing struct {
+		start, end int
+		text       string
+	}
+	var found []listing
+	root.Walk(func(e *markup.Element) bool {
+		render, ok := listings[e.Attrs["name"]]
+		if e.Type != "directive" || !ok || e.Attrs["inline"] != "true" {
+			return true
+		}
+		if m := listingText.FindStringSubmatch(e.Text); m != nil {
+			skill := cmp.Or(strings.TrimSpace(m[1]), self)
+			found = append(found, listing{e.Start, e.End, render(skill)})
+		}
+		return true
+	})
+	for i := len(found) - 1; i >= 0; i-- {
+		body = body[:found[i].start] + found[i].text + body[found[i].end:]
+	}
+	return body
 }

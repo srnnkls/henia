@@ -717,11 +717,11 @@ $ henia show route | grep -c ':::'; henia preload --skill route -- 'henia show r
   - Detail: `henia show 'route#detail'`
 ```
 
-A skill places its contents and related skills with `{{.contents}}` and
-`{{.related}}`; `--head` then appends neither.
+A skill places its contents and related skills with `:contents[]` and
+`:related[]`; `--head` then appends neither. A named skill lists that skill.
 
 ```scrut
-$ mk "$L/hybrid/skills/route/SKILL.md" '---\nname: route\ndescription: Routed work.\n---\n\n# Route\n\n:::static\n## Routes\n\nSections:\n\n{{.contents}}\n\nRelated:\n\n{{.related}}\n\nUse `$checks` first.\n:::\n\n## Detail\n\nReference.\n'
+$ mk "$L/hybrid/skills/route/SKILL.md" '---\nname: route\ndescription: Routed work.\n---\n\n# Route\n\n:::static\n## Routes\n\nSections:\n\n:contents[]\n\nRelated:\n\n:related[]\n\nChecks:\n\n:contents[checks]\n\nUse `$checks` first.\n:::\n\n## Detail\n\nReference.\n'
 > henia show route --head
 ## Routes
 
@@ -734,6 +734,10 @@ Sections:
 Related:
 
 Skill checks: Validation commands.
+- Checks: `henia show 'checks#checks'`
+
+Checks:
+
 - Checks: `henia show 'checks#checks'`
 
 Use `henia show checks` first.
