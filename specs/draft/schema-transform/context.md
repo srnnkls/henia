@@ -5,7 +5,7 @@ The current normative contract is [spec.md](spec.md).
 
 - `internal/canonical`: typed canonical fields and round-trip extra data.
 - `internal/expression`: shared Expr compilation and evaluation.
-- `internal/vendor`: TOML profiles, resolution, metadata and file computations.
+- `internal/profile`: TOML profiles, resolution, metadata and file computations.
 - `internal/config`: layered configuration with legacy compatibility.
 - `internal/markup`: Goldmark rendering and source-aware lint views.
 - `internal/lint`: built-in checks and declarative custom rules.

@@ -1,5 +1,5 @@
 // Package vendor compiles canonical skill metadata to documented vendor schemas.
-package vendor
+package profile
 
 import (
 	"fmt"

@@ -1,4 +1,4 @@
-package vendor
+package profile
 
 import (
 	"os"
