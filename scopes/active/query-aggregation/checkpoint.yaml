@@ -2,13 +2,13 @@ checkpoint:
   scope_name: query-aggregation
   scope_path: scopes/active/query-aggregation
   branch: feat/query-aggregation
-  last_commit: 5704ecd
-  updated_at: "2026-10-05T22:37:27Z"
+  last_commit: 520d9fd
+  updated_at: "2026-10-06T06:02:25Z"
   batch:
     number: 7
     tasks:
       - QAG-007
-    phase: review
+    phase: integration
     status: in_progress
   routing_snapshot:
     epoch_id: 20261005T203329Z-45e93b
@@ -20,15 +20,7 @@ checkpoint:
         - {agent: claude-opus, effort: high, class: native}
         - {agent: peer-gpt6-astra, effort: high, class: peer}
   reports:
-    tester:
-      QAG-007: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-tester-QAG-007
-    implementer:
-      QAG-007: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-implementer-QAG-007
-    review:
-      general: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-review-general
-      architecture: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-review-architecture
-      compliance: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-review-compliance
     fix:
-      QAG-007: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-fix-QAG-007
-    rereview: .peer/scope-query-aggregation/20261005T203329Z-45e93b/b7-rereview
+      integration: .peer/scope-query-aggregation/20261005T203329Z-45e93b/integration-fix
+    rereview: .peer/scope-query-aggregation/20261005T203329Z-45e93b/integration-rereview
   in_flight_mutations: []

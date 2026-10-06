@@ -44,27 +44,33 @@ func Parse(data []byte) (*Artifact, error) {
 	art := &Artifact{
 		Frontmatter: make(map[string]any),
 	}
+	header, body, err := SplitFrontmatter(string(data))
+	if err != nil {
+		return nil, err
+	}
+	if err := yaml.Unmarshal([]byte(header), &art.Frontmatter); err != nil {
+		return nil, fmt.Errorf("parse frontmatter: %w", err)
+	}
+	art.Body = body
+	return art, nil
+}
 
-	first, rest, found := strings.Cut(string(data), "\n")
+func SplitFrontmatter(data string) (header, body string, err error) {
+	first, rest, found := strings.Cut(data, "\n")
 	if strings.TrimSuffix(first, "\r") != "---" {
-		art.Body = string(data)
-		return art, nil
+		return "", data, nil
 	}
 	if !found {
-		return nil, fmt.Errorf("unclosed YAML frontmatter")
+		return "", "", fmt.Errorf("unclosed YAML frontmatter")
 	}
 	end := 0
 	for {
 		line, remaining, newline := strings.Cut(rest[end:], "\n")
 		if strings.TrimSuffix(line, "\r") == "---" {
-			if err := yaml.Unmarshal([]byte(rest[:end]), &art.Frontmatter); err != nil {
-				return nil, fmt.Errorf("parse frontmatter: %w", err)
-			}
-			art.Body = strings.TrimPrefix(strings.TrimPrefix(remaining, "\r\n"), "\n")
-			return art, nil
+			return rest[:end], strings.TrimPrefix(strings.TrimPrefix(remaining, "\r\n"), "\n"), nil
 		}
 		if !newline {
-			return nil, fmt.Errorf("unclosed YAML frontmatter")
+			return "", "", fmt.Errorf("unclosed YAML frontmatter")
 		}
 		end += len(line) + 1
 	}
