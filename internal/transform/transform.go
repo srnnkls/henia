@@ -14,9 +14,9 @@ import (
 	"github.com/srnnkls/henia/internal/canonical"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
+	"github.com/srnnkls/henia/internal/profile"
 	"github.com/srnnkls/henia/internal/reference"
 	"github.com/srnnkls/henia/internal/slots"
-	"github.com/srnnkls/henia/internal/profile"
 )
 
 const StaticBlock = "static"
