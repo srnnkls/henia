@@ -15,7 +15,7 @@ import (
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/target"
 	"github.com/srnnkls/henia/internal/transform"
-	"github.com/srnnkls/henia/internal/vendor"
+	"github.com/srnnkls/henia/internal/profile"
 )
 
 type writeJob struct {
@@ -304,7 +304,7 @@ func nativePreloads(h henia.Harness) bool {
 	if h.Profile == "" {
 		return false
 	}
-	profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot)
+	profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot)
 	return err == nil && profile.Preloads
 }
 
@@ -320,7 +320,7 @@ func projectPreloads(art *artifact.Artifact, h henia.Harness) {
 	}
 	switch tools := art.Frontmatter["allowed-tools"].(type) {
 	case nil:
-		if profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
+		if profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
 			art.Frontmatter["allowed-tools"] = preload.RunnerTool
 		}
 	case string:
@@ -431,14 +431,14 @@ func transformerFor(name, output string, h henia.Harness, kind artifact.Type) (h
 		Tools: h.Tools, References: convertReferences(h.References),
 	}
 	if h.Profile != "" {
-		profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot)
+		loaded, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot)
 		if err == nil {
-			tr.Compiler, err = vendor.NewCompiler(profile)
+			tr.Compiler, err = profile.NewCompiler(loaded)
 		}
 		if err != nil {
 			return h, nil, fmt.Errorf("harness %s: %w", name, err)
 		}
-		tr.Context = vendor.Context{Name: name, Profile: h.Profile, Path: output, Variables: h.Variables, Tools: h.Tools, Keys: h.Frontmatter.Rename}
+		tr.Context = profile.Context{Name: name, Profile: h.Profile, Path: output, Variables: h.Variables, Tools: h.Tools, Keys: h.Frontmatter.Rename}
 	}
 	return h, tr, nil
 }

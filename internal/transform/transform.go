@@ -15,7 +15,7 @@ import (
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
 	"github.com/srnnkls/henia/internal/slots"
-	"github.com/srnnkls/henia/internal/vendor"
+	"github.com/srnnkls/henia/internal/profile"
 )
 
 const StaticBlock = "static"
@@ -27,8 +27,8 @@ type ReferenceConfig struct {
 type Transformer struct {
 	Profile      string
 	Strict       bool
-	Compiler     *vendor.Compiler
-	Context      vendor.Context
+	Compiler     *profile.Compiler
+	Context      profile.Context
 	OutputFormat string
 	Variables    map[string]string
 	Keys         map[string]string

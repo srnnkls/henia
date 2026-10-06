@@ -13,7 +13,7 @@ import (
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
-	"github.com/srnnkls/henia/internal/vendor"
+	"github.com/srnnkls/henia/internal/profile"
 )
 
 func newLintCommand() *cobra.Command {
@@ -138,7 +138,7 @@ func lintOptions(cmd *cobra.Command) (lint.Options, *config.Config, error) {
 		if h.Profile == "" {
 			continue
 		}
-		profile, err := vendor.Load(h.Profile, project, library.ConfigDir())
+		profile, err := profile.Load(h.Profile, project, library.ConfigDir())
 		if err != nil {
 			return lint.Options{}, nil, fmt.Errorf("harness %s: %w", name, err)
 		}

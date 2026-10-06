@@ -16,7 +16,7 @@ import (
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
 	"github.com/srnnkls/henia/internal/preload"
-	"github.com/srnnkls/henia/internal/vendor"
+	"github.com/srnnkls/henia/internal/profile"
 )
 
 type Config struct {
@@ -119,7 +119,7 @@ func loadLayers(path string, projectData []byte) (*Config, error) {
 		if err := toml.Unmarshal(localData, &local); err != nil {
 			return nil, fmt.Errorf("%s: %w", deps.Local(path), err)
 		}
-		if projectData, err = toml.Marshal(vendor.Merge(project, local)); err != nil {
+		if projectData, err = toml.Marshal(profile.Merge(project, local)); err != nil {
 			return nil, err
 		}
 	}
@@ -174,7 +174,7 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 			semantic["model_path"] = filepath.Join(layer.root, path)
 		}
 	}
-	merged := vendor.Merge(vendor.Merge(base, user), project)
+	merged := profile.Merge(profile.Merge(base, user), project)
 	data, err := toml.Marshal(merged)
 	if err != nil {
 		return nil, err
@@ -204,9 +204,9 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		h.ProjectRoot, h.UserRoot = projectRoot, userRoot
 		cfg.Harness[name] = h
 		if h.Profile != "" {
-			profile, err := vendor.Load(h.Profile, projectRoot, userRoot)
+			loaded, err := profile.Load(h.Profile, projectRoot, userRoot)
 			if err == nil {
-				_, err = vendor.NewCompiler(profile)
+				_, err = profile.NewCompiler(loaded)
 			}
 			if err != nil {
 				return nil, fmt.Errorf("harness %s: %w", name, err)

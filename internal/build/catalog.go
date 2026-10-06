@@ -10,7 +10,7 @@ import (
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/defaults"
-	"github.com/srnnkls/henia/internal/vendor"
+	"github.com/srnnkls/henia/internal/profile"
 )
 
 const (
@@ -64,7 +64,7 @@ func HeniaArtifact(source string, entries []Entry, h henia.Harness) (*artifact.A
 	}
 	frontmatter := map[string]any{"name": heniaSkill.Frontmatter["name"], "description": heniaSkill.Frontmatter["description"]}
 	if h.Profile != "" {
-		if profile, err := vendor.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
+		if profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
 			frontmatter["allowed-tools"] = catalogTools
 		}
 	}

@@ -52,7 +52,7 @@ another target's output. Sidecars are generated alongside the skill resources.
 
 Profile definitions merge from:
 
-1. Bundled `internal/vendor/profiles/<profile>.toml`.
+1. Bundled `internal/profile/profiles/<profile>.toml`.
 2. `~/.config/henia/harnesses/<profile>/transform.toml`.
 3. `<project>/.henia/harnesses/<profile>/transform.toml`.
 

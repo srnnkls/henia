@@ -10,7 +10,7 @@ following packages implement the contracts in [the spec](../spec.md):
 | `internal/transform` | Go templates, metadata mapping, markup, then references |
 | `internal/markup` | Goldmark directive nodes, rendering and lint source views |
 | `internal/reference` | Parse and rewrite harness-specific artifact/tool references |
-| `internal/vendor` | TOML profile loading, Expr mappings and generated sidecars |
+| `internal/profile` | TOML profile loading, Expr mappings and generated sidecars |
 | `internal/build` | Plan local compilations, detect collisions, protect source files |
 | `internal/target` | Artifact layout and bounded filesystem writes |
 | `internal/lint` | Canonical quality checks and TOML + Expr rules |
