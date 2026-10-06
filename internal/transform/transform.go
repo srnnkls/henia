@@ -6,6 +6,7 @@ import (
 	"maps"
 	"path"
 	"strings"
+	"sync"
 	"text/template"
 
 	"github.com/srnnkls/henia/internal/artifact"
@@ -210,6 +211,9 @@ func templateValue(value any, context map[string]any) (any, error) {
 func (t *Transformer) RenderReferences(body string) string { return t.renderReferences(body, "") }
 
 func (t *Transformer) renderReferences(body, self string) string {
+	if !strings.Contains(body, "`") {
+		return body
+	}
 	refs := reference.Parse(body)
 	if len(refs) == 0 {
 		return body
@@ -253,6 +257,20 @@ func wrapOutput(output string) string {
 	return "`" + output + "`"
 }
 
+var referenceTemplates sync.Map
+
+func referenceTemplate(source string) (*template.Template, error) {
+	if cached, ok := referenceTemplates.Load(source); ok {
+		return cached.(*template.Template), nil
+	}
+	parsed, err := template.New("ref").Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	referenceTemplates.Store(source, parsed)
+	return parsed, nil
+}
+
 func (t *Transformer) executeReferenceTemplate(tmpl string, ref reference.Reference) (string, error) {
 	data := map[string]string{
 		"Name": ref.Name,
@@ -260,7 +278,7 @@ func (t *Transformer) executeReferenceTemplate(tmpl string, ref reference.Refere
 		"Raw":  ref.Raw,
 	}
 
-	parsed, err := template.New("ref").Parse(tmpl)
+	parsed, err := referenceTemplate(tmpl)
 	if err != nil {
 		return "", err
 	}
@@ -274,9 +292,12 @@ func (t *Transformer) executeReferenceTemplate(tmpl string, ref reference.Refere
 }
 
 func (t *Transformer) renderLinks(body, skill string) string {
-	links := markup.Links([]byte(body))
-	for i := len(links) - 1; i >= 0; i-- {
-		link := links[i]
+	if !strings.Contains(body, "](") {
+		return body
+	}
+	var out strings.Builder
+	end := 0
+	for _, link := range markup.Links([]byte(body)) {
 		target, ok := t.libraryTarget(skill, link.Dest)
 		if !ok {
 			continue
@@ -288,9 +309,15 @@ func (t *Transformer) renderLinks(body, skill string) string {
 		if text == link.Dest || text == file || text == strings.TrimPrefix(path.Clean(file), "../") || text == strings.SplitN(target, "#", 2)[0] {
 			replacement = command
 		}
-		body = body[:link.Start] + replacement + body[link.End:]
+		out.WriteString(body[end:link.Start])
+		out.WriteString(replacement)
+		end = link.End
 	}
-	return body
+	if end == 0 {
+		return body
+	}
+	out.WriteString(body[end:])
+	return out.String()
 }
 
 func (t *Transformer) libraryTarget(skill, dest string) (string, bool) {

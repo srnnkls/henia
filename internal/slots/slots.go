@@ -286,6 +286,9 @@ func Preload(slots []string) string {
 }
 
 func Expand(body string, render func(slots []string) string) string {
+	if !strings.Contains(body, ":slot[") {
+		return body
+	}
 	applications := Applications(body)
 	for i := len(applications) - 1; i >= 0; i-- {
 		a := applications[i]
