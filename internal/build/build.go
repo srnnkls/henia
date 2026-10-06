@@ -13,9 +13,9 @@ import (
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/preload"
+	"github.com/srnnkls/henia/internal/profile"
 	"github.com/srnnkls/henia/internal/target"
 	"github.com/srnnkls/henia/internal/transform"
-	"github.com/srnnkls/henia/internal/profile"
 )
 
 type writeJob struct {
