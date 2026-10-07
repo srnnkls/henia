@@ -120,10 +120,11 @@ Ships.
 
 ## Template directives
 
-A block directive with a `template` attribute renders that shared template in
-place of its content. The template sees the skill's values, the directive's
-other attributes as `.args` and its rendered content as `.content`; the
-directive stays, bare, so `:::head` still marks the hybrid head.
+A block directive with a `template` attribute renders that shared template.
+The template sees the skill's values, the directive's other attributes as
+`.args` and its rendered content as `.content`. A `:::head` directive keeps
+its fences, without attributes, so it still marks the hybrid head; any other
+directive gives way to the template's output.
 
 ```scrut
 $ proj directive && mk .henia/templates/banner.md.tmpl '# {{or .args.title .name}}\n\n{{.content}}\n:contents[]\n'
@@ -197,19 +198,16 @@ run first: `henia context deploy`
 ```
 
 A template directive inside another's content expands first, so the outer
-template receives the inner one's output.
+template receives the inner one's output. Both give way to their templates'
+output; only `:::head` keeps its fences.
 
 ```scrut
 $ proj nested && mk .henia/templates/box.md.tmpl '[{{.args.label}}: {{.content}}]'
 > skill boxed '' '::::note{template="box" label="outer"}\n:::tip{template="box" label="inner"}\nCore.\n:::\n::::\n'
 > out boxed
-::::note
-[outer: :::tip
-[inner: Core.
+[outer: [inner: Core.
 ]
-:::
 ]
-::::
 ```
 
 A directive naming a template that does not exist fails the build.

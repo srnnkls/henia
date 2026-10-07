@@ -6,7 +6,10 @@ import (
 	"strings"
 )
 
-const TemplateAttr = "template"
+const (
+	TemplateAttr = "template"
+	HeadBlock    = "head"
+)
 
 type TemplateUse struct {
 	Name     string
@@ -79,10 +82,14 @@ func Expand(source string, shared func(name string) bool, expand func(template s
 			rendered += "\n"
 		}
 		out.WriteString(source[last:e.Start])
-		out.WriteString(head)
-		out.WriteString("\n")
-		out.WriteString(rendered)
-		out.WriteString(fence)
+		if e.Attrs["name"] == HeadBlock {
+			out.WriteString(head)
+			out.WriteString("\n")
+			out.WriteString(rendered)
+			out.WriteString(fence)
+		} else {
+			out.WriteString(strings.TrimSuffix(rendered, "\n"))
+		}
 		last = e.End
 	}
 	out.WriteString(source[last:])

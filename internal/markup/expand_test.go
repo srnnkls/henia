@@ -22,7 +22,7 @@ func only(names ...string) func(string) bool {
 
 func TestExpand(t *testing.T) {
 	for _, tc := range []struct{ name, source, want string }{
-		{"explicit template with args", "Intro.\n\n:::note{template=\"banner\" title=\"Git\" tier=2}\nLead.\n:::\n\nTail.\n", "Intro.\n\n:::note\nbanner [tier=2 title=Git] \"Lead.\\n\"\n:::\n\nTail.\n"},
+		{"other directives give way to their template", "Intro.\n\n:::note{template=\"banner\" title=\"Git\" tier=2}\nLead.\n:::\n\nTail.\n", "Intro.\n\nbanner [tier=2 title=Git] \"Lead.\\n\"\n\nTail.\n"},
 		{"bare directive uses its own template", ":::head\nLead.\n:::\n", ":::head\nhead [] \"Lead.\\n\"\n:::\n"},
 		{"empty braces", ":::head{}\nLead.\n:::\n", ":::head\nhead [] \"Lead.\\n\"\n:::\n"},
 		{"classes are flags", ":::head{.context .contents title=\"Git\"}\n:::\n", ":::head\nhead [contents=true context=true title=Git] \"\"\n:::\n"},

@@ -140,13 +140,14 @@ henia:
 
 ### Template directives
 
-A block directive renders a shared template in place of its content: the one
-its `template` attribute names, or else the one named after the directive, so
-`:::head` always goes through `head.md.tmpl` when it exists. The template
-sees the skill's values plus `.args`, the directive's other attributes with
-each class as a `true` flag, and `.content`, the directive's rendered body,
-empty when it holds only blank lines. The directive stays without its
-attributes, so `:::head` still marks a hybrid head:
+A block directive renders a shared template: the one its `template`
+attribute names, or else the one named after the directive, so `:::head`
+always goes through `head.md.tmpl` and `:::related` through
+`related.md.tmpl` when they exist. The template sees the skill's values plus
+`.args`, the directive's other attributes with each class as a `true` flag,
+and `.content`, the directive's rendered body, empty when it holds only blank
+lines. The template's output replaces the directive. `:::head` alone keeps
+its fences, without attributes, so it still marks a hybrid head:
 
 ```markdown
 <!-- .henia/templates/head.md.tmpl -->

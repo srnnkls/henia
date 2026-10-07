@@ -23,7 +23,7 @@ import (
 	"github.com/srnnkls/henia/internal/slots"
 )
 
-const HeadBlock = "head"
+const HeadBlock = markup.HeadBlock
 
 type ReferenceConfig struct {
 	Output string
