@@ -295,7 +295,7 @@ func digest(dir string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-const gitignore = "/*\n!/.gitignore\n!/henia.toml\n!/henia.lock\n!/skills/\n!/harnesses/\n!/lint/\n"
+const gitignore = "/*\n!/.gitignore\n!/henia.toml\n!/henia.lock\n!/skills/\n!/harnesses/\n!/lint/\n!/templates/\n"
 
 func EnsureGitignore(dir string) error {
 	path := filepath.Join(dir, ".gitignore")

@@ -451,7 +451,7 @@ Each skill has a mode per harness:
 |---|---|---|
 | `static` | the whole compiled skill | the whole skill |
 | `dynamic` | nothing; the catalog skill lists it | the whole skill |
-| `hybrid` | a head: frontmatter and its `:::static` blocks | the whole skill |
+| `hybrid` | a head: frontmatter and its `:::head` blocks | the whole skill |
 
 The package's `henia.toml` sets them:
 
@@ -469,7 +469,7 @@ static. References to dynamic skills render as `henia show` commands.
 
 ### Hybrid skills
 
-`:::static` blocks mark what a hybrid head carries upfront: routes, hard rules,
+`:::head` blocks mark what a hybrid head carries upfront: routes, hard rules,
 the context it preloads. Everything else stays in the library, and a skill read
 in full keeps the blocks' content without the markers.
 
@@ -483,7 +483,7 @@ description: Cut a release. Use when tagging a version or publishing notes.
 
 # Release
 
-:::static
+:::head
 ## Routes
 
 | Argument | Action |
@@ -523,7 +523,7 @@ name: release
 !`henia show release --head`
 ```
 
-Elsewhere the head holds the rendered `:::static` blocks, then run-first lines
+Elsewhere the head holds the rendered `:::head` blocks, then run-first lines
 for `henia show <skill> --toc` and `henia context <skill>` unless the blocks
 place them:
 
@@ -541,7 +541,7 @@ run first: `henia show release --toc`
 run first: `henia context release`
 ```
 
-`henia show <skill> --head` prints the `:::static` blocks, the skill's contents
+`henia show <skill> --head` prints the `:::head` blocks, the skill's contents
 as `henia show '<skill>#<section>'` commands, its resources and the contents of
 the skills it references. `--toc` prints only the contents:
 
@@ -559,7 +559,7 @@ directives, and `--head` then appends neither. A skill name in the brackets,
 as in `:contents[tropos:git]`, lists that skill instead:
 
 ```md
-:::static
+:::head
 ## Routes
 
 …
@@ -571,7 +571,7 @@ Sections:
 ```
 
 Both report a harness copy that `henia install` wrote from an older revision of
-the skill. A hybrid skill without `:::static` blocks is a launcher: its head is
+the skill. A hybrid skill without `:::head` blocks is a launcher: its head is
 the contents and related contents alone.
 
 Relative links to a skill's resources and to other skills render as the

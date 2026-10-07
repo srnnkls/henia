@@ -14,7 +14,7 @@ func TestTransformParseCount(t *testing.T) {
 		References:   map[string]ReferenceConfig{"skill": {Output: "/{{.Name}}"}},
 		LibraryLinks: true,
 	}
-	art := &artifact.Artifact{Name: "demo", Type: artifact.TypeSkill, Body: "# Demo\n\n:::static\nUse `$review`.\n:::\n\nSee [the guide](guide.md) and :slot[code.style].\n\n:::note\nInline :term[`$git`] here.\n:::\n"}
+	art := &artifact.Artifact{Name: "demo", Type: artifact.TypeSkill, Body: "# Demo\n\n:::head\nUse `$review`.\n:::\n\nSee [the guide](guide.md) and :slot[code.style].\n\n:::note\nInline :term[`$git`] here.\n:::\n"}
 	before := markup.Parses()
 	if _, err := tr.Transform(art); err != nil {
 		t.Fatal(err)

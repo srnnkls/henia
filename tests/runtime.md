@@ -677,12 +677,12 @@ henia query --grammar prints the language
 
 ## Hybrid skills
 
-A hybrid skill's head carries its `:::static` blocks. A harness with native
+A hybrid skill's head carries its `:::head` blocks. A harness with native
 preloads gets one preload that renders the head from the library; others get
 the blocks and "run first" lines.
 
 ```scrut
-$ H="$T/hybrid"; mk "$H/skills/route/SKILL.md" '---\nname: route\ndescription: Routed work.\n---\n\n# Route\n\n:::static\n## Routes\n\nUse `$checks` first.\n:::\n\n## Detail\n\nReference.\n'
+$ H="$T/hybrid"; mk "$H/skills/route/SKILL.md" '---\nname: route\ndescription: Routed work.\n---\n\n# Route\n\n:::head\n## Routes\n\nUse `$checks` first.\n:::\n\n## Detail\n\nReference.\n'
 > printf '[harness.claude]\nprofile = "claude"\nartifacts = ["skills"]\n\n[harness.claude.skills]\ndefault = "dynamic"\nhybrid = ["route"]\n\n[harness.codex]\nprofile = "codex"\nartifacts = ["skills"]\n\n[harness.codex.skills]\ndefault = "dynamic"\nhybrid = ["route"]\n' > "$H/henia.toml"
 > henia build "$H" --output "$T/hybrid-build" > /dev/null
 > sed -e '1,/^---$/d' "$T/hybrid-build/claude/skills/route/SKILL.md"
@@ -734,7 +734,7 @@ A skill places its contents and related skills with `:contents[]` and
 `:related[]`; `--head` then appends neither. A named skill lists that skill.
 
 ```scrut
-$ mk "$L/hybrid/skills/route/SKILL.md" '---\nname: route\ndescription: Routed work.\n---\n\n# Route\n\n:::static\n## Routes\n\nSections:\n\n:contents[]\n\nRelated:\n\n:related[]\n\nChecks:\n\n:contents[checks]\n\nUse `$checks` first.\n:::\n\n## Detail\n\nReference.\n'
+$ mk "$L/hybrid/skills/route/SKILL.md" '---\nname: route\ndescription: Routed work.\n---\n\n# Route\n\n:::head\n## Routes\n\nSections:\n\n:contents[]\n\nRelated:\n\n:related[]\n\nChecks:\n\n:contents[checks]\n\nUse `$checks` first.\n:::\n\n## Detail\n\nReference.\n'
 > henia show route --head
 ## Routes
 

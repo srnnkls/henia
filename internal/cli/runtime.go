@@ -25,6 +25,7 @@ import (
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/reference"
+	"github.com/srnnkls/henia/internal/templates"
 )
 
 const outputBudget = 28000
@@ -89,7 +90,7 @@ A skill is <name> or <package>:<name>. Output longer than the budget prints the
 sections instead, each addressable as <skill>#<section>. A full skill ends with
 the list of its resources, addressed like modules: <skill>.<dir>.<file> reads
 <dir>/<file>.md and <skill>.<dir> lists <dir>/. Other files are read by path,
-<skill>/<path>. --head prints what a hybrid skill carries upfront: its :::static
+<skill>/<path>. --head prints what a hybrid skill carries upfront: its :::head
 blocks, its contents and the contents of the skills it references; --toc
 prints only its contents, and both report a harness copy that henia install
 wrote from an older revision of the skill. Problems print as text;
@@ -113,7 +114,7 @@ the command always exits successfully so a skill preload never aborts.`,
 		},
 	}
 	flags.register(cmd)
-	cmd.Flags().BoolVar(&mode.head, "head", false, "Print the skill's :::static blocks, contents and related contents")
+	cmd.Flags().BoolVar(&mode.head, "head", false, "Print the skill's :::head blocks, contents and related contents")
 	cmd.Flags().BoolVar(&mode.toc, "toc", false, "Print the skill's contents")
 	return cmd
 }
@@ -506,10 +507,11 @@ func (r *renderer) render(e library.Entry, head bool) string {
 		if harnesses, err := config.Harnesses(packageConfig); err == nil {
 			if h, ok := harnesses[r.harness]; ok {
 				harness, name = h, r.harness
-				harness.ProjectRoot, harness.UserRoot = e.Origin.ProjectRoot(), library.ConfigDir()
 			}
 		}
 	}
+	harness.ProjectRoot, harness.UserRoot = e.Origin.ProjectRoot(), library.ConfigDir()
+	shared, _ := templates.Load(harness.ProjectRoot, harness.UserRoot)
 	if name == "" {
 		packageConfig = nil
 	}
@@ -522,7 +524,7 @@ func (r *renderer) render(e library.Entry, head bool) string {
 		}
 	}
 	h := sha256.New()
-	for _, part := range [][]byte{[]byte(rootCmd.Version + executableStamp()), []byte(name), []byte(strconv.FormatBool(head)), packageConfig, canonical, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " "))} {
+	for _, part := range [][]byte{[]byte(rootCmd.Version + executableStamp()), []byte(name), []byte(strconv.FormatBool(head)), packageConfig, canonical, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " ")), []byte(templates.Digest(shared))} {
 		h.Write(part)
 		h.Write([]byte{0})
 	}

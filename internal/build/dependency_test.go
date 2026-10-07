@@ -42,3 +42,28 @@ func TestDependencyHarnessDefaults(t *testing.T) {
 		})
 	}
 }
+
+func TestDependencyTemplates(t *testing.T) {
+	root := t.TempDir()
+	project, dependency, user := filepath.Join(root, "project"), filepath.Join(root, "project", ".henia", "sources", "dep"), filepath.Join(root, "config")
+	put(t, filepath.Join(project, ".henia/templates/head.md.tmpl"), "Project static.")
+	put(t, filepath.Join(dependency, ".henia/templates/head.md.tmpl"), "Dependency static.")
+	put(t, filepath.Join(user, "templates/footer.md.tmpl"), "User footer.")
+	put(t, filepath.Join(project, "skills/own/SKILL.md"), "---\nname: own\ndescription: Own skill.\n---\n\n{{template \"head\" .}} {{template \"footer\" .}}\n")
+	put(t, filepath.Join(dependency, "skills/dep/SKILL.md"), "---\nname: dep\ndescription: Dependency skill.\n---\n\n{{template \"head\" .}} {{template \"footer\" .}}\n")
+	output := filepath.Join(root, "build")
+	harnesses := map[string]henia.Harness{"claude": {Artifacts: []string{"skills"}, ProjectRoot: project, UserRoot: user}}
+	result, err := Run(t.Context(), []string{project, dependency}, output, harnesses, Dependency{Root: dependency})
+	if err != nil || len(result.Errors) != 0 {
+		t.Fatalf("%v %v", err, result.Errors)
+	}
+	for skill, want := range map[string]string{"own": "Project static. User footer.", "dep": "Dependency static. User footer."} {
+		data, err := os.ReadFile(filepath.Join(output, "claude", "skills", skill, "SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), want) {
+			t.Errorf("%s: %q lacks %q", skill, data, want)
+		}
+	}
+}

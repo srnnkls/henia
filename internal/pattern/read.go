@@ -119,7 +119,8 @@ var types = map[string][]string{
 	"image":       {"url", "dest", "exists", "valid", "anchored", "problem"},
 	"entry":       {"key", "value", "index", "tag"},
 	"problem":     {"kind", "message"},
-	"slot":        {"role", "slot", "type", "entry", "error"},
+	"slot":        {"role", "slot", "type", "entry", "error", "section", "found"},
+	"template":    {"role", "name", "resolved", "used"},
 	"directive":   nil,
 	"frontmatter": nil,
 }
