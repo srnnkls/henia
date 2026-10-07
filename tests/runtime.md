@@ -648,6 +648,19 @@ $ mk "$L/tropos/skills/echo/SKILL.md" '---\nname: echo\ndescription: Echo.\n---\
 @b  style-guide#go  L7  paragraph  Run gofmt. Canary: CANARY-GO.
 ```
 
+`:package` names the package a skill comes from, and a heading inside a block
+directive opens a section in canonical reads too.
+
+```scrut
+$ henia query '(skill :package ?p) @k (group ?p (count @k @n))'
+> mk "$L/tropos/skills/headed/SKILL.md" '---\nname: headed\ndescription: Headed.\n---\n\n# Headed\n\n:::note\n## Routes\n\nGo.\n:::\n'
+> henia query '(skill :id "headed" (section :level 2) @s)' --canonical
+?p=tropos
+@k  8 nodes
+@n  8
+@s  headed#routes  L9-11  section  Routes
+```
+
 A malformed query points at the problem and suggests a fix.
 
 ```scrut
