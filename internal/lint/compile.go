@@ -252,7 +252,7 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 			docs = append(docs, library.Document{Path: path, Kind: "skill", Dependency: true})
 		}
 	}
-	ev := &evaluation{corpus: corpus(docs)}
+	ev := &evaluation{corpus: corpus(docs, p.options.Templates, p.options.Variables)}
 	diagnostics := []Diagnostic{}
 	for _, s := range p.specs {
 		if p.disabled[s.id] {

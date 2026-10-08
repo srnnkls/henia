@@ -15,6 +15,7 @@ import (
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/profile"
 	"github.com/srnnkls/henia/internal/target"
+	"github.com/srnnkls/henia/internal/templates"
 	"github.com/srnnkls/henia/internal/transform"
 )
 
@@ -71,6 +72,15 @@ func layered(harness henia.Harness, name, path string, dependencies []Dependency
 		}
 	}
 	return harness
+}
+
+func templateRoot(project, path string, dependencies []Dependency) string {
+	for _, d := range dependencies {
+		if strings.HasPrefix(path, d.Root+string(filepath.Separator)) {
+			return d.Root
+		}
+	}
+	return project
 }
 
 func run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, clean bool, dependencies []Dependency, extra []*artifact.Artifact) (*Result, error) {
@@ -154,6 +164,10 @@ func run(ctx context.Context, sources []string, output string, harnesses map[str
 				continue
 			}
 			tr.Served = served
+			if tr.Templates, err = templates.Load(templateRoot(effective.ProjectRoot, art.SourcePath, dependencies), effective.UserRoot); err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("%s: templates for %s: %w", art.SourcePath, harnessName, err))
+				continue
+			}
 			hybrid := art.Type == artifact.TypeSkill && art.Name != CatalogName && harness.Mode("skills", art.Name) == henia.Hybrid
 			tr.Head, tr.LibraryLinks = hybrid, hybrid
 			tgt := target.NewFromConfig(harnessName, outputPath, effective)
@@ -339,6 +353,9 @@ func Render(art *artifact.Artifact, name string, h henia.Harness, served map[str
 		return nil, err
 	}
 	tr.Served, tr.Head, tr.LibraryLinks = served, head, true
+	if tr.Templates, err = templates.Load(h.ProjectRoot, h.UserRoot); err != nil {
+		return nil, err
+	}
 	return tr.Transform(art)
 }
 

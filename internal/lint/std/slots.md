@@ -162,3 +162,51 @@ henia:
 ---
 # Example
 ```
+
+## missing-section
+
+A `section` offer in `henia.provides` must name a heading the skill renders,
+either its own or one from a shared template or layout it uses.
+
+```hq
+(rule missing-section
+  :severity error
+  :message "slot {@s.slot} offers section #{@s.section}, which the skill does not render"
+  (slot :role provide :found false) @s)
+```
+
+### Matches
+
+```md
+---
+name: example
+description: An example skill.
+henia:
+  slots:
+    git.commits:
+  provides:
+    git.commits: {section: commits}
+---
+# Example
+
+:slot[git.commits]
+```
+
+### Passes
+
+```md
+---
+name: example
+description: An example skill.
+henia:
+  slots:
+    git.commits:
+  provides:
+    git.commits: {section: commits}
+---
+# Example
+
+:slot[git.commits]
+
+## Commits
+```

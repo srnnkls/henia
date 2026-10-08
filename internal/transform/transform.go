@@ -7,6 +7,8 @@ import (
 	"maps"
 	"path"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -21,7 +23,7 @@ import (
 	"github.com/srnnkls/henia/internal/slots"
 )
 
-const StaticBlock = "static"
+const HeadBlock = markup.HeadBlock
 
 type ReferenceConfig struct {
 	Output string
@@ -41,13 +43,25 @@ type Transformer struct {
 	Served       map[string]bool
 	Head         bool
 	LibraryLinks bool
+	Templates    map[string]string
 }
 
 const absent = "henia_absent"
 
 func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
-	tmpl, err := template.New("content").Funcs(template.FuncMap{absent: blankAbsent}).Parse(content)
-	if err != nil {
+	return Compose(content, vars, nil, "")
+}
+
+// Compose executes content with the shared templates in scope. With a layout,
+// content may only define blocks, and the layout template renders them.
+func Compose[T any](content string, vars map[string]T, shared map[string]string, layout string) (string, error) {
+	tmpl := template.New("content").Funcs(template.FuncMap{absent: blankAbsent, "required": requiredBlock})
+	for _, name := range slices.Sorted(maps.Keys(shared)) {
+		if _, err := tmpl.New(name).Parse(shared[name]); err != nil {
+			return "", fmt.Errorf("parse template %s: %w", name, err)
+		}
+	}
+	if _, err := tmpl.Parse(content); err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
 	}
 	for _, t := range tmpl.Templates() {
@@ -55,13 +69,39 @@ func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
 			printAbsentBlank(t.Tree.Root)
 		}
 	}
+	entry := tmpl
+	if layout != "" {
+		if !blocksOnly(tmpl.Tree.Root) {
+			return "", fmt.Errorf("layout %s: text outside define blocks", layout)
+		}
+		if entry = tmpl.Lookup(layout); entry == nil || entry.Tree == nil {
+			return "", fmt.Errorf("unknown layout %q", layout)
+		}
+	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, vars); err != nil {
+	if err := entry.Execute(&buf, vars); err != nil {
 		return "", fmt.Errorf("execute template: %w", err)
 	}
 
 	return buf.String(), nil
+}
+
+func requiredBlock(name string) (string, error) {
+	return "", fmt.Errorf("block %q is required", name)
+}
+
+func blocksOnly(root *parse.ListNode) bool {
+	if root == nil {
+		return true
+	}
+	for _, node := range root.Nodes {
+		text, ok := node.(*parse.TextNode)
+		if !ok || len(bytes.TrimSpace(text.Text)) > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func blankAbsent(v any) any {
@@ -158,10 +198,8 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 
 	templateContext := make(map[string]any, len(art.Frontmatter)+len(t.Variables))
 	maps.Copy(templateContext, art.Frontmatter)
-	if h, ok := art.Frontmatter["henia"].(map[string]any); ok {
-		if vars, ok := h["variables"].(map[string]any); ok {
-			maps.Copy(templateContext, vars)
-		}
+	if vars, ok := henia(art.Frontmatter)["variables"].(map[string]any); ok {
+		maps.Copy(templateContext, vars)
 	}
 	for k, v := range t.Variables {
 		templateContext[k] = v
@@ -196,15 +234,28 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		}
 	}
 
-	body, err := ExecuteTemplate(art.Body, templateContext)
+	layout, _ := henia(art.Frontmatter)["layout"].(string)
+	body, err := Compose(art.Body, templateContext, t.Templates, layout)
 	if err != nil {
 		return nil, fmt.Errorf("transform body: %w", err)
+	}
+	var shared func(string) bool
+	if len(t.Templates) > 0 {
+		shared = func(name string) bool { _, ok := t.Templates[name]; return ok }
+	}
+	body, err = markup.Expand(body, shared, func(name string, args map[string]string, content string) (string, error) {
+		data := maps.Clone(templateContext)
+		data["args"], data["content"] = args, content
+		return Compose("{{template "+strconv.Quote(name)+" .}}", data, t.Templates, "")
+	})
+	if err != nil {
+		return nil, fmt.Errorf("expand template directives: %w", err)
 	}
 	body = slots.Expand(body, slots.Preload)
 	if art.Type == artifact.TypeSkill {
 		body = expandListings(body, art.Name)
 	}
-	full, head := markup.Unwrap(body, StaticBlock)
+	full, head := markup.Unwrap(body, HeadBlock)
 	if t.Head {
 		body = strings.Join(head, "\n")
 	} else {
@@ -224,6 +275,11 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	result.Body = body
 
 	return result, nil
+}
+
+func henia(frontmatter map[string]any) map[string]any {
+	h, _ := frontmatter["henia"].(map[string]any)
+	return h
 }
 
 func templateValue(value any, context map[string]any) (any, error) {

@@ -2,12 +2,21 @@ package lint
 
 import (
 	"bytes"
+	"os"
+	"strconv"
 
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/slots"
+	"github.com/srnnkls/henia/internal/templates"
 )
 
-func addSlots(root *markup.Element, documents []document) {
+func addSlots(root *markup.Element, documents []document, shared []templates.File, variables map[string]string) {
+	sources := map[string]string{}
+	for _, f := range shared {
+		if data, err := os.ReadFile(f.Path); err == nil {
+			sources[f.Name] = string(data)
+		}
+	}
 	files := map[string]*markup.Element{}
 	root.Walk(func(e *markup.Element) bool {
 		if e.Type == "file" {
@@ -32,20 +41,48 @@ func addSlots(root *markup.Element, documents []document) {
 			}
 			return 0
 		}
-		metadata := slots.Read(d.art.Frontmatter, d.art.Body, slots.Normal)
+		body := d.art.Body
+		if masked, err := markup.MaskTemplates([]byte(body)); err == nil {
+			body = string(masked)
+		}
+		metadata := slots.Read(d.art.Frontmatter, body, slots.Normal)
 		for _, problem := range metadata.Problems {
 			add(map[string]string{"role": problem.Role, "slot": problem.Slot, "error": problem.Message}, inFrontmatter(problem.Slot))
 		}
 		for _, declared := range metadata.Declared {
 			add(map[string]string{"role": "declare", "slot": declared.Slot, "type": declared.Type.String()}, inFrontmatter(declared.Slot))
 		}
+		var anchors map[string]bool
 		for _, offered := range metadata.Offered {
-			add(map[string]string{"role": "provide", "slot": offered.Slot, "priority": offered.Priority.String()}, inFrontmatter(offered.Slot))
+			attrs := map[string]string{"role": "provide", "slot": offered.Slot, "priority": offered.Priority.String()}
+			at := inFrontmatter(offered.Slot)
+			if offered.Section != "" {
+				if anchors == nil {
+					anchors = sectionAnchors(d, shared)
+				}
+				attrs["section"], attrs["found"] = offered.Section, strconv.FormatBool(anchors[offered.Section])
+				if provides := bytes.Index(d.source[:d.offset], []byte("provides:")); provides >= 0 {
+					if key := bytes.Index(d.source[provides:d.offset], []byte(offered.Slot)); key >= 0 {
+						key += provides + len(offered.Slot)
+						if index := bytes.Index(d.source[key:d.offset], []byte(offered.Section)); index >= 0 {
+							at = key + index
+						}
+					}
+				}
+			}
+			add(attrs, at)
 		}
-		for _, application := range slots.Applications(d.art.Body) {
+		for _, application := range slots.Applications(body) {
 			for _, slot := range application.Slots {
 				add(map[string]string{"role": "apply", "slot": slot}, d.offset+application.Start)
 			}
+		}
+		for _, slot := range templateSlots(d, body, sources, variables) {
+			at := d.offset
+			if index := bytes.Index(d.source[d.offset:], []byte(slot)); index >= 0 {
+				at += index
+			}
+			add(map[string]string{"role": "apply", "slot": slot}, at)
 		}
 	}
 }

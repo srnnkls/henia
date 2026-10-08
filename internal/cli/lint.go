@@ -14,6 +14,7 @@ import (
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
 	"github.com/srnnkls/henia/internal/profile"
+	"github.com/srnnkls/henia/internal/templates"
 )
 
 func newLintCommand() *cobra.Command {
@@ -147,6 +148,15 @@ func lintOptions(cmd *cobra.Command) (lint.Options, *config.Config, error) {
 		}
 		for _, agent := range profile.Agents {
 			options.Builtin = append(options.Builtin, "agent:"+agent)
+		}
+	}
+	options.Templates = templates.Files(project, library.ConfigDir())
+	options.Variables = map[string]string{}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Harness)) {
+		for k, v := range cfg.Harness[name].Variables {
+			if _, ok := options.Variables[k]; !ok {
+				options.Variables[k] = v
+			}
 		}
 	}
 	options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(library.ConfigDir(), "lint")}, lint.ModuleDir{Dir: filepath.Join(project, library.ProjectDir, "lint")})

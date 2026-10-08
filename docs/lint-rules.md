@@ -70,11 +70,12 @@ henia lint .henia/build/codex --strict
 
 | Module | Rules | Params and data |
 |---|---|---|
-| `std/structure` | `large-skill`, `large-static`, `duplicate-heading` | `max-lines` (500), `max-static-lines` (150) |
+| `std/structure` | `large-skill`, `large-head`, `duplicate-heading` | `max-lines` (500), `max-head-lines` (150) |
 | `std/metadata` | `metadata`, `stale-review`, `invalid-template`, `invalid-markup` | `max-age-days` (180) |
 | `std/references` | `broken-link`, `missing-reference`, `outdated-reference` | `outdated` map |
 | `std/duplicates` | `duplicate-skill`, `duplicate-content` | `min-words` (12) |
-| `std/slots` | `invalid-slot`, `unknown-slot` | |
+| `std/slots` | `invalid-slot`, `unknown-slot`, `missing-section` | |
+| `std/templates` | `unknown-template`, `unused-template` | |
 | `std/similarity` | `similar-content`, `semantic-content` | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
 
 The modules live under `internal/lint/std/`, readable like any other module.
@@ -92,7 +93,7 @@ $ henia lint test
 
 ```toml
 [lint]
-disable = ["large-static"]
+disable = ["large-head"]
 
 [lint.config.duplicate-heading]
 severity = "error"

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/templates"
 )
 
 type Diagnostic struct {
@@ -49,6 +50,8 @@ type Options struct {
 	Semantic     SemanticOptions           `toml:"semantic,omitempty"`
 	Builtin      []string                  `toml:"-"`
 	Dependencies []string                  `toml:"-"`
+	Templates    []templates.File          `toml:"-"`
+	Variables    map[string]string         `toml:"-"`
 	Now          time.Time                 `toml:"-"`
 }
 
