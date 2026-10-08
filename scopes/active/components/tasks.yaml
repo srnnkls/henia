@@ -1,0 +1,123 @@
+scope: components
+code: CMP
+next_id: 17
+tasks:
+  - id: CMP-001
+    content: "Directive syntax: leaf form, label children for text and leaf, own attribute tokenizer (key=value, quoted, bare key, #id, .class), duplicate-attribute and unclosed-directive with positions, every error reported (FR-1)"
+    status: done
+    active_form: "Parsing the full directive syntax"
+    depends_on: []
+    files: [internal/markup/markup.go, internal/markup/attributes.go, internal/markup/tree.go, internal/markup/markup_test.go, internal/markup/tree_test.go]
+  - id: CMP-002
+    content: "Mutable document tree with origins and backtraces, and the span-preserving writer with canonical fence lengths (FR-2, AD-1, AD-2)"
+    status: pending
+    active_form: "Building the document tree and writer"
+    depends_on: [CMP-001]
+    files: [internal/markup/document.go, internal/markup/write.go, internal/markup/document_test.go, internal/markup/write_test.go]
+  - id: CMP-003
+    content: "Component declarations: discovery with project over user and per-package roots, schema parsing, typed attribute coercion incl. list of, render keep, built-in declarations with reserved names and related's two forms, invalid-component, components/ exemption in the generated .henia/.gitignore (FR-3, AD-3, AD-5); move the absent-blanking pass (blankAbsent, printAbsentBlank) from internal/transform into internal/templating, used by ExecuteTemplate"
+    status: done
+    active_form: "Loading component declarations"
+    depends_on: []
+    files: [internal/components/declaration.go, internal/components/load.go, internal/components/builtin.go, internal/components/declaration_test.go, internal/components/load_test.go, internal/library/library.go, internal/templating/absent.go, internal/templating/absent_test.go, internal/transform/transform.go]
+  - id: CMP-004
+    content: "Source-stage call checks without execution: unknown-component, attribute and body checks, wrong-form, template-action, invalid-template, unknown-field against known skill values on root-anchored field chains only (range/with rebind dot), unused-component (FR-4, AD-3, AD-4)"
+    status: pending
+    active_form: "Checking component calls"
+    depends_on: [CMP-001, CMP-003]
+    files: [internal/components/diagnostic.go, internal/components/check.go, internal/components/check_test.go]
+  - id: CMP-005
+    content: "Fixpoint expansion: when/unless per target, include{template}, components inside out, ::body grafting, .body, missingkey=error with absent skill values as nil and blanked by internal/templating, head rule, output form checks, backtraces, component-cycle (FR-5, AD-3, AD-5)"
+    status: pending
+    active_form: "Expanding components to a fixpoint"
+    depends_on: [CMP-002, CMP-004]
+    files: [internal/components/expand.go, internal/components/expand_test.go]
+  - id: CMP-006
+    content: "include{ref}: section selection after the target's step 3 by henia show anchors, document graph in dependency order, include-cycle, missing-include, invalid-include (FR-6, AD-5)"
+    status: pending
+    active_form: "Resolving includes across documents"
+    depends_on: [CMP-005]
+    files: [internal/components/include.go, internal/components/graph.go, internal/components/include_test.go]
+  - id: CMP-007
+    content: ":slot, :contents, text :related and container :::related as tree transforms; build output unchanged (FR-7, AD-5)"
+    status: pending
+    active_form: "Moving slot and listing expansion onto the tree"
+    depends_on: [CMP-002]
+    files: [internal/slots/slots.go, internal/slots/slots_test.go, internal/transform/transform.go, internal/transform/transform_test.go]
+  - id: CMP-015
+    content: "Head split, kept-directive rendering per harness, links, references and serialization on the tree; build output unchanged (FR-7)"
+    status: pending
+    active_form: "Moving rendering onto the tree"
+    depends_on: [CMP-007]
+    files: [internal/markup/markup.go, internal/markup/unwrap.go, internal/markup/unwrap_test.go, internal/markup/render.go, internal/markup/render_test.go, internal/markup/links.go, internal/transform/transform.go, internal/transform/links_test.go, internal/transform/references_test.go]
+  - id: CMP-008
+    content: "Build, henia show and runtime on the component pipeline with per-package components; legacy composition stays compiling for lint; tests/components.md scrut suite (FR-8, AD-6); runtime render cache key covers transitively included documents and every involved package's component declarations; migrate every build and runtime fixture whose body uses template actions or undeclared directives (internal/cli/build_lint_test.go, tests/runtime.md) to declared components, keeping their assertions"
+    status: pending
+    active_form: "Switching the build to components"
+    depends_on: [CMP-006, CMP-015]
+    files: [internal/transform/transform.go, internal/transform/pipeline_test.go, internal/build/build.go, internal/build/head.go, internal/build/dependency_test.go, internal/cli/runtime.go, tests/components.md, tests/fixtures/components/, internal/cli/build_lint_test.go, tests/runtime.md]
+  - id: CMP-009
+    content: "Lint stages: stage on every std rule, Diagnostic notes and stage, source and expanded checks per target, components replace template nodes; lint drops Options.Templates, the corpus shared parameter and templates.Files so no lint package imports internal/templates after CMP-010, per-package component roots in lint (FR-9, AD-8)"
+    status: pending
+    active_form: "Staging lint"
+    depends_on: [CMP-008]
+    files: [internal/lint/lint.go, internal/lint/lint_test.go, internal/lint/compile.go, internal/lint/module.go, internal/lint/components.go, internal/lint/components_test.go, internal/lint/templates.go, internal/lint/templates_test.go, internal/lint/std/components.md, internal/lint/std/templates.md, internal/lint/std/duplicates.md, internal/lint/std/metadata.md, internal/lint/std/similarity.md, internal/cli/lint.go]
+  - id: CMP-010
+    content: "Rendered lint stage per harness: unused-slot, unknown-slot, missing-section, duplicate-heading, anchors, head size, references on each skill's full per-harness body as henia show renders it (no build projection filter; dynamic and hybrid skills included), hybrid heads separately for head size; lint/slots.go drops templates.File (FR-9, AD-8)"
+    status: pending
+    active_form: "Linting rendered output per harness"
+    depends_on: [CMP-009]
+    files: [internal/lint/slots.go, internal/lint/rendered.go, internal/lint/rendered_test.go, internal/lint/std/slots.md, internal/lint/std/structure.md, internal/lint/std/references.md, internal/lint/compile.go, internal/cli/lint.go]
+  - id: CMP-011
+    content: "hq typed directive attributes from declarations on canonical sources: bare keys and booleans, numbers, lists; henia q --canonical '(directive :name \"routes\" :ordered true)' (FR-10)"
+    status: pending
+    active_form: "Typing directive attributes in hq"
+    depends_on: [CMP-004]
+    files: [internal/library/corpus.go, internal/library/corpus_test.go, internal/pattern/read.go, internal/pattern/match.go, internal/pattern/directive_test.go, docs/query.md]
+  - id: CMP-016
+    content: "Remove legacy composition after its last consumer: internal/templates, Compose (absent-blanking stays in internal/templating), henia.layout, markup.Expand, MaskTemplates and its corpus caller, templates/ gitignore exemption; removed-composition (FR-8, AD-4)"
+    status: pending
+    active_form: "Removing Go template composition"
+    depends_on: [CMP-010, CMP-011]
+    files: [internal/templates/templates.go, internal/templates/templates_test.go, internal/transform/transform.go, internal/transform/compose_test.go, internal/markup/expand.go, internal/markup/expand_test.go, internal/markup/template.go, internal/library/corpus.go, internal/library/library.go, internal/build/build.go, internal/cli/runtime.go, internal/components/check.go, internal/components/check_test.go, tests/templates.md]
+  - id: CMP-012
+    content: "henia fmt [paths] with --check: rewrite directive fence lengths from the tree, idempotent (FR-11, AD-1)"
+    status: pending
+    active_form: "Adding henia fmt"
+    depends_on: [CMP-002]
+    files: [internal/cli/fmt.go, internal/cli/fmt_test.go, internal/cli/root.go, tests/fmt.md]
+  - id: CMP-013
+    content: "Docs: docs/components.md, docs/build.md drops templates and layouts, docs/lint-rules.md stages and ids (TR-4)"
+    status: pending
+    active_form: "Documenting components"
+    depends_on: [CMP-012, CMP-016]
+    files: [docs/components.md, docs/build.md, docs/lint-rules.md, README.md]
+  - id: CMP-014
+    content: "Tropos migration: capture the b24ebfe baseline, convert partials to components (related folds into the built-in), instruction as render keep, classes to bare keys, pr to :::when, workflow slots listed, remove .henia/templates, exempt components/ in .henia/.gitignore, henia fmt; build diff empty per harness, lint clean, hybrid heads unchanged (FR-12, AD-7, AD-9)"
+    status: pending
+    active_form: "Converting Tropos to components"
+    depends_on: [CMP-012, CMP-016]
+    blocked_by_gap: G-1
+    files:
+      - /Users/srnnkls/projects/tropos/.henia/components/
+      - /Users/srnnkls/projects/tropos/.henia/templates/
+      - /Users/srnnkls/projects/tropos/.henia/.gitignore
+      - /Users/srnnkls/projects/tropos/skills/*/SKILL.md
+      - /Users/srnnkls/projects/tropos/henia.toml
+meta:
+  created: 2026-10-08
+  last_updated: "2026-10-09"
+  progress: 2/16
+phases:
+  - id: syntax
+    tasks: [CMP-001, CMP-002, CMP-012]
+  - id: components
+    tasks: [CMP-003, CMP-004, CMP-005, CMP-006, CMP-011]
+  - id: pipeline
+    tasks: [CMP-007, CMP-015, CMP-008]
+  - id: lint
+    tasks: [CMP-009, CMP-010]
+  - id: removal
+    tasks: [CMP-016]
+  - id: migration
+    tasks: [CMP-013, CMP-014]

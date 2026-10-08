@@ -36,8 +36,11 @@ var parses atomic.Int64
 func Parses() int64 { return parses.Load() }
 
 func run(p parser.Parser, source []byte) (ast.Node, error) {
+	return runContext(p, source, parser.NewContext())
+}
+
+func runContext(p parser.Parser, source []byte, pc parser.Context) (ast.Node, error) {
 	parses.Add(1)
-	pc := parser.NewContext()
 	doc := p.Parse(text.NewReader(source), parser.WithContext(pc))
 	err, _ := pc.Get(failure).(error)
 	return doc, err

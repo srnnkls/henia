@@ -1,0 +1,27 @@
+batches:
+  - batch: 1
+    tasks: [CMP-001, CMP-003]
+    run: 20261008T221438Z-201fe2
+    reports: .peer/components/20261008T221438Z-201fe2/b1-review-{general,architecture,compliance}
+    coverage: {native: [claude-opus x3], peer: [peer-gpt6.1-sol x3, peer-gpt6-astra x3]}
+    gates_initial: {correctness: fail, security: pass, performance: pass, architecture: fail, style: fail}
+    admitted:
+      - {id: B1-1, severity: critical, group: A, found_by: [claude-opus, sol, astra], location: internal/markup/markup.go Continue, trigger: "':::x\\n::y[a]\\n:::\\n'", wrong_outcome: "open leaf shields container close; unclosed-directive (regression)", verified: true}
+      - {id: B1-2, severity: high, group: A, found_by: [claude-opus, sol, astra], location: internal/markup/markup.go leaf, trigger: "'::x{a=}' / '::x{k=1 k=2 bad=}'", wrong_outcome: "tokenizer problems dropped; no error", verified: true}
+      - {id: B1-3, severity: high, group: A, found_by: [sol, astra], location: internal/markup/markup.go:311, trigger: "Render('::body\\n','xml')", wrong_outcome: "overlapping directive source spans; every leaf render fails", verified: true}
+      - {id: B1-4, severity: medium, group: A, found_by: [sol, astra], location: internal/markup/tree.go:259, trigger: "':x[[doc][r]]\\n\\n[r]: https://example.test\\n'", wrong_outcome: "label reparsed without reference definitions; no link child", verified: true}
+      - {id: B1-5, severity: high, group: B, found_by: [sol, astra], location: internal/components/declaration.go Coerce, trigger: "number attr matches '[1-9][0-9]*' default 0", wrong_outcome: "scalar coercion skips matches; invalid default accepted", verified: true}
+      - {id: B1-6, severity: medium, group: B, found_by: [claude-opus], location: internal/components/load.go Load, trigger: "empty project or user root", wrong_outcome: "joins against cwd; stray components load", verified: true}
+      - {id: B1-7, severity: medium, group: B, found_by: [sol], location: internal/components/load.go loadDir, trigger: "root path containing '['", wrong_outcome: "Glob ErrBadPattern discarded; project declarations silently skipped", verified: true}
+      - {id: B1-8, severity: high, group: B, found_by: [sol], location: internal/transform/transform.go:51, trigger: "frontmatter '{{if false}}{{required \"x\"}}{{end}}ok'", wrong_outcome: "function required not defined; frontmatter contract changed", verified: true}
+    residual: []
+    supplemental_review:
+      reason: "internal/markup/attributes.go was untracked and missing from the initial materialized diff"
+      report: .peer/components/20261008T221438Z-201fe2/b1-review-general-attributes
+      admitted:
+        - {id: B1-9, severity: medium, group: C, found_by: [claude-opus], location: "internal/markup/attributes.go:35", trigger: "':x[y]{.b class=a}' vs ':x[y]{class=a .b}'", wrong_outcome: "order-dependent: one merges, the other raises duplicate-attribute", disposition: "merge every class entry regardless of order (AD-3 list; goldmark parity)", verified: true}
+    rereview_round_1: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b1-rereview, result: "B1-1..B1-8 resolved"}
+    rereview_B1-9: {reviewer: claude-opus, result: resolved}
+    gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
+    validation: "go vet ./... && go build ./... clean; go test ./... 20/20 ok; mise run test:integration 136/136"
+    status: complete

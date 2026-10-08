@@ -1,0 +1,39 @@
+checkpoint:
+  scope_name: components
+  scope_path: scopes/active/components
+  branch: feat/components
+  last_commit: b24ebfe
+  updated_at: "2026-10-08T22:14:59Z"
+  base_drift: {base: origin/main, behind: 0, ahead: 0, checked_at: "2026-10-08T22:14:59Z"}
+
+  batch:
+    number: 1
+    tasks: [CMP-001, CMP-003]
+    phase: complete
+    status: completed
+
+  routing_snapshot:
+    epoch_id: 20261008T221438Z-201fe2
+    tester: {agent: tester, effort: inherit, class: native}
+    implementer: {agent: implementer, effort: inherit, class: native}
+    reviewer:
+      agents:
+        - {agent: peer-gpt6.1-sol, effort: inherit, class: peer}
+        - {agent: claude-opus, effort: inherit, class: native}
+        - {agent: peer-gpt6-astra, effort: inherit, class: peer}
+
+  reports:
+    tester:
+      CMP-001: .peer/components/20261008T221438Z-201fe2/b1-tester-CMP-001
+      CMP-003: .peer/components/20261008T221438Z-201fe2/b1-tester-CMP-003
+    implementer:
+      CMP-001: .peer/components/20261008T221438Z-201fe2/b1-implementer-CMP-001
+      CMP-003: .peer/components/20261008T221438Z-201fe2/b1-implementer-CMP-003
+    review:
+      general: .peer/components/20261008T221438Z-201fe2/b1-review-general
+      architecture: .peer/components/20261008T221438Z-201fe2/b1-review-architecture
+      compliance: .peer/components/20261008T221438Z-201fe2/b1-review-compliance
+
+  orchestrator_notes:
+    - "CMP-001 GREEN blocked on TestInvalidMarkup case ':x[y]{key=value with spaces}', valid under FR-1 bare keys; orchestrator replaced it with ':x[y]{key=\"unclosed}'."
+  fix_round: {number: 1, groups: [A, B], status: green, rereview: .peer/components/20261008T221438Z-201fe2/b1-rereview}

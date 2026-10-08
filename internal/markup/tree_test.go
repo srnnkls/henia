@@ -131,3 +131,83 @@ func TestConcurrentParsesKeepTheirOwnErrors(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestTreeDirectiveSyntax(t *testing.T) {
+	source := []byte(":::routes{ordered protocol}\n:::\n\n::item[see [doc](u) and :term[[ref](v)]]{#main k=\"a b\"}\n\nafter\n")
+	root, err := markup.Tree(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(root.Children) != 3 {
+		t.Fatalf("got %d top-level elements, want routes, item and paragraph", len(root.Children))
+	}
+	routes, item, after := root.Children[0], root.Children[1], root.Children[2]
+	if routes.Attrs["name"] != "routes" || routes.Attrs["ordered"] != "true" || routes.Attrs["protocol"] != "true" {
+		t.Errorf("routes attrs = %v, want ordered and protocol true", routes.Attrs)
+	}
+	if item.Type != "directive" || item.Attrs["name"] != "item" || item.Attrs["inline"] == "true" || item.Line != 4 || item.EndLine != 4 {
+		t.Fatalf("got %s %v L%d-%d, want leaf directive item on line 4", item.Type, item.Attrs, item.Line, item.EndLine)
+	}
+	if item.Attrs["id"] != "main" || item.Attrs["k"] != "a b" {
+		t.Errorf("item attrs = %v, want id main and k \"a b\"", item.Attrs)
+	}
+	if after.Type != "paragraph" || after.Text != "after" {
+		t.Errorf("got %s %q after the leaf, want paragraph \"after\"", after.Type, after.Text)
+	}
+	var label []string
+	for _, c := range item.Children {
+		label = append(label, c.Type+":"+c.Attrs["url"]+c.Attrs["name"])
+		for _, g := range c.Children {
+			label = append(label, "  "+g.Type+":"+g.Attrs["url"]+g.Attrs["name"])
+		}
+	}
+	want := []string{"link:u", "directive:term", "  link:v"}
+	if !slices.Equal(label, want) {
+		t.Errorf("label children = %q, want %q", label, want)
+	}
+}
+
+func TestTreeReportsEveryDirectiveError(t *testing.T) {
+	source := []byte("intro\n\n:x[a]{k=1 k=2}\n\n:::menu\nbody\n")
+	_, err := markup.Tree(source)
+	var got []string
+	var collect func(error)
+	collect = func(err error) {
+		switch e := err.(type) {
+		case *markup.Error:
+			got = append(got, e.Error())
+		case interface{ Unwrap() []error }:
+			for _, inner := range e.Unwrap() {
+				collect(inner)
+			}
+		case interface{ Unwrap() error }:
+			collect(e.Unwrap())
+		}
+	}
+	collect(err)
+	if len(got) != 2 || !strings.HasPrefix(got[0], "3:11: ") || !strings.Contains(got[0], "duplicate-attribute") ||
+		!strings.HasPrefix(got[1], "5:1: ") || !strings.Contains(got[1], "unclosed-directive") {
+		t.Fatalf("errors = %q, want duplicate-attribute at 3:11 and unclosed-directive at 5:1", got)
+	}
+}
+
+func TestTreeLabelsResolveReferenceLinks(t *testing.T) {
+	for _, source := range []string{":x[[doc][r]]\n\n[r]: https://example.test\n", ":x[:y[[doc][r]]]\n\n[r]: https://example.test\n"} {
+		t.Run(source, func(t *testing.T) {
+			root, err := markup.Tree([]byte(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var urls []string
+			root.Walk(func(e *markup.Element) bool {
+				if e.Type == "link" {
+					urls = append(urls, e.Attrs["url"])
+				}
+				return true
+			})
+			if !slices.Equal(urls, []string{"https://example.test"}) {
+				t.Errorf("links = %q, want the reference destination", urls)
+			}
+		})
+	}
+}

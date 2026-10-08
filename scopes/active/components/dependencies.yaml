@@ -1,0 +1,86 @@
+phases:
+- id: syntax
+  name: Syntax, tree and fmt
+  tasks:
+  - id: CMP-001
+    files: [internal/markup/markup.go, internal/markup/attributes.go, internal/markup/tree.go, internal/markup/markup_test.go, internal/markup/tree_test.go]
+    depends_on: []
+  - id: CMP-002
+    files: [internal/markup/document.go, internal/markup/write.go, internal/markup/document_test.go, internal/markup/write_test.go]
+    depends_on: [CMP-001]
+  - id: CMP-012
+    files: [internal/cli/fmt.go, internal/cli/fmt_test.go, internal/cli/root.go, tests/fmt.md]
+    depends_on: [CMP-002]
+- id: components
+  name: Declarations, checks and expansion
+  tasks:
+  - id: CMP-003
+    files: [internal/components/declaration.go, internal/components/load.go, internal/components/builtin.go, internal/components/declaration_test.go, internal/components/load_test.go, internal/library/library.go, internal/templating/absent.go, internal/templating/absent_test.go, internal/transform/transform.go]
+    depends_on: []
+  - id: CMP-004
+    files: [internal/components/diagnostic.go, internal/components/check.go, internal/components/check_test.go]
+    depends_on: [CMP-001, CMP-003]
+  - id: CMP-005
+    files: [internal/components/expand.go, internal/components/expand_test.go]
+    depends_on: [CMP-002, CMP-004]
+  - id: CMP-006
+    files: [internal/components/include.go, internal/components/graph.go, internal/components/include_test.go]
+    depends_on: [CMP-005]
+  - id: CMP-011
+    files: [internal/library/corpus.go, internal/library/corpus_test.go, internal/pattern/read.go, internal/pattern/match.go, internal/pattern/directive_test.go, docs/query.md]
+    depends_on: [CMP-004]
+- id: pipeline
+  name: Tree pipeline and build switch
+  tasks:
+  - id: CMP-007
+    files: [internal/slots/slots.go, internal/slots/slots_test.go, internal/transform/transform.go, internal/transform/transform_test.go]
+    depends_on: [CMP-002]
+  - id: CMP-015
+    files: [internal/markup/markup.go, internal/markup/unwrap.go, internal/markup/unwrap_test.go, internal/markup/render.go, internal/markup/render_test.go, internal/markup/links.go, internal/transform/transform.go, internal/transform/links_test.go, internal/transform/references_test.go]
+    depends_on: [CMP-007]
+  - id: CMP-008
+    files: [internal/transform/transform.go, internal/transform/pipeline_test.go, internal/build/build.go, internal/build/head.go, internal/build/dependency_test.go, internal/cli/runtime.go, tests/components.md, tests/fixtures/components/, internal/cli/build_lint_test.go, tests/runtime.md]
+    depends_on: [CMP-006, CMP-015]
+- id: lint
+  name: Lint stages
+  tasks:
+  - id: CMP-009
+    files: [internal/lint/lint.go, internal/lint/lint_test.go, internal/lint/compile.go, internal/lint/module.go, internal/lint/components.go, internal/lint/components_test.go, internal/lint/templates.go, internal/lint/templates_test.go, internal/lint/std/components.md, internal/lint/std/templates.md, internal/lint/std/duplicates.md, internal/lint/std/metadata.md, internal/lint/std/similarity.md, internal/cli/lint.go]
+    depends_on: [CMP-008]
+  - id: CMP-010
+    files: [internal/lint/slots.go, internal/lint/rendered.go, internal/lint/rendered_test.go, internal/lint/std/slots.md, internal/lint/std/structure.md, internal/lint/std/references.md, internal/lint/compile.go, internal/cli/lint.go]
+    depends_on: [CMP-009]
+- id: removal
+  name: Legacy removal
+  tasks:
+  - id: CMP-016
+    files: [internal/templates/templates.go, internal/templates/templates_test.go, internal/transform/transform.go, internal/transform/compose_test.go, internal/markup/expand.go, internal/markup/expand_test.go, internal/markup/template.go, internal/library/corpus.go, internal/library/library.go, internal/build/build.go, internal/cli/runtime.go, internal/components/check.go, internal/components/check_test.go, tests/templates.md]
+    depends_on: [CMP-010, CMP-011]
+- id: migration
+  name: Docs and Tropos
+  tasks:
+  - id: CMP-013
+    files: [docs/components.md, docs/build.md, docs/lint-rules.md, README.md]
+    depends_on: [CMP-012, CMP-016]
+  - id: CMP-014
+    files: [/Users/srnnkls/projects/tropos/.henia/components/, /Users/srnnkls/projects/tropos/.henia/templates/, /Users/srnnkls/projects/tropos/.henia/.gitignore, /Users/srnnkls/projects/tropos/skills/*/SKILL.md, /Users/srnnkls/projects/tropos/henia.toml]
+    depends_on: [CMP-012, CMP-016]
+batches:
+- batch: 1
+  tasks: [CMP-001, CMP-003]
+- batch: 2
+  tasks: [CMP-002, CMP-004]
+- batch: 3
+  tasks: [CMP-005, CMP-007, CMP-012]
+- batch: 4
+  tasks: [CMP-006, CMP-011, CMP-015]
+- batch: 5
+  tasks: [CMP-008]
+- batch: 6
+  tasks: [CMP-009]
+- batch: 7
+  tasks: [CMP-010]
+- batch: 8
+  tasks: [CMP-016]
+- batch: 9
+  tasks: [CMP-013, CMP-014]

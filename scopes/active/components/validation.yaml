@@ -1,0 +1,128 @@
+metadata:
+  issue_type: Feature
+  created: 2026-10-08
+  questions_used: 6
+  questions_limit: 5
+  approach: "Typed directive components per design.md; span-preserving tree writer; staged lint; Tropos converts in the same pass"
+  source: scope
+ambiguity_scan:
+  scope:
+    status: clear
+    gaps: []
+  behavior:
+    status: clear
+    gaps: []
+  data_model:
+    status: clear
+    gaps: []
+  constraints:
+    status: clear
+    gaps: []
+  edge_cases:
+    status: clear
+    gaps: []
+  integration:
+    status: partial
+    gaps: ["Tropos working tree dirty on feat/head-templates (G-1)"]
+  terminology:
+    status: clear
+    gaps: []
+taxonomy_coverage:
+  scope: {status: covered, source: scope.md#goal}
+  behavior: {status: covered, source: design.md#pipeline}
+  data_model: {status: covered, source: design.md#declarations}
+  constraints: {status: covered, source: scope.md#constraints}
+  edge_cases: {status: covered, source: "scope.md#ad-4-diagnostic-ids-beyond-the-designs-table"}
+  integration: {status: covered, source: scope.md#key-files}
+  terminology: {status: covered, source: design.md#syntax}
+clarification_log:
+  - id: C001
+    area: scope
+    question: "What type of work is this?"
+    answer: "Feature"
+    impact_uncertainty: 2
+    integration: scope.md frontmatter
+  - id: C002
+    area: integration
+    question: "feat/components is cut from the initial commit; reset it to main?"
+    answer: "Reset to main (fast-forwarded to b24ebfe)"
+    impact_uncertainty: 6
+    integration: scope.md#context
+  - id: C003
+    area: integration
+    question: "How does the scope carry the Tropos migration?"
+    answer: "Tasks in this scope with Tropos paths; done-gate is the per-harness build diff"
+    impact_uncertainty: 6
+    integration: "scope.md#ad-8-tropos-baseline"
+  - id: C004
+    area: scope
+    question: "Include henia fmt?"
+    answer: "Include"
+    impact_uncertainty: 4
+    integration: "scope.md#ad-1-nesting-keeps-innermost-close-parsing"
+  - id: C005
+    area: data_model
+    question: "Where do slot sets such as workflow live?"
+    answer: "Drop sets for now; skills list the slots"
+    impact_uncertainty: 4
+    integration: "scope.md#ad-7-no-slot-sets"
+  - id: C006
+    area: scope
+    question: "Expose typed directive attributes in hq in this scope?"
+    answer: "Include"
+    impact_uncertainty: 3
+    integration: scope.md#functional-requirements
+  - id: C007
+    area: data_model
+    question: Built-in :related[] collides with Tropos :::related; which rule?
+    answer: 'Fold into built-in: related gains a container form rendering ## Related + body'
+    impact_uncertainty: 4
+    integration: scope.md#ad-5-built-in-names-and-the-head
+markers: []
+complexity_tracking: []
+gates:
+  simplicity: {status: n/a, reason: "Feature"}
+  anti_abstraction: {status: n/a, reason: "Feature"}
+  integration_first: {status: n/a, reason: "Feature"}
+deferred:
+  - "Slot sets (AD-7)"
+  - "Tropos mise.toml henia pin"
+design_context:
+  design_opted_in: true
+  alternatives_described: true
+  alternative_descriptions:
+    - "Text-level composition (Hugo shortcodes) — design.md#principles"
+    - "Go template includes and henia.layout — design.md#migration"
+readiness:
+  high_priority_areas_covered: true
+  success_criteria_measurable: true
+  scope_boundaries_clear: true
+  integration_points_identified: true
+  edge_cases_addressed: true
+code_style_check:
+  present: true
+  language: go
+  status: n/a
+  violations: []
+  adherence_notes: "Validation: go vet ./... && go build ./...; go test ./...; mise run test:integration"
+review_config:
+  reasoning_effort: high
+  reviewers: [sol, opus, astra]
+notes: "Round 1 (sol, opus, astra): 3 high folded (legacy removal order -> CMP-016, absent skill values -> AD-3, byte-identical constraint qualified), plus hq --canonical, list of, head and related rules, include selection, std stage coverage, file-level ids, CMP-007 split, gitignore. list `of:` element type chosen by orchestrator (sol, astra flagged needs decision). Round 2: opus absent printing + lint imports; astra render cache + field scoping; sol fixtures + rendered corpus; all folded, targeted re-review (sol) resolved F1-F6."
+review_gate:
+  status: passed
+  reviewers:
+    - peer-gpt6.1-sol
+    - claude-opus
+    - peer-gpt6-astra
+  reviewed_at: "2026-10-08T15:50:01Z"
+  rounds: 2
+  blocking_resolved: 7
+  re_review:
+    reviewer: peer-gpt6.1-sol
+    result: F1-F6 resolved
+    report_dir: .peer/scope-components/20261008T154859Z-8ebbc8/review
+  deferred_nits: []
+  report_dirs:
+    - .peer/scope-components/20261008T153323Z-1e5ee5/review
+    - .peer/scope-components/20261008T154109Z-a32422/review

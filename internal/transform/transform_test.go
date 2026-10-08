@@ -436,3 +436,13 @@ func TestTransformUnmappedReferencePassesThrough(t *testing.T) {
 		t.Errorf("Body =\n%s\nwant (unchanged):\n%s", result.Body, art.Body)
 	}
 }
+
+func TestExecuteTemplateKeepsRequired(t *testing.T) {
+	result, err := ExecuteTemplate(`{{if false}}{{required "x"}}{{end}}ok`, map[string]any{})
+	if err != nil {
+		t.Fatalf("ExecuteTemplate() error = %v", err)
+	}
+	if result != "ok" {
+		t.Errorf("ExecuteTemplate() = %q, want %q", result, "ok")
+	}
+}

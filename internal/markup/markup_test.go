@@ -18,6 +18,8 @@ func TestRender(t *testing.T) {
 		{"CRLF", ":::x\r\ntext\r\n:::\r\n", "xml", "<x>\r\ntext\r\n</x>\r\n"},
 		{"XML whitespace", ":x[y]{a=\"line\\nnext\\tcolumn\"}", "xml", "<x a=\"line&#xA;next&#x9;column\">y</x>"},
 		{"brackets", ":term[a [link](url) and `]`]{#main .one .two}", "xml", "<term id=\"main\" class=\"one two\">a [link](url) and `]`</term>"},
+		{"class key then shorthand", ":x[y]{class=a .b}", "xml", "<x class=\"a b\">y</x>"},
+		{"class shorthand then key", ":x[y]{.a class=b}", "xml", "<x class=\"a b\">y</x>"},
 		{"normalize", "::: note {key = \"val\"}\nx\n:::\nUse :term[x] {}.", "", ":::note{key=\"val\"}\nx\n:::\nUse :term[x]."},
 		{"escaped attributes", ":x[y]{msg=\"Use \\\"quotes\\\" & <tags>\"}", "xml", "<x msg=\"Use &#34;quotes&#34; &amp; &lt;tags&gt;\">y</x>"},
 		{"code", "```md\n:::x{bad=}\n:x[bad\n```\n\n`:x[y]`\n\n    :::x\n", "xml", "```md\n:::x{bad=}\n:x[bad\n```\n\n`:x[y]`\n\n    :::x\n"},
@@ -43,7 +45,7 @@ func TestRender(t *testing.T) {
 }
 
 func TestInvalidMarkup(t *testing.T) {
-	for _, input := range []string{":::x{attr=}\nx\n:::", ":x[y]{key=value with spaces}", ":::x\ntext", ":x[unclosed", ":::x{a=1 a=2}\n:::", ":x[y]{a=[1,2]}", ":outer[:inner[x]{a=}]", ":x[y]{a=\"\\b\"}"} {
+	for _, input := range []string{":::x{attr=}\nx\n:::", ":x[y]{key=\"unclosed}", ":::x\ntext", ":x[unclosed", ":::x{a=1 a=2}\n:::", ":x[y]{a=[1,2]}", ":outer[:inner[x]{a=}]", ":x[y]{a=\"\\b\"}"} {
 		t.Run(input, func(t *testing.T) {
 			_, err := markup.Render("intro\n\n"+input, "xml")
 			var location *markup.Error
@@ -77,4 +79,36 @@ func FuzzRender(f *testing.F) {
 			t.Fatalf("normalization not idempotent: %q -> %q (%v)", normalized, again, err)
 		}
 	})
+}
+
+func TestLeafInsideContainerKeepsItsClose(t *testing.T) {
+	got, err := markup.Render(":::x\n::y[a]\n:::\n", "xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "<x>\n<y>a</y>\n</x>\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestInvalidLeafAttributes(t *testing.T) {
+	for _, input := range []string{"::x{a=}", "::x{k=1 k=2 bad=}"} {
+		t.Run(input, func(t *testing.T) {
+			_, err := markup.Render("intro\n\n"+input+"\n", "xml")
+			var location *markup.Error
+			if !errors.As(err, &location) || location.Line != 3 {
+				t.Fatalf("expected line 3 diagnostic, got %v", err)
+			}
+		})
+	}
+}
+
+func TestRenderUnlabeledLeaf(t *testing.T) {
+	got, err := markup.Render("::body\n", "xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "<body></body>\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
 }

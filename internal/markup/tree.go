@@ -10,6 +10,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 )
 
@@ -32,8 +33,10 @@ type Element struct {
 // Tree places extra elements under the innermost block that spans them. A
 // directive error still yields the tree.
 func Tree(source []byte, extra ...*Element) (*Element, error) {
-	doc, err := run(documentParser, source)
-	b := &builder{source: source}
+	pc := parser.NewContext()
+	doc, err := runContext(documentParser, source, pc)
+	b := &builder{source: source, references: pc.References()}
+	b.failures, _ = err.(errorList)
 	root := b.file()
 	b.blocks(root, doc, true)
 	b.finish(root)
@@ -41,7 +44,10 @@ func Tree(source []byte, extra ...*Element) (*Element, error) {
 		place(root, e)
 	}
 	b.finish(root)
-	return root, err
+	if len(b.failures) == 0 {
+		return root, nil
+	}
+	return root, b.failures
 }
 
 func PlainTree(source []byte) *Element {
@@ -99,9 +105,11 @@ func (e *Element) add(child *Element) {
 }
 
 type builder struct {
-	source []byte
-	body   string
-	lines  []int
+	source     []byte
+	body       string
+	lines      []int
+	failures   errorList
+	references []parser.Reference
 }
 
 func (b *builder) file() *Element {
@@ -171,7 +179,11 @@ func (b *builder) block(node ast.Node) *Element {
 		for _, a := range v.attrs {
 			e.Attrs[a.name] = a.value
 		}
-		b.blocks(e, v, true)
+		if v.leaf() {
+			b.inlines(e, v)
+		} else {
+			b.blocks(e, v, true)
+		}
 		return e
 	default:
 		return nil
@@ -228,6 +240,7 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 			}
 			e.Start, e.End = v.open.start, v.close.stop
 			parent.add(e)
+			b.inlines(e, b.label(v.content))
 			return ast.WalkSkipChildren, nil
 		default:
 			return ast.WalkContinue, nil
@@ -236,6 +249,25 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 		parent.add(e)
 		return ast.WalkSkipChildren, nil
 	})
+}
+
+func (b *builder) label(s span) ast.Node {
+	stop := s.stop
+	if end := bytes.IndexByte(b.source[s.start:s.stop], '\n'); end >= 0 {
+		stop = s.start + end + 1
+	}
+	r := text.NewReader(b.source[:s.stop])
+	r.SetPosition(0, text.NewSegment(s.start, stop))
+	pc := parser.NewContext()
+	for _, ref := range b.references {
+		pc.AddReference(ref)
+	}
+	doc := inlineDirectiveParser.Parse(r, parser.WithContext(pc))
+	list, _ := pc.Get(failure).(errorList)
+	for _, e := range list {
+		b.failures = b.failures.add(e)
+	}
+	return doc
 }
 
 func extent(node ast.Node) (int, int) {

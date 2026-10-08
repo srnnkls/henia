@@ -21,6 +21,7 @@ import (
 	"github.com/srnnkls/henia/internal/profile"
 	"github.com/srnnkls/henia/internal/reference"
 	"github.com/srnnkls/henia/internal/slots"
+	"github.com/srnnkls/henia/internal/templating"
 )
 
 const HeadBlock = markup.HeadBlock
@@ -46,8 +47,6 @@ type Transformer struct {
 	Templates    map[string]string
 }
 
-const absent = "henia_absent"
-
 func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
 	return Compose(content, vars, nil, "")
 }
@@ -55,7 +54,7 @@ func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
 // Compose executes content with the shared templates in scope. With a layout,
 // content may only define blocks, and the layout template renders them.
 func Compose[T any](content string, vars map[string]T, shared map[string]string, layout string) (string, error) {
-	tmpl := template.New("content").Funcs(template.FuncMap{absent: blankAbsent, "required": requiredBlock})
+	tmpl := template.New("content").Funcs(templating.Funcs).Funcs(template.FuncMap{"required": requiredBlock})
 	for _, name := range slices.Sorted(maps.Keys(shared)) {
 		if _, err := tmpl.New(name).Parse(shared[name]); err != nil {
 			return "", fmt.Errorf("parse template %s: %w", name, err)
@@ -64,11 +63,7 @@ func Compose[T any](content string, vars map[string]T, shared map[string]string,
 	if _, err := tmpl.Parse(content); err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
 	}
-	for _, t := range tmpl.Templates() {
-		if t.Tree != nil {
-			printAbsentBlank(t.Tree.Root)
-		}
-	}
+	templating.BlankAbsent(tmpl)
 	entry := tmpl
 	if layout != "" {
 		if !blocksOnly(tmpl.Tree.Root) {
@@ -102,41 +97,6 @@ func blocksOnly(root *parse.ListNode) bool {
 		}
 	}
 	return true
-}
-
-func blankAbsent(v any) any {
-	if v == nil {
-		return ""
-	}
-	return v
-}
-
-func printAbsentBlank(node parse.Node) {
-	switch n := node.(type) {
-	case *parse.ListNode:
-		if n != nil {
-			for _, child := range n.Nodes {
-				printAbsentBlank(child)
-			}
-		}
-	case *parse.ActionNode:
-		if len(n.Pipe.Decl) == 0 {
-			n.Pipe.Cmds = append(n.Pipe.Cmds, &parse.CommandNode{
-				NodeType: parse.NodeCommand,
-				Pos:      n.Pos,
-				Args:     []parse.Node{parse.NewIdentifier(absent).SetPos(n.Pos)},
-			})
-		}
-	case *parse.IfNode:
-		printAbsentBlank(n.List)
-		printAbsentBlank(n.ElseList)
-	case *parse.RangeNode:
-		printAbsentBlank(n.List)
-		printAbsentBlank(n.ElseList)
-	case *parse.WithNode:
-		printAbsentBlank(n.List)
-		printAbsentBlank(n.ElseList)
-	}
 }
 
 func ApplyMappings(fm map[string]any, mappings map[string]string) map[string]any {
