@@ -171,7 +171,7 @@ func (b *builder) block(node ast.Node) *Element {
 		for _, a := range v.attrs {
 			e.Attrs[a.name] = a.value
 		}
-		b.blocks(e, v, false)
+		b.blocks(e, v, true)
 		return e
 	default:
 		return nil

@@ -2,6 +2,7 @@ package markup_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -74,6 +75,22 @@ func TestTreeAnchorsMatchSections(t *testing.T) {
 		if anchors[i] != s.Anchor {
 			t.Errorf("section %d: tree %q, Sections %q", i, anchors[i], s.Anchor)
 		}
+	}
+}
+
+func TestTreeSectionsInsideDirectives(t *testing.T) {
+	source := []byte("# Skill\n\n:::note\n## Routes\n\nGo.\n\n## Slots\n\nNone.\n:::\n\n## Detail\n\nMore.\n")
+	root, _ := markup.Tree(source)
+	var got []string
+	root.Walk(func(e *markup.Element) bool {
+		if e.Type == "section" {
+			got = append(got, e.Attrs["id"]+"<"+e.Parent.Type)
+		}
+		return true
+	})
+	want := []string{"skill<file", "routes<directive", "slots<directive", "detail<section"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 
