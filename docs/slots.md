@@ -97,7 +97,7 @@ henia:
 
 | Key | Meaning |
 |---|---|
-| `section` | offer one section, read as `henia show <package>:<skill>#<section>` |
+| `section` | offer one section, read as `henia show '<package>:<skill>#<section>'` |
 | `command`, `text`, `path` | the value for a slot of that value type |
 | `priority` | `force`, `normal` or `fallback`, overriding the one the tier implies |
 
@@ -132,26 +132,34 @@ Language guidance and checks:
 ```
 
 When the skill renders, the directive becomes a preload of
-`henia slots code.style code.validation`. `henia show` runs it and prints the
-providers in place:
+`henia slots --markdown code.style code.validation`. `henia show` resolves it
+in-process and lists each provider as the pointer it offers. A skill or section
+renders as the command that reads it, a path as the address of its file, and a
+command or text as itself:
 
-````console
-$ henia show code#runtime-context
-## Runtime Context
+```console
+$ henia show code
 …
-Slot providers:
+Language guidance and checks:
 
-
-```text
-$ henia slots code.style code.validation test.conventions review.criteria
-code.style.go	project	henia show project:house-go
-code.validation.go	project	henia show project:house-go	go test ./...
-code.style.bash	dependency	henia show loqui:loqui
-…
-test.conventions	none	-
-review.criteria	none	-
+- `code.style.go`: `henia show project:house-go`
+- `code.style.bash`: `henia show 'loqui:loqui#bash'`
+- `code.validation.go`: `go test ./...`
 ```
-````
+
+A pointer costs one line however large the provider is. A slot whose content
+the skill always needs opts into it with `{.inline}`:
+
+```md
+Commit messages follow :slot[git.style]{.inline}.
+
+:slot[git.commits]{.inline}
+```
+
+An inlined slot renders each provider's content: a skill or section body, a
+command block, a text or a file. A one-line result inside a sentence stays in
+the sentence. A slot without a provider renders nothing, and a problem renders
+as a `henia:` line.
 
 `henia build` projects the directive into the harness's preload syntax. A
 built skill therefore resolves its providers in whichever project it runs.
@@ -223,6 +231,12 @@ given, `--explain` covers every slot.
 `--json` emits the same data. That covers `declarations`, `providers` (with
 `ref`, `status`, `priority`, `explicit` and `shadowed_by`), `consumers` and
 `problems`.
+
+`--markdown` and `--inline` print what a `:slot[…]` directive renders: pointer
+items, or the providers' content.
+
+`henia lint` warns `unused-slot` on a declared slot that no scanned skill
+applies, directly, through a sub-slot or through an enclosing slot.
 
 ## Lineage
 

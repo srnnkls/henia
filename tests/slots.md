@@ -54,7 +54,7 @@ Outside the project only the global packages count.
 $ slots "$T" code.style
 code.style global henia show acme:style
 code.style.go global henia show tropos:loqui
-code.style.python global henia show tropos:loqui#python
+code.style.python global henia show 'tropos:loqui#python'
 exit 0
 ```
 
@@ -120,7 +120,7 @@ $ skill "$P/.henia/skills/effect" 'henia:\n  provides:\n    code.style.python: {
 > slots "$P" code.style.python
 code.style.python project henia show project:effect
 code.style global henia show acme:style
-code.style.python global henia show tropos:loqui#python
+code.style.python global henia show 'tropos:loqui#python'
 exit 0
 ```
 
@@ -150,7 +150,7 @@ exit 1
 
 ```scrut
 $ henia slots git.commits --check 2>&1
-Error: --check takes no slots, --explain or --json
+Error: --check takes no slots, --explain, --json, --markdown or --inline
 [1]
 ```
 
@@ -163,7 +163,7 @@ its sub-slots.
 $ rm -rf "$G/acme/skills/bad" && mk "$P/henia.toml" '[slots."code.style"]\ndisable = ["acme:style"]\n'
 > slots "$P" code.style.python
 code.style.python project henia show project:effect
-code.style.python global henia show tropos:loqui#python
+code.style.python global henia show 'tropos:loqui#python'
 exit 0
 ```
 
@@ -200,20 +200,16 @@ $ (cd "$P" && henia slots --json review.criteria) | jq -c '.providers[] | [.ref,
 A `:slot[...]` directive in a skill body applies slots. `henia show` and
 `henia build` render it as a preload of `henia slots`.
 
-````scrut
+```scrut
 $ skill "$G/tropos/skills/review" 'henia:\n  slots:\n    review.lenses:\n' '\nCriteria:\n\n:slot[review.criteria review.lenses]\n'
 > (cd "$P" && henia show tropos:review) | sed "s|$T/||g" | tr '\t' ' '
 # review
 
 Criteria:
 
-
-```text
-$ henia slots review.criteria review.lenses
-review.criteria project henia show project:criteria
-review.lenses none -
+- `review.criteria`: `henia show project:criteria`
+- `review.lenses`: no provider
 ```
-````
 
 ```scrut
 $ slots "$P" --explain review.criteria

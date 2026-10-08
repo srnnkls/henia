@@ -108,6 +108,8 @@ Compared with a variable:
 - `(contains ?x)` holds it as a substring, ignoring case.
 - `(covers ?x)` is it or a dotted prefix of it: `code.style` covers
   `code.style.go`.
+- `(within ?x)` is it or a dotted extension of it: `code.style.go` lies within
+  `code.style`.
 - `(near ?t 0.6)` shares at least that Jaccard share of three-word shingles.
 - `(overlap ?t 0.9)` shares at least that share of the shorter text's shingles.
 - `(similar ?t 0.85)` has at least that cosine similarity under a local
@@ -143,7 +145,7 @@ pattern  := "(" type item* ")" quant? capture?  ; captures the node
           | "[" pattern+ "]" quant? capture?  ; alternatives
 value    := "string" | word | number | range | /regexp/ | ?variable
           | $param | "(" "not" value ")" | "(" comparison (number | $param) ")"
-          | "(" ("after" | "before" | "contains" | "covers") ?variable ")"
+          | "(" ("after" | "before" | "contains" | "covers" | "within") ?variable ")"
           | "(" ("near" | "overlap" | "similar") ?variable threshold capture? ")"
 comparison := ">" | ">=" | "<" | "<=" | "older"
 item     := :key value capture? | pattern | ">" pattern | "."  ; captures the value

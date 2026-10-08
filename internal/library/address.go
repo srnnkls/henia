@@ -77,3 +77,12 @@ func Address(skill, path string) string {
 	}
 	return skill + "." + strings.Join(segments, ".")
 }
+
+var shellSafe = regexp.MustCompile(`^[A-Za-z0-9._:/-]+$`)
+
+func ShowCommand(address string) string {
+	if shellSafe.MatchString(address) {
+		return "henia show " + address
+	}
+	return "henia show '" + strings.ReplaceAll(address, "'", `'\''`) + "'"
+}

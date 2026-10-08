@@ -262,6 +262,7 @@ func offer(slot string, value any, implied Priority) (Offer, error) {
 
 type Application struct {
 	Slots      []string
+	Inline     bool
 	Start, End int
 }
 
@@ -273,7 +274,7 @@ func Applications(body string) []Application {
 	root.Walk(func(e *markup.Element) bool {
 		if e.Type == "directive" && e.Attrs["name"] == "slot" && e.Attrs["inline"] == "true" {
 			if match := applicationText.FindStringSubmatch(e.Text); match != nil && !strings.Contains(match[1], "{{") {
-				found = append(found, Application{Slots: strings.Fields(match[1]), Start: e.Start, End: e.End})
+				found = append(found, Application{Slots: strings.Fields(match[1]), Inline: slices.Contains(strings.Fields(e.Attrs["class"]), "inline"), Start: e.Start, End: e.End})
 			}
 		}
 		return true
@@ -281,18 +282,22 @@ func Applications(body string) []Application {
 	return found
 }
 
-func Preload(slots []string) string {
-	return "!`henia slots " + strings.Join(slots, " ") + "`"
+func Preload(a Application) string {
+	mode := "--markdown"
+	if a.Inline {
+		mode = "--inline"
+	}
+	return "!`henia slots " + mode + " " + strings.Join(a.Slots, " ") + "`"
 }
 
-func Expand(body string, render func(slots []string) string) string {
+func Expand(body string, render func(Application) string) string {
 	if !strings.Contains(body, ":slot[") {
 		return body
 	}
 	applications := Applications(body)
 	for i := len(applications) - 1; i >= 0; i-- {
 		a := applications[i]
-		body = body[:a.Start] + render(a.Slots) + body[a.End:]
+		body = body[:a.Start] + render(a) + body[a.End:]
 	}
 	return body
 }

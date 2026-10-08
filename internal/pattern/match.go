@@ -952,6 +952,8 @@ func (m *matcher) satisfies(c constraint, bound string) (bool, float64) {
 		return strings.Contains(strings.ToLower(c.value), strings.ToLower(bound)), 0
 	case "covers":
 		return bound == c.value || strings.HasPrefix(bound, c.value+"."), 0
+	case "within":
+		return c.value == bound || strings.HasPrefix(c.value, bound+"."), 0
 	case "near", "overlap", "similar":
 		threshold := c.threshold
 		if c.limit != "" {

@@ -18,7 +18,7 @@ import (
 
 func newSlotsCommand() *cobra.Command {
 	var flags runtimeFlags
-	var check, explain, asJSON bool
+	var check, explain, asJSON, markdown, inline bool
 	cmd := &cobra.Command{
 		Use:   "slots [slot...]",
 		Short: "Resolve the providers of skill slots across the library",
@@ -32,13 +32,17 @@ then problem rows whose tier is invalid, unknown, undeclared or conflict.
 --check prints only the problem rows of every provider and fails when any
 exist. --explain shows every provider of the requested slots with its status,
 priority and origin, the provider that shadows it and the declaration that
-types it, or of every slot without any; --json emits the same as JSON.`,
+types it, or of every slot without any; --json emits the same as JSON.
+--markdown lists the providers as Markdown items naming the command or value
+each one points to, and --inline prints their content instead: a skill or
+section body, a command, a text or a file. A :slot[...] directive renders as
+--markdown, or as --inline when it carries {.inline}.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if check && (len(args) > 0 || explain || asJSON) {
-				return fmt.Errorf("--check takes no slots, --explain or --json")
+			if check && (len(args) > 0 || explain || asJSON || markdown || inline) {
+				return fmt.Errorf("--check takes no slots, --explain, --json, --markdown or --inline")
 			}
-			if explain && asJSON {
-				return fmt.Errorf("--explain and --json are exclusive")
+			if moreThanOne(explain, asJSON, markdown, inline) {
+				return fmt.Errorf("--explain, --json, --markdown and --inline are exclusive")
 			}
 			if !check && !explain && !asJSON && len(args) == 0 {
 				return nil
@@ -49,6 +53,11 @@ types it, or of every slot without any; --json emits the same as JSON.`,
 				return err
 			}
 			switch {
+			case markdown || inline:
+				x := newResolver(lib, newRenderer(detectHarness(flags.harness), lib), flags.project)
+				x.resolution = resolution
+				fmt.Fprint(cmd.OutOrStdout(), x.slots(inline, args))
+				return nil
 			case explain:
 				return resolution.Explain(cmd.OutOrStdout(), args)
 			case asJSON:
@@ -71,6 +80,8 @@ types it, or of every slot without any; --json emits the same as JSON.`,
 	flags.register(cmd)
 	cmd.Flags().BoolVar(&check, "check", false, "Report problems of every provider and fail when any exist")
 	cmd.Flags().BoolVar(&explain, "explain", false, "Show why each provider of the requested slots is selected, shadowed, disabled or unknown")
+	cmd.Flags().BoolVar(&markdown, "markdown", false, "List the providers of the requested slots as Markdown pointers")
+	cmd.Flags().BoolVar(&inline, "inline", false, "Print the content of the providers of the requested slots")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "Emit declarations, providers and problems of the requested slots, or of all, as JSON")
 	return cmd
 }
@@ -97,4 +108,14 @@ func projectRoot(cmd *cobra.Command) string {
 	}
 	wd, _ := os.Getwd()
 	return wd
+}
+
+func moreThanOne(flags ...bool) bool {
+	n := 0
+	for _, f := range flags {
+		if f {
+			n++
+		}
+	}
+	return n > 1
 }

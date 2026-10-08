@@ -3,8 +3,8 @@
 Codex lists only the projected entry skill; the library skill it references is
 read through `henia show`. A library skill's preload runs inside `henia show`.
 Henia's sandbox cannot nest
-inside Codex's, so Codex rules let `henia show` and `henia preload` run outside
-it; Henia then sandboxes each preload itself.
+inside Codex's, so Codex rules let `henia show`, `henia slots`, `henia context`
+and `henia preload` run outside it; Henia then sandboxes each preload itself.
 Skipped without `codex` or Codex credentials.
 
 ```scrut

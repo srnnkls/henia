@@ -36,6 +36,8 @@ type Context struct {
 	Package string
 	Tier    string
 	Caller  string
+	// Resolve renders a command in-process as Markdown; ok reports whether it did.
+	Resolve func(command string) (markdown string, ok bool)
 }
 
 type Runner struct {
@@ -99,6 +101,22 @@ func NewRunner(user, project Settings) (*Runner, error) {
 }
 
 func (r *Runner) Expand(ctx context.Context, body string, c Context) string {
+	return splice(body, func(p Preload) (string, bool, bool) {
+		if markdown, ok := c.resolve(p.Command); ok {
+			return markdown, true, true
+		}
+		return fence(p.Indent, p.Command, r.Run(ctx, p.Command, c)), false, true
+	})
+}
+
+func Substitute(body string, resolve func(command string) (string, bool)) string {
+	return splice(body, func(p Preload) (string, bool, bool) {
+		markdown, ok := resolve(p.Command)
+		return markdown, true, ok
+	})
+}
+
+func splice(body string, replace func(Preload) (text string, markdown, ok bool)) string {
 	preloads := Find([]byte(body))
 	if len(preloads) == 0 {
 		return body
@@ -106,33 +124,88 @@ func (r *Runner) Expand(ctx context.Context, body string, c Context) string {
 	var b strings.Builder
 	last := 0
 	for _, p := range preloads {
+		text, markdown, ok := replace(p)
+		if !ok {
+			b.WriteString(body[last:p.Stop])
+			last = p.Stop
+			continue
+		}
+		if span, isSpan := inlineSpan(text); markdown && !p.Block && isSpan && !ownLine(body, p) {
+			b.WriteString(body[last:p.Start] + span)
+			last = p.Stop
+			continue
+		}
+		if markdown {
+			text = indent(p.Indent, text)
+		}
 		segment := body[last:p.Start]
 		if !p.Block {
 			segment = strings.TrimRight(segment, " \t")
 		}
 		b.WriteString(segment)
-		output := r.Run(ctx, p.Command, c)
 		last = p.Stop
-		if p.Block {
-			b.WriteString(fence(p.Indent, p.Command, output))
-			continue
+		if !p.Block {
+			if text != "" && b.Len() > 0 && !strings.HasSuffix(b.String(), "\n") {
+				b.WriteString("\n")
+			}
+			for last < len(body) && (body[last] == ' ' || body[last] == '\t') {
+				last++
+			}
+			if last < len(body) && body[last] == '\n' {
+				last++
+			} else if last < len(body) && text != "" {
+				text += p.Indent
+			}
 		}
-		b.WriteString("\n" + fence(p.Indent, p.Command, output))
-		for last < len(body) && (body[last] == ' ' || body[last] == '\t') {
+		b.WriteString(text)
+		if text == "" && strings.HasSuffix(b.String(), "\n\n") && strings.HasPrefix(body[last:], "\n") {
 			last++
-		}
-		if last < len(body) && body[last] == '\n' {
-			last++
-		} else if last < len(body) {
-			b.WriteString(p.Indent)
 		}
 	}
 	b.WriteString(body[last:])
 	return b.String()
 }
 
+func ownLine(body string, p Preload) bool {
+	before := strings.TrimRight(body[:p.Start], " \t")
+	after := strings.TrimLeft(body[p.Stop:], " \t")
+	return (before == "" || strings.HasSuffix(before, "\n")) && (after == "" || strings.HasPrefix(after, "\n"))
+}
+
+func inlineSpan(markdown string) (string, bool) {
+	line := strings.TrimSpace(markdown)
+	if line == "" || strings.Contains(line, "\n") || strings.HasPrefix(line, "```") || strings.HasPrefix(line, "#") {
+		return "", false
+	}
+	return strings.TrimPrefix(line, "- "), true
+}
+
 func (r *Runner) Block(ctx context.Context, command string, c Context) string {
+	if markdown, ok := c.resolve(command); ok {
+		return indent("", markdown)
+	}
 	return Show(command, r.Run(ctx, command, c))
+}
+
+func (c Context) resolve(command string) (string, bool) {
+	if c.Resolve == nil {
+		return "", false
+	}
+	return c.Resolve(command)
+}
+
+func indent(prefix, markdown string) string {
+	if strings.TrimSpace(markdown) == "" {
+		return ""
+	}
+	var b strings.Builder
+	for line := range strings.SplitSeq(strings.TrimRight(markdown, "\n"), "\n") {
+		if line != "" {
+			b.WriteString(prefix)
+		}
+		b.WriteString(line + "\n")
+	}
+	return b.String()
 }
 
 func Show(command, output string) string { return fence("", command, output) }

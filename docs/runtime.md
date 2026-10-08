@@ -91,7 +91,8 @@ A skill's full name is `<package>:<name>`, and the project's own package is
 else a global one. Two packages of the same rank that define one name make it
 ambiguous, and Henia asks for the qualified name. Same-named skills never
 replace each other silently. `<skill>#<section>` addresses a heading anchor,
-as in `henia show tropos:git#commits`.
+as in `henia show 'tropos:git#commits'`. Quote it in a shell: zsh treats `#` as
+a glob operator. Every address Henia prints comes quoted when it needs it.
 
 A dependency hides a global package of the same name, so a project that pins
 its own Tropos reads only that one.
@@ -269,11 +270,11 @@ and prints each capture with an address `show` reads. See
 references. It never repeats the skill's own text:
 
 ```console
-$ henia context changelog | head -4
-Skill git: Modern git workflows plus dispatched operations (rebase strategy analysis). Use when managing branches, structuring commits, choosing development strategies, or planning a rebase.
-  git#runtime-context  Runtime Context
-git#git-skill  Git Skill
-  git#auto-detect-rules  Auto-Detect Rules
+$ henia context code | head -4
+Skill implement: Strict delegated RED → GREEN → review workflow. Use only when explicitly invoked for a task, scope, verification, or debugging.
+- Pre-loaded Context: `henia show 'implement#pre-loaded-context'`
+- Strict Implementation: `henia show 'implement#strict-implementation'`
+  - Routes: `henia show 'implement#routes'`
 ```
 
 Renders are cached by content under `$XDG_CACHE_HOME/henia/render`; preload
@@ -402,17 +403,26 @@ henia: blocked by henia/not-a-preload: changelog declares no such preload
 ```
 ````
 
-Claude runs the rewritten preload natively in `!` syntax, and the build adds
-`Bash(henia preload *)` to a declared `allowed-tools`. Harnesses without native
-preloads get a run-first line instead.
+Henia's own read commands stay as they are, with no wrapper:
+`henia slots --markdown|--inline …`, `henia show <skill> --head|--toc` and
+`henia context <skill>`. They are what `:slot[…]`, `:contents[]`, `:related[]`
+and a hybrid head render to.
+
+Claude runs preloads natively in `!` syntax, and the build adds the matching
+`Bash(henia preload *)`, `Bash(henia slots *)`, `Bash(henia show *)` or
+`Bash(henia context *)` to a declared `allowed-tools`. Harnesses without native
+preloads get a run-first line instead, or "the output of" a command that sits
+inside a sentence. `henia show` resolves all three cases itself.
 
 macOS cannot nest one sandbox inside another, so Henia's sandbox cannot start
-inside Codex's. Let Codex run `henia show` and `henia preload` outside its
-sandbox, and Henia sandboxes each preload itself:
+inside Codex's. Let Codex run Henia's commands outside its sandbox, and Henia
+sandboxes each preload itself:
 
 ```
 # ~/.codex/rules/henia.rules
 prefix_rule(pattern=["henia", "show"], decision="allow")
+prefix_rule(pattern=["henia", "slots"], decision="allow")
+prefix_rule(pattern=["henia", "context"], decision="allow")
 prefix_rule(pattern=["henia", "preload"], decision="allow")
 ```
 
@@ -505,16 +515,17 @@ single preload:
 ```console
 $ sed -n '/^---$/,$p' build/claude/skills/release/SKILL.md
 ---
-allowed-tools: Bash(henia preload *)
+allowed-tools: Bash(henia show *)
 description: Cut a release. Use when tagging a version or publishing notes.
 name: release
 ---
 
-!`henia preload --skill release -- 'henia show release --head'`
+!`henia show release --head`
 ```
 
 Elsewhere the head holds the rendered `:::static` blocks, then run-first lines
-for `henia show <skill> --toc` and `henia context <skill>`:
+for `henia show <skill> --toc` and `henia context <skill>` unless the blocks
+place them:
 
 ```console
 $ sed -n '/^## Routes/,$p' build/codex/skills/release/SKILL.md
@@ -523,25 +534,40 @@ $ sed -n '/^## Routes/,$p' build/codex/skills/release/SKILL.md
 | Argument | Action |
 |---|---|
 | `notes` | Draft notes with `henia show changelog` |
-| `tag <version>` | Tag after the checks in Checklist (`henia show release#checklist`) pass |
+| `tag <version>` | Tag after the checks in Checklist (`henia show 'release#checklist'`) pass |
 
+run first: `henia show release --toc`
 
-run first: `henia preload --skill release -- 'henia show release --toc'`
-
-run first: `henia preload --skill release -- 'henia context release'`
+run first: `henia context release`
 ```
 
 `henia show <skill> --head` prints the `:::static` blocks, the skill's contents
-as `henia show <skill>#<section>` addresses, its resources and the contents of
+as `henia show '<skill>#<section>'` commands, its resources and the contents of
 the skills it references. `--toc` prints only the contents:
 
 ```console
 $ henia show release --toc
 Read the sections of release as the task needs them:
 
-release#release  Release
-  release#routes  Routes
-  release#checklist  Checklist
+- Release: `henia show 'release#release'`
+  - Routes: `henia show 'release#routes'`
+  - Checklist: `henia show 'release#checklist'`
+```
+
+A skill places these lists itself with the `:contents[]` and `:related[]`
+directives, and `--head` then appends neither. A skill name in the brackets,
+as in `:contents[tropos:git]`, lists that skill instead:
+
+```md
+:::static
+## Routes
+
+…
+
+Sections:
+
+:contents[]
+:::
 ```
 
 Both report a harness copy that `henia install` wrote from an older revision of
@@ -552,10 +578,10 @@ Relative links to a skill's resources and to other skills render as the
 `henia show` commands that read them, wherever the files are not beside the
 text: in heads, in `henia show` output, and in static skills that link into a
 skill this harness serves dynamically. The `[Checklist](#checklist)` link above
-became `henia show release#checklist`. In the same way,
+became `henia show 'release#checklist'`. In the same way,
 `[review](reference/review.md)` in `scope` becomes
 ``review (`henia show scope/reference/review.md`)``, and `../git/SKILL.md#slots`
-becomes `henia show git#slots`.
+becomes `henia show 'git#slots'`.
 
 ### Catalog
 

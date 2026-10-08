@@ -97,7 +97,7 @@ func Parse(body string) []Reference {
 	return refs
 }
 
-var shown = regexp.MustCompile("`henia show ([a-z0-9][a-z0-9._:-]*)(?:/([^`#\\s]+))?(?:#([^`\\s]+))?")
+var shown = regexp.MustCompile("`henia show '?([a-z0-9][a-z0-9._:-]*)(?:/([^`#'\\s]+))?(?:#([^`'\\s]+))?'?")
 
 func Skills(body string) []Reference {
 	var refs []Reference

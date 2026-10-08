@@ -2,9 +2,11 @@ package transform
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"maps"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"text/template"
@@ -199,6 +201,9 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 		return nil, fmt.Errorf("transform body: %w", err)
 	}
 	body = slots.Expand(body, slots.Preload)
+	if art.Type == artifact.TypeSkill {
+		body = expandListings(body, art.Name)
+	}
 	full, head := markup.Unwrap(body, StaticBlock)
 	if t.Head {
 		body = strings.Join(head, "\n")
@@ -272,7 +277,7 @@ func (t *Transformer) renderReferences(body, self string) string {
 				replacement = "`" + mapped + "`"
 			}
 		} else if ref.Type == reference.TypeSkill && t.Served[ref.Name] && ref.Name != self {
-			replacement = "`henia show " + ref.Name + "`"
+			replacement = "`" + library.ShowCommand(ref.Name) + "`"
 		} else {
 			refConfig, ok := t.References[ref.Type.String()]
 			if ok {
@@ -345,7 +350,7 @@ func (t *Transformer) renderLinks(body, skill string) string {
 		if !ok {
 			continue
 		}
-		command := "`henia show " + target + "`"
+		command := "`" + library.ShowCommand(target) + "`"
 		text := strings.Trim(link.Text, "`*_~")
 		replacement := link.Text + " (" + command + ")"
 		file := strings.SplitN(link.Dest, "#", 2)[0]
@@ -392,4 +397,38 @@ func (t *Transformer) libraryTarget(skill, dest string) (string, bool) {
 		return owner + "." + module + suffix, true
 	}
 	return owner + "/" + rest + suffix, true
+}
+
+var listings = map[string]func(skill string) string{
+	"contents": func(skill string) string { return "!`henia show " + skill + " --toc`" },
+	"related":  func(skill string) string { return "!`henia context " + skill + "`" },
+}
+
+var listingText = regexp.MustCompile(`^:[a-z]+\[([^\]]*)\]`)
+
+func expandListings(body, self string) string {
+	if !strings.Contains(body, ":contents[") && !strings.Contains(body, ":related[") {
+		return body
+	}
+	root, _ := markup.Tree([]byte(body))
+	type listing struct {
+		start, end int
+		text       string
+	}
+	var found []listing
+	root.Walk(func(e *markup.Element) bool {
+		render, ok := listings[e.Attrs["name"]]
+		if e.Type != "directive" || !ok || e.Attrs["inline"] != "true" {
+			return true
+		}
+		if m := listingText.FindStringSubmatch(e.Text); m != nil {
+			skill := cmp.Or(strings.TrimSpace(m[1]), self)
+			found = append(found, listing{e.Start, e.End, render(skill)})
+		}
+		return true
+	})
+	for i := len(found) - 1; i >= 0; i-- {
+		body = body[:found[i].start] + found[i].text + body[found[i].end:]
+	}
+	return body
 }

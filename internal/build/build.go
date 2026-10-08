@@ -310,26 +310,25 @@ func nativePreloads(h henia.Harness) bool {
 
 func projectPreloads(art *artifact.Artifact, h henia.Harness) {
 	native := nativePreloads(h)
-	body := preload.Project(art.Body, art.Name, native)
-	if body == art.Body {
-		return
-	}
-	art.Body = body
+	needed := preload.Tools(art.Body)
+	art.Body = preload.Project(art.Body, art.Name, native)
 	if !native {
 		return
 	}
-	switch tools := art.Frontmatter["allowed-tools"].(type) {
-	case nil:
-		if profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
-			art.Frontmatter["allowed-tools"] = preload.RunnerTool
-		}
-	case string:
-		if tools != "" && !strings.Contains(tools, preload.RunnerTool) {
-			art.Frontmatter["allowed-tools"] = tools + ", " + preload.RunnerTool
-		}
-	case []any:
-		if !slices.Contains(tools, any(preload.RunnerTool)) {
-			art.Frontmatter["allowed-tools"] = append(tools, preload.RunnerTool)
+	for _, tool := range needed {
+		switch tools := art.Frontmatter["allowed-tools"].(type) {
+		case nil:
+			if profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
+				art.Frontmatter["allowed-tools"] = tool
+			}
+		case string:
+			if tools != "" && !strings.Contains(tools, tool) {
+				art.Frontmatter["allowed-tools"] = tools + ", " + tool
+			}
+		case []any:
+			if !slices.Contains(tools, any(tool)) {
+				art.Frontmatter["allowed-tools"] = append(tools, tool)
+			}
 		}
 	}
 }
