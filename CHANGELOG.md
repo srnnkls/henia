@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.0-alpha.19](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.18...v0.1.0-alpha.19) (2026-10-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **templates:** the hybrid head directive is :::head instead of :::static; large-static and max-static-lines are large-head and max-head-lines.
+* **slots:** :slot[...] renders as henia slots --markdown instead of the tab-separated table, and contents lines render as Markdown items with quoted henia show commands instead of bare <skill>#<anchor> addresses.
+
+### Features
+
+* **slots:** render slots, contents and related skills as Markdown pointers ([#46](https://github.com/srnnkls/henia/issues/46)) ([8aeae3f](https://github.com/srnnkls/henia/commit/8aeae3f72dea53df00dafca98f8f4b4d3f2f6d84))
+* **templates:** compose skills from shared templates and partials ([#48](https://github.com/srnnkls/henia/issues/48)) ([b24ebfe](https://github.com/srnnkls/henia/commit/b24ebfe73fa86a18494ca732b1db28f8aeeec157))
+
+
+### Bug Fixes
+
+* **query:** key skills by package and section directive bodies ([#47](https://github.com/srnnkls/henia/issues/47)) ([2d1a091](https://github.com/srnnkls/henia/commit/2d1a091fae46c939679dbc5b54eec95933dc92a8))
+
 ## [0.1.0-alpha.18](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.17...v0.1.0-alpha.18) (2026-10-06)
 
 
