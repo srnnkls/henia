@@ -123,10 +123,6 @@ func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selec
 		}
 		harnesses[name] = h
 	}
-	compile := build.Run
-	if clean {
-		compile = build.RunClean
-	}
 	sources := []string{source}
 	var layers []build.Dependency
 	for _, dependency := range dependencies {
@@ -139,7 +135,7 @@ func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selec
 		}
 		layers = append(layers, build.Dependency{Root: dependency.Root, Harnesses: own})
 	}
-	result, err := compile(cmd.Context(), sources, destination, harnesses, layers...)
+	result, err := build.RunSelected(cmd.Context(), sources, destination, harnesses, cfg.Harness, clean, layers...)
 	if err != nil {
 		return nil, err
 	}

@@ -18,8 +18,10 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	henia "github.com/srnnkls/henia"
+	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/build"
 	"github.com/srnnkls/henia/internal/caller"
+	"github.com/srnnkls/henia/internal/components"
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
@@ -139,14 +141,22 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string, mode 
 		showResource(out, name, filepath.Dir(entry.Path), resource, anchor, sectioned, mode.toc)
 		return
 	}
-	body := r.body(entry)
+	body, stopped := r.rendered(entry, false)
+	static := ""
+	if stopped == "" && mode.head {
+		static, stopped = r.rendered(entry, true)
+	}
+	if stopped != "" {
+		fmt.Fprint(out, stopped)
+		return
+	}
 	if mode.head || mode.toc {
 		if stale(r.harness, entry) {
 			fmt.Fprintf(out, "henia: the %s copy of %s was installed from an older revision of the skill; run henia install to update it\n\n", r.harness, name)
 		}
 		placedContents, placedRelated := false, false
 		if mode.head {
-			static := strings.TrimSpace(r.render(entry, true))
+			static = strings.TrimSpace(static)
 			placedContents, placedRelated = places(static, preload.ShowCommand, entry.Name, name), places(static, preload.ContextCommand, entry.Name, name)
 			if static != "" {
 				fmt.Fprint(out, expand(entry, static+"\n\n"))
@@ -475,10 +485,11 @@ type renderer struct {
 	harness string
 	lib     *library.Library
 	configs map[string][]byte
+	knowns  map[string]map[string]bool
 }
 
 func newRenderer(harness string, lib *library.Library) *renderer {
-	return &renderer{harness: harness, lib: lib, configs: make(map[string][]byte)}
+	return &renderer{harness: harness, lib: lib, configs: make(map[string][]byte), knowns: make(map[string]map[string]bool)}
 }
 
 func (r *renderer) config(path string) []byte {
@@ -495,11 +506,7 @@ func (r *renderer) config(path string) []byte {
 
 func (r *renderer) body(e library.Entry) string { return r.render(e, false) }
 
-func (r *renderer) render(e library.Entry, head bool) string {
-	canonical, err := os.ReadFile(e.Path)
-	if err != nil {
-		return e.Artifact.Body
-	}
+func (r *renderer) harnessFor(e library.Entry) (string, henia.Harness, []byte) {
 	var harness henia.Harness
 	name := ""
 	packageConfig := r.config(e.Origin.Config)
@@ -511,10 +518,33 @@ func (r *renderer) render(e library.Entry, head bool) string {
 		}
 	}
 	harness.ProjectRoot, harness.UserRoot = e.Origin.ProjectRoot(), library.ConfigDir()
-	shared, _ := templates.Load(harness.ProjectRoot, harness.UserRoot)
 	if name == "" {
 		packageConfig = nil
 	}
+	return name, harness, packageConfig
+}
+
+func (r *renderer) render(e library.Entry, head bool) string {
+	body, stopped := r.rendered(e, head)
+	return body + stopped
+}
+
+type resolution struct {
+	Package, Name, ID string
+}
+
+type cached struct {
+	Refs   []resolution
+	Digest string
+	Body   string
+}
+
+func (r *renderer) rendered(e library.Entry, head bool) (string, string) {
+	canonical, err := os.ReadFile(e.Path)
+	if err != nil {
+		return e.Artifact.Body, ""
+	}
+	name, harness, packageConfig := r.harnessFor(e)
 	served := r.lib.Names()
 	if name != "" {
 		for _, other := range r.lib.Entries {
@@ -523,24 +553,181 @@ func (r *renderer) render(e library.Entry, head bool) string {
 			}
 		}
 	}
+	shared, _ := templates.Load(harness.ProjectRoot, harness.UserRoot)
+	legacy := build.Legacy(e.Artifact, shared)
+	key := digest([]byte(rootCmd.Version+executableStamp()), []byte(r.harness), []byte(name), []byte(strconv.FormatBool(head)), packageConfig, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " ")), []byte(e.ID), []byte(e.Path))
+	inputs := func(refs []resolution) (string, bool) {
+		if legacy {
+			return digest(canonical, []byte(templates.Digest(shared))), true
+		}
+		closure := []library.Entry{e}
+		for _, ref := range refs {
+			target, err := r.locate(ref.Package, ref.Name)
+			if err != nil || target.ID != ref.ID {
+				return "", false
+			}
+			if !slices.ContainsFunc(closure, func(c library.Entry) bool { return c.ID == target.ID }) {
+				closure = append(closure, target)
+			}
+		}
+		return digest(r.dependencies(closure)...), true
+	}
+	cache := filepath.Join(library.CacheDir(), "render", key[:2], key)
+	if data, err := os.ReadFile(cache); err == nil {
+		var entry cached
+		if json.Unmarshal(data, &entry) == nil {
+			if current, ok := inputs(entry.Refs); ok && current == entry.Digest {
+				return entry.Body, ""
+			}
+		}
+	}
+	var rendered *artifact.Artifact
+	var refs []resolution
+	if legacy {
+		rendered, err = build.Render(e.Artifact, name, harness, served, head)
+	} else {
+		rendered, refs, err = r.expand(e, served, head)
+	}
+	if diagnostics, ok := errors.AsType[build.Diagnostics](err); ok {
+		return "", fmt.Sprintf("henia: rendering %s for %q stopped:\n%v\n", e.ID, r.harness, diagnostics)
+	}
+	if err != nil {
+		return fmt.Sprintf("henia: rendering %s for %q failed (%v); canonical text follows\n\n%s", e.ID, r.harness, err, e.Artifact.Body), ""
+	}
+	if current, ok := inputs(refs); ok {
+		if data, err := json.Marshal(cached{Refs: refs, Digest: current, Body: rendered.Body}); err == nil && os.MkdirAll(filepath.Dir(cache), 0o755) == nil {
+			_ = os.WriteFile(cache, data, 0o644)
+		}
+	}
+	return rendered.Body, ""
+}
+
+func digest(parts ...[]byte) string {
 	h := sha256.New()
-	for _, part := range [][]byte{[]byte(rootCmd.Version + executableStamp()), []byte(name), []byte(strconv.FormatBool(head)), packageConfig, canonical, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " ")), []byte(templates.Digest(shared))} {
+	for _, part := range parts {
 		h.Write(part)
 		h.Write([]byte{0})
 	}
-	key := hex.EncodeToString(h.Sum(nil))
-	cache := filepath.Join(library.CacheDir(), "render", key[:2], key)
-	if cached, err := os.ReadFile(cache); err == nil {
-		return string(cached)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (r *renderer) targets() (map[string]map[string]string, error) {
+	var layers []build.Dependency
+	for _, p := range r.lib.Packages {
+		if configured, err := config.Harnesses(r.config(p.Config)); err == nil {
+			layers = append(layers, build.Dependency{Harnesses: configured})
+		}
 	}
-	rendered, err := build.Render(e.Artifact, name, harness, served, head)
+	return build.Targets(nil, layers)
+}
+
+func (r *renderer) known(pkg string, targets map[string]map[string]string) map[string]bool {
+	if known, ok := r.knowns[pkg]; ok {
+		return known
+	}
+	var arts []*artifact.Artifact
+	for _, other := range r.lib.Entries {
+		if other.Package == pkg {
+			arts = append(arts, other.Artifact)
+		}
+	}
+	r.knowns[pkg] = build.Known(arts, targets)
+	return r.knowns[pkg]
+}
+
+func (r *renderer) expand(e library.Entry, served map[string]bool, head bool) (*artifact.Artifact, []resolution, error) {
+	targets, err := r.targets()
 	if err != nil {
-		return fmt.Sprintf("henia: rendering %s for %q failed (%v); canonical text follows\n\n%s", e.ID, name, err, e.Artifact.Body)
+		return nil, nil, err
 	}
-	if os.MkdirAll(filepath.Dir(cache), 0o755) == nil {
-		_ = os.WriteFile(cache, []byte(rendered.Body), 0o644)
+	unit := func(e library.Entry, head bool) *build.Unit {
+		art := *e.Artifact
+		art.SourcePath = e.Path
+		u := &build.Unit{Artifact: &art, Package: e.Package}
+		name, harness, _ := r.harnessFor(e)
+		if u.Transformer, u.Err = build.Renderer(e.Artifact, name, harness, served, head); u.Err != nil {
+			return u
+		}
+		u.Root, u.User, u.Known = e.Origin.ProjectRoot(), componentUser(e), r.known(e.Package, targets)
+		if name != "" {
+			u.Variables = harness.Variables
+		}
+		return u
 	}
-	return rendered.Body
+	first := unit(e, head)
+	if first.Err != nil {
+		return nil, nil, first.Err
+	}
+	var refs []resolution
+	resolved := map[components.Key]library.Entry{}
+	build.Expand([]*build.Unit{first}, build.Target{
+		Name: r.harness, Harnesses: targets,
+		Resolve: func(from components.Unit, ref string) (components.Key, string, error) {
+			name, anchor, _ := strings.Cut(ref, "#")
+			target, err := r.locate(from.Package, name)
+			key := components.Key{Package: target.Package, Name: target.Name}
+			if err == nil {
+				refs = append(refs, resolution{from.Package, name, target.ID})
+				resolved[key] = target
+			}
+			return key, anchor, err
+		},
+		Load: func(k components.Key) *build.Unit {
+			if target, ok := resolved[k]; ok {
+				return unit(target, false)
+			}
+			return nil
+		},
+	})
+	rendered, err := first.Render()
+	return rendered, refs, err
+}
+
+func componentUser(e library.Entry) string {
+	if e.Tier == library.Project {
+		return library.ConfigDir()
+	}
+	return ""
+}
+
+func (r *renderer) locate(pkg, name string) (library.Entry, error) {
+	if !strings.Contains(name, ":") {
+		for _, e := range r.lib.Entries {
+			if e.Package == pkg && e.Name == name {
+				return e, nil
+			}
+		}
+	}
+	return r.lib.Resolve(name)
+}
+
+func (r *renderer) dependencies(closure []library.Entry) [][]byte {
+	targets, _ := r.targets()
+	var parts [][]byte
+	for _, p := range r.lib.Packages {
+		parts = append(parts, []byte(p.Config), r.config(p.Config))
+	}
+	packages := map[string]bool{}
+	for _, e := range closure {
+		canonical, _ := os.ReadFile(e.Path)
+		parts = append(parts, []byte(e.ID), []byte(e.Path), canonical, r.config(e.Origin.Config))
+		if packages[e.Origin.Root] {
+			continue
+		}
+		packages[e.Origin.Root] = true
+		parts = append(parts, []byte(strings.Join(slices.Sorted(maps.Keys(r.known(e.Package, targets))), " ")))
+		decls, problems := components.Load(e.Origin.ProjectRoot(), componentUser(e))
+		for _, name := range slices.Sorted(maps.Keys(decls)) {
+			if path := decls[name].Path; path != "" {
+				declared, _ := os.ReadFile(path)
+				parts = append(parts, []byte(path), declared)
+			}
+		}
+		for _, p := range problems {
+			parts = append(parts, []byte(p.Path), []byte(p.Message))
+		}
+	}
+	return parts
 }
 
 func (r *renderer) reference(e library.Entry) *regexp.Regexp {

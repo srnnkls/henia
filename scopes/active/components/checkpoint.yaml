@@ -2,13 +2,13 @@ checkpoint:
   scope_name: components
   scope_path: scopes/active/components
   branch: feat/components
-  last_commit: c2fadfb
-  updated_at: "2026-10-09T00:38:51Z"
+  last_commit: 60bec56
+  updated_at: "2026-10-09T01:08:26Z"
   base_drift: {base: origin/main, behind: 0, ahead: 0, checked_at: "2026-10-08T22:14:38Z"}
 
   batch:
-    number: 4
-    tasks: [CMP-006, CMP-011, CMP-015]
+    number: 5
+    tasks: [CMP-008]
     phase: complete
     status: completed
 
@@ -25,21 +25,15 @@ checkpoint:
 
   reports:
     tester:
-      CMP-006: .peer/components/20261008T221438Z-201fe2/b4-tester-CMP-006
-      CMP-011: .peer/components/20261008T221438Z-201fe2/b4-tester-CMP-011
-      CMP-015: .peer/components/20261008T221438Z-201fe2/b4-tester-CMP-015
+      CMP-008: .peer/components/20261008T221438Z-201fe2/b5-tester-CMP-008
     implementer:
-      CMP-006: .peer/components/20261008T221438Z-201fe2/b4-implementer-CMP-006
-      CMP-011: .peer/components/20261008T221438Z-201fe2/b4-implementer-CMP-011
-      CMP-015: .peer/components/20261008T221438Z-201fe2/b4-implementer-CMP-015
+      CMP-008: .peer/components/20261008T221438Z-201fe2/b5-implementer-CMP-008
     review:
-      general: .peer/components/20261008T221438Z-201fe2/b4-review-general
-      architecture: .peer/components/20261008T221438Z-201fe2/b4-review-architecture
-      compliance: .peer/components/20261008T221438Z-201fe2/b4-review-compliance
+      general: .peer/components/20261008T221438Z-201fe2/b5-review-general
+      architecture: .peer/components/20261008T221438Z-201fe2/b5-review-architecture
+      compliance: .peer/components/20261008T221438Z-201fe2/b5-review-compliance
 
   orchestrator_notes:
-    - "CMP-015 TestRenderDocument 'nested directives' expected non-canonical fences from the text path; AD-2 writes fences at canonical length, so expected output changed to '::::outer ... ::::'."
-  orchestrator_notes:
-    - "CMP-015 render_test 'nested directives' oracle corrected to canonical fences (AD-2)."
-    - "Pre-admitted B4-0: Write(Parse(src)) grows 2/90 unchanged large docs (duplicated lines); tropos skills/* unaffected."
-  fix_round: {number: 1, groups: [A, B, C], findings: [B4-0, B4-1, B4-2, B4-3, B4-4, B4-5], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b4-rereview}
+    - "Accepted transitional build.Legacy route; carried to CMP-016."
+    - "Pre-admitted B5-0: --harness narrows configured harnesses; unselected custom harness in :::when -> unknown-target."
+  fix_round: {number: 1, groups: [A], findings: [B5-0, B5-1, B5-2, B5-3, B5-4, B5-5, B5-6, B5-7, B5-8, B5-9], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b5-rereview}

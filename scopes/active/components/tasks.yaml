@@ -52,7 +52,7 @@ tasks:
     files: [internal/markup/markup.go, internal/markup/unwrap.go, internal/markup/unwrap_test.go, internal/markup/render.go, internal/markup/render_test.go, internal/markup/links.go, internal/transform/transform.go, internal/transform/links_test.go, internal/transform/references_test.go]
   - id: CMP-008
     content: "Build, henia show and runtime on the component pipeline with per-package components (ExpandDocuments units carry their own Unit.Values, Environment.Resolve is built from Library.Resolve, and the Unit.Finish hook runs :slot/:contents/:related before include selection; callers switch to markup.RenderDocument/UnwrapDocument and Transformer.renderDocument); legacy composition stays compiling for lint; tests/components.md scrut suite (FR-8, AD-6); runtime render cache key covers transitively included documents and every involved package's component declarations; migrate every build and runtime fixture whose body uses template actions or undeclared directives (internal/cli/build_lint_test.go, tests/runtime.md) to declared components, keeping their assertions"
-    status: pending
+    status: done
     active_form: "Switching the build to components"
     depends_on: [CMP-006, CMP-015]
     files: [internal/transform/transform.go, internal/transform/pipeline_test.go, internal/build/build.go, internal/build/head.go, internal/build/dependency_test.go, internal/cli/runtime.go, tests/components.md, tests/fixtures/components/, internal/cli/build_lint_test.go, tests/runtime.md]
@@ -75,7 +75,7 @@ tasks:
     depends_on: [CMP-004]
     files: [internal/library/corpus.go, internal/library/corpus_test.go, internal/pattern/read.go, internal/pattern/match.go, internal/pattern/directive_test.go, docs/query.md]
   - id: CMP-016
-    content: "Remove legacy composition after its last consumer: internal/templates, Compose (absent-blanking stays in internal/templating), henia.layout, markup.Expand, MaskTemplates and its corpus caller, templates/ gitignore exemption; removed-composition (FR-8, AD-4)"
+    content: "Remove legacy composition after its last consumer (including the transitional build.Legacy route CMP-008 kept for packages with .henia/templates, user templates or henia.layout): internal/templates, Compose (absent-blanking stays in internal/templating), henia.layout, markup.Expand, MaskTemplates and its corpus caller, templates/ gitignore exemption; removed-composition (FR-8, AD-4)"
     status: pending
     active_form: "Removing Go template composition"
     depends_on: [CMP-010, CMP-011]
@@ -107,7 +107,7 @@ tasks:
 meta:
   created: 2026-10-08
   last_updated: "2026-10-09"
-  progress: 10/16
+  progress: 11/16
 phases:
   - id: syntax
     tasks: [CMP-001, CMP-002, CMP-012]

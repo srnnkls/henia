@@ -11,7 +11,8 @@ $ T=$(cd "$(mktemp -d)" && pwd -P); L="$T/data/henia/packages/global"; P="$T/rep
 > mk() { mkdir -p "$(dirname "$1")"; printf -- "$2" > "$1"; }
 > mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nhenia:\n  slots:\n    code.style:\n    code.check: keyed(list(command))\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n\n:slot[code.style code.check]\n'
 > mk "$L/tropos/skills/style-guide/SKILL.md" '---\nname: style-guide\ndescription: House style by language.\nhenia:\n  provides:\n    code.style.go:\n---\n\n# Style guide\n\nShared rules.\n\n## Go\n\nRun gofmt. Canary: CANARY-GO.\n\n### Errors\n\nWrap with %%w.\n\n## Python\n\nUse ruff.\n'
-> mk "$L/tropos/skills/checks/SKILL.md" '---\nname: checks\ndescription: Validation commands.\nhenia:\n  provides:\n    code.check.go: {command: go vet ./...}\n---\n\n# Checks\n\nSee `$style-guide` and `$code`.{{with .flavor}} Flavor: {{.}}.{{end}}\n'
+> mk "$L/tropos/skills/checks/SKILL.md" '---\nname: checks\ndescription: Validation commands.\nhenia:\n  provides:\n    code.check.go: {command: go vet ./...}\n---\n\n# Checks\n\n:flavor[See `$style-guide` and `$code`.]\n'
+> mk "$L/tropos/.henia/components/flavor.md" '---\nform: text\nbody:\n  kind: text\n---\n{{.body}}{{with .flavor}} Flavor: {{.}}.{{end}}\n'
 > printf '[harness.claude]\nartifacts = ["skills"]\n\n[harness.claude.skills]\nstatic = ["code"]\n\n[harness.claude.references]\nskill = "/{{.Name}}"\n\n[harness.pi]\nartifacts = ["skills"]\n\n[harness.pi.variables]\nflavor = "pi"\n\n[harness.pi.references]\nskill = "/skill:{{.Name}}"\n' > "$L/tropos/henia.toml"
 > henia build "$L/tropos" --output "$T/build" > /dev/null
 > mkdir -p "$P" && git -C "$P" init -q && cd "$P"
@@ -561,7 +562,8 @@ henia: blocked by henia/not-a-preload: no skill named "missing" in the library; 
 A preload rendered with harness variables is declared in each harness's form.
 
 ````scrut
-$ mkdir -p "$L/tropos/skills/flavored" && printf -- '---\nname: flavored\ndescription: Flavored.\n---\n\nFlavor: !`echo {{.flavor}}`\n' > "$L/tropos/skills/flavored/SKILL.md"
+$ mkdir -p "$L/tropos/skills/flavored" && printf -- '---\nname: flavored\ndescription: Flavored.\n---\n\nFlavor: :flavor-preload[]\n' > "$L/tropos/skills/flavored/SKILL.md"
+> printf -- '---\nform: text\nbody:\n  kind: none\n---\n!`echo {{.flavor}}`\n' > "$L/tropos/.henia/components/flavor-preload.md"
 > hn preload --skill flavored -- 'echo pi'; hn preload --skill flavored -- 'echo codex' | tail -n 2 | head -n 1
 ```text
 $ echo pi
@@ -604,7 +606,7 @@ $ henia query '(skill :id "checks" (paragraph) @p (link) @l)' --harness pi; heni
 
 @p  checks#checks  L3-4  paragraph  See `/skill:style-guide` and `henia show code`. Flavor: pi.
 @l  checks#checks  L3  link  henia show code
-@p  checks#checks  L11-12  paragraph  See `$style-guide` and `$code`.{{with .flavor}} Flavor: {{.}}.{{end}}
+@p  checks#checks  L11-12  paragraph  :flavor[See `$style-guide` and `$code`.]
 ```
 
 `reaches` follows skill references transitively.
@@ -654,6 +656,7 @@ directive opens a section in canonical reads too.
 ```scrut
 $ henia query '(skill :package ?p) @k (group ?p (count @k @n))'
 > mk "$L/tropos/skills/headed/SKILL.md" '---\nname: headed\ndescription: Headed.\n---\n\n# Headed\n\n:::note\n## Routes\n\nGo.\n:::\n'
+> mk "$L/tropos/.henia/components/note.md" '---\nform: container\nbody:\n  kind: markdown\nrender: keep\n---\n'
 > henia query '(skill :id "headed" (section :level 2) @s)' --canonical
 ?p=tropos
 @k  8 nodes

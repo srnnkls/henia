@@ -11,7 +11,7 @@ func Builtins() map[string]Declaration {
 		}, true),
 		"when":     builtin("when", []string{Container}, "markdown", map[string]Attribute{"target": {Type: "list"}}, true),
 		"unless":   builtin("unless", []string{Container}, "markdown", map[string]Attribute{"target": {Type: "list"}}, true),
-		"slot":     builtin("slot", []string{Text}, "text", nil, false),
+		"slot":     builtin("slot", []string{Text}, "text", map[string]Attribute{"class": {Type: "list"}}, false),
 		"contents": builtin("contents", []string{Text}, "text", nil, false),
 		"related":  builtin("related", []string{Text, Container}, "markdown", nil, false),
 		"body":     builtin("body", []string{Leaf}, "none", nil, false),

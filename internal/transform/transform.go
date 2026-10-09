@@ -146,54 +146,10 @@ func ApplyValueMappings(fm map[string]any, values map[string]map[string]string) 
 }
 
 func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, error) {
-	result := &artifact.Artifact{
-		Name:        art.Name,
-		Namespace:   art.Namespace,
-		Type:        art.Type,
-		SourcePath:  art.SourcePath,
-		IsDirectory: art.IsDirectory,
-		Resources:   art.Resources,
-		Frontmatter: make(map[string]any),
+	result, templateContext, err := t.Prepare(art)
+	if err != nil {
+		return nil, err
 	}
-
-	templateContext := make(map[string]any, len(art.Frontmatter)+len(t.Variables))
-	maps.Copy(templateContext, art.Frontmatter)
-	if vars, ok := henia(art.Frontmatter)["variables"].(map[string]any); ok {
-		maps.Copy(templateContext, vars)
-	}
-	for k, v := range t.Variables {
-		templateContext[k] = v
-	}
-
-	for k, v := range art.Frontmatter {
-		transformed, err := templateValue(v, templateContext)
-		if err != nil {
-			return nil, fmt.Errorf("transform frontmatter %q: %w", k, err)
-		}
-		result.Frontmatter[k] = transformed
-	}
-
-	result.Frontmatter = ApplyMappings(result.Frontmatter, t.Keys)
-
-	result.Frontmatter = ApplyValueMappings(result.Frontmatter, t.Values)
-	if (art.Type == artifact.TypeSkill || art.Type == artifact.TypeAgent) && t.Profile != "" {
-		can, err := canonical.Parse(result.Frontmatter)
-		if err != nil {
-			return nil, err
-		}
-		if t.Compiler == nil {
-			return nil, fmt.Errorf("profile %s was not compiled", t.Profile)
-		}
-		compiled, err := t.Compiler.Compile(art.FullName(), can.ToMap(), t.Context)
-		if err != nil {
-			return nil, err
-		}
-		result.Frontmatter, result.Files, result.Warnings = compiled.Frontmatter, compiled.Files, compiled.Warnings
-		if t.Strict && len(result.Warnings) > 0 {
-			return nil, fmt.Errorf("unsupported skill metadata: %s", strings.Join(result.Warnings, "; "))
-		}
-	}
-
 	layout, _ := henia(art.Frontmatter)["layout"].(string)
 	body, err := Compose(art.Body, templateContext, t.Templates, layout)
 	if err != nil {
@@ -235,6 +191,61 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	result.Body = body
 
 	return result, nil
+}
+
+func (t *Transformer) Prepare(art *artifact.Artifact) (*artifact.Artifact, map[string]any, error) {
+	result := &artifact.Artifact{
+		Name:        art.Name,
+		Namespace:   art.Namespace,
+		Type:        art.Type,
+		SourcePath:  art.SourcePath,
+		IsDirectory: art.IsDirectory,
+		Resources:   art.Resources,
+		Frontmatter: make(map[string]any),
+	}
+
+	templateContext := make(map[string]any, len(art.Frontmatter)+len(t.Variables))
+	maps.Copy(templateContext, art.Frontmatter)
+	if vars, ok := henia(art.Frontmatter)["variables"].(map[string]any); ok {
+		maps.Copy(templateContext, vars)
+	}
+	for k, v := range t.Variables {
+		templateContext[k] = v
+	}
+
+	for k, v := range art.Frontmatter {
+		transformed, err := templateValue(v, templateContext)
+		if err != nil {
+			return nil, nil, fmt.Errorf("transform frontmatter %q: %w", k, err)
+		}
+		result.Frontmatter[k] = transformed
+	}
+
+	result.Frontmatter = ApplyMappings(result.Frontmatter, t.Keys)
+
+	result.Frontmatter = ApplyValueMappings(result.Frontmatter, t.Values)
+	if (art.Type == artifact.TypeSkill || art.Type == artifact.TypeAgent) && t.Profile != "" {
+		can, err := canonical.Parse(result.Frontmatter)
+		if err != nil {
+			return nil, nil, err
+		}
+		if t.Compiler == nil {
+			return nil, nil, fmt.Errorf("profile %s was not compiled", t.Profile)
+		}
+		compiled, err := t.Compiler.Compile(art.FullName(), can.ToMap(), t.Context)
+		if err != nil {
+			return nil, nil, err
+		}
+		result.Frontmatter, result.Files, result.Warnings = compiled.Frontmatter, compiled.Files, compiled.Warnings
+		if t.Strict && len(result.Warnings) > 0 {
+			return nil, nil, fmt.Errorf("unsupported skill metadata: %s", strings.Join(result.Warnings, "; "))
+		}
+	}
+	return result, templateContext, nil
+}
+
+func (t *Transformer) RenderDocument(doc *markup.Document, art *artifact.Artifact) (string, error) {
+	return t.renderDocument(doc, art)
 }
 
 func (t *Transformer) renderDocument(doc *markup.Document, art *artifact.Artifact) (string, error) {
@@ -457,6 +468,40 @@ func expandListings(body, self string) string {
 		return body
 	}
 	return string(markup.Write(doc))
+}
+
+func Listings(doc *markup.Document, self string, skill bool) {
+	doc.Children = expandListed(doc.Children, self, skill, false)
+}
+
+func expandListed(items []*markup.Item, self string, skill, nested bool) []*markup.Item {
+	out := make([]*markup.Item, 0, len(items))
+	for _, it := range items {
+		if it.Kind != "directive" {
+			it.Children = expandListed(it.Children, self, skill, true)
+			out = append(out, it)
+			continue
+		}
+		name := it.Attrs["name"]
+		switch {
+		case nested && it.Attrs["inline"] == "true" && name == "slot":
+			preload := slots.Preload(slots.Application{Slots: strings.Fields(it.Text), Inline: slices.Contains(strings.Fields(it.Attrs["class"]), "inline")})
+			out = append(out, it.Replace(listed(it, preload))...)
+		case skill && nested && it.Attrs["inline"] == "true" && listings[name] != nil:
+			out = append(out, it.Replace(listed(it, listings[name](cmp.Or(strings.TrimSpace(it.Text), self))))...)
+		case skill && name == "related" && it.Fenced():
+			heading := &markup.Item{Kind: "heading", Attrs: map[string]string{"level": "2"}, Text: "Related", Origin: it.Origin, Backtrace: it.Backtrace}
+			out = append(out, it.Replace(append([]*markup.Item{heading}, expandListed(it.Children, self, skill, false)...)...)...)
+		default:
+			it.Children = expandListed(it.Children, self, skill, true)
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+func listed(it *markup.Item, text string) *markup.Item {
+	return &markup.Item{Kind: "text", Text: text, Origin: it.Origin, Backtrace: it.Backtrace}
 }
 
 func relatedSections(items *[]*markup.Item, source string) bool {

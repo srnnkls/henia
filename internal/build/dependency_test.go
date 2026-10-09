@@ -12,8 +12,12 @@ import (
 func TestDependencyHarnessDefaults(t *testing.T) {
 	root := t.TempDir()
 	project, dependency := filepath.Join(root, "project"), filepath.Join(root, "project", ".henia", "sources", "dep")
-	put(t, filepath.Join(project, "skills/own/SKILL.md"), "---\nname: own\ndescription: Own skill.\n---\n\nFlavor: {{.flavor}}.\n")
-	put(t, filepath.Join(dependency, "skills/dep/SKILL.md"), "---\nname: dep\ndescription: Dependency skill.\n---\n\nFlavor: {{.flavor}}, mode: {{.mode}}.\n")
+	put(t, filepath.Join(project, "skills/own/SKILL.md"), "---\nname: own\ndescription: Own skill.\n---\n\nFlavor: :flavor[].\n")
+	put(t, filepath.Join(dependency, "skills/dep/SKILL.md"), "---\nname: dep\ndescription: Dependency skill.\n---\n\nFlavor: :flavor[], mode: :mode[].\n")
+	value := func(name string) string { return "---\nform: text\nbody:\n  kind: none\n---\n{{." + name + "}}\n" }
+	put(t, filepath.Join(project, ".henia/components/flavor.md"), value("flavor"))
+	put(t, filepath.Join(dependency, ".henia/components/flavor.md"), value("flavor"))
+	put(t, filepath.Join(dependency, ".henia/components/mode.md"), value("mode"))
 	dependencies := []Dependency{{Root: dependency, Harnesses: map[string]henia.Harness{"claude": {Variables: map[string]string{"flavor": "dependency", "mode": "strict"}}}}}
 	for _, test := range []struct {
 		name     string
@@ -25,7 +29,7 @@ func TestDependencyHarnessDefaults(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			output := filepath.Join(root, test.name)
-			harnesses := map[string]henia.Harness{"claude": {Artifacts: []string{"skills"}, Variables: test.project}}
+			harnesses := map[string]henia.Harness{"claude": {Artifacts: []string{"skills"}, Variables: test.project, ProjectRoot: project}}
 			result, err := Run(t.Context(), []string{project, dependency}, output, harnesses, dependencies...)
 			if err != nil || len(result.Errors) != 0 {
 				t.Fatalf("%v %v", err, result.Errors)

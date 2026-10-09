@@ -24,7 +24,11 @@ type Environment struct {
 	Harnesses map[string]map[string]string
 	Values    map[string]any
 	Known     map[string]bool
+	Variables map[string]string
 	Resolve   func(from Unit, ref string) (Key, string, error)
+	Load      func(Key) (Unit, bool)
+	Included  func(from, to Key, call markup.Origin)
+	Called    func(from Key, decl Declaration)
 }
 
 type expander struct {
@@ -94,6 +98,9 @@ func (x *expander) item(it *markup.Item) []*markup.Item {
 		return x.condition(it, decl)
 	case name == "include":
 		return x.include(it, decl)
+	}
+	x.called(decl)
+	switch {
 	case decl.Path == "" || decl.Render == Keep:
 		x.kept[it] = decl
 		return x.keep(it)
@@ -277,14 +284,30 @@ func (x *expander) holds(it *markup.Item) (bool, bool) {
 				known = false
 				continue
 			}
-			value, ok := x.env.Harnesses[x.env.Target][name]
+			value, ok := x.variables()[name]
 			holds = holds && ok && value == raw
 		}
 	}
 	return holds, known
 }
 
+func (x *expander) variables() map[string]string {
+	if x.env.Variables != nil {
+		return x.env.Variables
+	}
+	return x.env.Harnesses[x.env.Target]
+}
+
+func (x *expander) called(decl Declaration) {
+	if x.unit != nil && x.env.Called != nil && decl.Path != "" {
+		x.env.Called(x.unit.key(), decl)
+	}
+}
+
 func (x *expander) variable(name string) bool {
+	if _, ok := x.variables()[name]; ok {
+		return true
+	}
 	for _, vars := range x.env.Harnesses {
 		if _, ok := vars[name]; ok {
 			return true
@@ -404,7 +427,7 @@ func (x *expander) data(decl Declaration, values map[string]any, body *markup.It
 			data[name] = nil
 		}
 	}
-	for name, value := range x.env.Harnesses[x.env.Target] {
+	for name, value := range x.variables() {
 		data[name] = value
 	}
 	maps.Copy(data, x.env.Values)

@@ -94,3 +94,26 @@ batches:
     gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
     validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 143/143; both B4-0 files round-trip byte-identical"
     status: complete
+  - batch: 5
+    tasks: [CMP-008]
+    run: 20261008T221438Z-201fe2
+    reports: .peer/components/20261008T221438Z-201fe2/b5-review-{general,architecture,compliance}
+    coverage: {native: [claude-opus x3], peer: [peer-gpt6.1-sol x3, peer-gpt6-astra x3]}
+    gates_initial: {correctness: fail, security: pass, performance: fail, architecture: fail, style: fail}
+    accepted: ["transitional build.Legacy route (carried to CMP-016)"]
+    admitted:
+      - {id: B5-0, severity: medium, group: A, found_by: [orchestrator, implementer], location: internal/cli/build.go, trigger: "henia build --harness X with :::when naming another configured custom harness", wrong_outcome: "unknown-target", verified: "implementer report"}
+      - {id: B5-1, severity: high, group: A, found_by: [claude-opus, sol, astra], location: "internal/build/build.go:178-206", trigger: "harness static=[a]; a includes b#usage; b dynamic", wrong_outcome: "build: missing-include, a dropped; henia show renders a", verified: "reviewer, built binary"}
+      - {id: B5-2, severity: high, group: A, found_by: [claude-opus, sol, astra], location: "internal/cli/runtime.go:534-558", trigger: "package without harness config, :::when{target=claude}; show for claude then codex; or remove a known value from a non-included sibling", wrong_outcome: "cached claude body served to codex; stale success after Known changes", verified: true}
+      - {id: B5-3, severity: high, group: A, found_by: [claude-opus, sol, astra], location: "internal/cli/runtime.go:645-672 closure", trigger: "component template '{{if true}}::include{ref=\"b#usage\"}{{end}}'; or any templated ref in an uncalled component", wrong_outcome: "generated include missed -> missing-include; or whole-library closure for every skill (quadratic: 300 skills 7.2s vs 0.3s)", verified: "reviewers"}
+      - {id: B5-4, severity: high, group: A, found_by: [sol, astra], location: "internal/build/build.go:495-497", trigger: "called component template '{{if false}}{{.typo}}{{end}}OK'", wrong_outcome: "component-path unknown-field discarded (byPath has only documents); skill renders", verified: "reviewers"}
+      - {id: B5-5, severity: high, group: A, found_by: [sol, astra], location: "internal/build/build.go:220-311", trigger: "build with A (::include{ref=missing}) and independent valid C", wrong_outcome: "global guard returns before writing C (AD-6)", verified: "reviewers"}
+      - {id: B5-6, severity: high, group: A, found_by: [sol, astra], location: "internal/cli/runtime.go:575; build harness map", trigger: "A (codex flavor=own) includes dependency B (codex flavor=dep) with :::when{flavor=dep}", wrong_outcome: "B's condition evaluated with A's harness variables; body dropped", verified: "reviewers"}
+      - {id: B5-7, severity: high, group: A, found_by: [sol, astra], location: "internal/cli/runtime.go:558", trigger: "henia show a#usage / --toc / over output budget when a has unknown-component", wrong_outcome: "diagnostics replaced by missing-section / empty TOC / truncated", verified: "reviewers"}
+      - {id: B5-8, severity: high, group: A, found_by: [sol, astra], location: "internal/build/build.go:522", trigger: "A includes all of B; B is only a claude-only when block with an undeclared component; render for codex", wrong_outcome: "B expands empty, no backtrace; A renders and is cached despite B's source error", verified: "reviewers"}
+      - {id: B5-9, severity: medium, group: A, found_by: [sol], location: "internal/build/build.go:473", trigger: "a includes b#usage; b has description: \"{{\" or an unknown harness profile", wrong_outcome: "reports missing-include 'unknown skill b'; real error hidden", verified: "reviewer"}
+    residual: []
+    rereview_round_1: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b5-rereview, resolved: [B5-0, B5-1, B5-2, B5-3, B5-4, B5-5, B5-6, B5-7, B5-8, B5-9]}
+    gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
+    validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 167/167"
+    status: complete

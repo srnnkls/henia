@@ -23,6 +23,9 @@ func (x *expander) include(it *markup.Item, decl Declaration) []*markup.Item {
 		return x.includeRef(it, ref)
 	}
 	target, ok := x.decls[name]
+	if ok {
+		x.called(target)
+	}
 	switch {
 	case !ok:
 		x.report(it, MissingInclude, "include names unknown component %s", name)
@@ -67,10 +70,13 @@ func (g *graph) resolve(x *expander, call *markup.Item, ref string) ([]*markup.I
 		x.report(call, MissingInclude, "include %s: %v", ref, err)
 		return nil, false
 	}
-	target, ok := g.nodes[at]
+	target, ok := g.node(at)
 	if !ok {
 		x.report(call, MissingInclude, "include names unknown skill %s:%s", at.Package, at.Name)
 		return nil, false
+	}
+	if g.env.Included != nil {
+		g.env.Included(x.unit.key(), at, callSite(call))
 	}
 	if target.state == expanding {
 		g.cycle(x, call, target)
@@ -79,6 +85,9 @@ func (g *graph) resolve(x *expander, call *markup.Item, ref string) ([]*markup.I
 	g.trail = append(g.trail, step{from: x.unit, call: call})
 	g.expand(target)
 	g.trail = g.trail[:len(g.trail)-1]
+	if target.unit.Document == nil {
+		return nil, false
+	}
 	selected, err := target.section(anchor)
 	switch {
 	case err != nil:

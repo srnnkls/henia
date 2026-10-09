@@ -12,6 +12,7 @@ type Unit struct {
 	Document      *markup.Document
 	Components    map[string]Declaration
 	Values        map[string]any
+	Variables     map[string]string
 	Finish        func(*markup.Document) []Diagnostic
 }
 
@@ -64,16 +65,40 @@ func (g *graph) expand(n *node) {
 		return
 	}
 	n.state = expanding
+	defer func() { n.state = expanded }()
+	if n.unit.Document == nil {
+		return
+	}
 	env := g.env
 	env.Values = n.unit.Values
+	if n.unit.Variables != nil {
+		env.Variables = n.unit.Variables
+	}
 	x := newExpander(n.unit.Components, env)
 	x.graph, x.unit = g, n
 	g.diags = append(g.diags, x.run(n.unit.Document)...)
 	if n.unit.Finish != nil {
 		g.diags = append(g.diags, n.unit.Finish(n.unit.Document)...)
 	}
-	n.state = expanded
 }
+
+func (g *graph) node(at Key) (*node, bool) {
+	if n, ok := g.nodes[at]; ok {
+		return n, true
+	}
+	if g.env.Load == nil {
+		return nil, false
+	}
+	u, ok := g.env.Load(at)
+	if !ok {
+		return nil, false
+	}
+	n := &node{unit: u}
+	g.nodes[at] = n
+	return n, true
+}
+
+func (n *node) key() Key { return Key{n.unit.Package, n.unit.Name} }
 
 func (n *node) section(anchor string) ([]*markup.Item, error) {
 	doc := n.unit.Document

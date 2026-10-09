@@ -33,9 +33,12 @@ func testConfig(t *testing.T, content string) {
 
 func TestBuildMultipleHarnesses(t *testing.T) {
 	root := t.TempDir()
-	fixture(t, filepath.Join(root, "skills/example/SKILL.md"), "---\nname: example\ndescription: Example\npriority: critical\n---\n\n:::instruction{priority={{.priority}}}\nUse `!read`.\n:::\n")
+	fixture(t, filepath.Join(root, "skills/example/SKILL.md"), "---\nname: example\ndescription: Example\npriority: critical\n---\n\n:::prioritized\nUse `!read`.\n:::\n")
 	fixture(t, filepath.Join(root, "skills/example/reference/guide.md"), "# Guide\n")
 	testConfig(t, "[harness.claude]\ndirectives = 'xml'\n[harness.claude.tools]\nread = 'Read'\n[harness.codex]\ndirectives = 'keep'\n")
+	components := filepath.Join(filepath.Dir(configPath), ".henia", "components")
+	fixture(t, filepath.Join(components, "instruction.md"), "---\nform: container\nattributes:\n  priority:\n    type: string\nbody:\n  kind: markdown\nrender: keep\n---\n")
+	fixture(t, filepath.Join(components, "prioritized.md"), "---\nform: container\nbody:\n  kind: markdown\n---\n:::instruction{priority=\"{{.priority}}\"}\n::body\n:::\n")
 	output := filepath.Join(t.TempDir(), "out")
 	cmd := newBuildCommand()
 	cmd.SetOut(&bytes.Buffer{})
@@ -136,10 +139,8 @@ henia:
           display_name: "{{.title}}"
 ---
 
-{{define "instructions"}}:::instruction{priority={{.priority}}}
-Use `+"`$example`"+`.
-:::
-{{end}}{{template "instructions" .}}`)
+::include{template="instructions"}
+`)
 	testConfig(t, `[harness.claude]
 profile = "claude"
 strict = true
@@ -149,6 +150,9 @@ strict = true
 [harness.codex.variables]
 title = "Example display"
 `)
+	components := filepath.Join(filepath.Dir(configPath), ".henia", "components")
+	fixture(t, filepath.Join(components, "instruction.md"), "---\nform: container\nattributes:\n  priority:\n    type: string\nbody:\n  kind: markdown\nrender: keep\n---\n")
+	fixture(t, filepath.Join(components, "instructions.md"), "---\nform: leaf\nbody:\n  kind: none\n---\n:::instruction{priority=\"{{.priority}}\"}\nUse `$example`.\n:::\n")
 	output := filepath.Join(t.TempDir(), "out")
 	cmd := newBuildCommand()
 	cmd.SetOut(&bytes.Buffer{})
