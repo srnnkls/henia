@@ -1,5 +1,6 @@
 ---
 description: Frontmatter, templates and directives that skills, commands and agents must get right.
+stage: source
 params:
   max-age-days: 180
 ---

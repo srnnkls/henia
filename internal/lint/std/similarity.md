@@ -1,5 +1,6 @@
 ---
 description: Paragraphs that repeat each other in other words. Off until a threshold is set.
+stage: source
 params:
   min-words: 12
   similarity: 0

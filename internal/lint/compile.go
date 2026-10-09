@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/srnnkls/henia/internal/library"
@@ -58,8 +59,8 @@ func Compile(options Options) (*Plan, error) {
 	}
 	disabled := map[string]bool{}
 	for _, id := range options.Disable {
-		if _, ok := byID[id]; !ok {
-			return nil, fmt.Errorf("unknown lint rule %q; %s", id, pattern.Suggest(id, ids))
+		if _, ok := byID[id]; !ok && !slices.Contains(checkIDs, id) {
+			return nil, fmt.Errorf("unknown lint rule %q; %s", id, pattern.Suggest(id, append(ids, checkIDs...)))
 		}
 		disabled[id] = true
 	}
@@ -252,8 +253,13 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 			docs = append(docs, library.Document{Path: path, Kind: "skill", Dependency: true})
 		}
 	}
-	ev := &evaluation{corpus: corpus(docs, p.options.Templates, p.options.Variables)}
-	diagnostics := []Diagnostic{}
+	expanded, err := p.componentDiagnostics(files)
+	if err != nil {
+		return nil, err
+	}
+	diagnostics := expanded.diagnostics
+	sources := []*evaluation{{corpus: corpus(docs, expanded.units)}}
+	var trees []*evaluation
 	for _, s := range p.specs {
 		if p.disabled[s.id] {
 			continue
@@ -261,11 +267,28 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		found, err := ev.run(s, p.options)
-		if err != nil {
-			return nil, err
+		evaluations := sources
+		if s.stage == StageExpanded && len(expanded.targets) > 0 {
+			if trees == nil {
+				for _, target := range expanded.targets {
+					c := corpus(docs, expanded.units)
+					expandedFiles(c.Root, expanded.units, target)
+					trees = append(trees, &evaluation{corpus: c})
+				}
+			}
+			evaluations = trees
 		}
-		diagnostics = append(diagnostics, found...)
+		for _, ev := range evaluations {
+			found, err := ev.run(s, p.options)
+			if err != nil {
+				return nil, err
+			}
+			for _, d := range found {
+				if !expanded.checked(d.Path) || !slices.Contains(supersededRules, d.Rule) {
+					diagnostics = append(diagnostics, d)
+				}
+			}
+		}
 	}
 	return sortDiagnostics(diagnostics), nil
 }
@@ -274,6 +297,10 @@ func (p *Plan) Test() ([]ExampleFailure, int, error) {
 	var failures []ExampleFailure
 	count := 0
 	for _, s := range p.specs {
+		if s.stage == "" {
+			count++
+			failures = append(failures, ExampleFailure{Rule: s.id, Module: p.files[s.module].path, Problem: fmt.Sprintf("declares no stage; set stage: %s in the module frontmatter", strings.Join(stages, ", "))})
+		}
 		for _, ex := range s.examples {
 			count++
 			found, err := s.try(ex, p.options)
@@ -281,7 +308,7 @@ func (p *Plan) Test() ([]ExampleFailure, int, error) {
 				return nil, 0, err
 			}
 			if ex.matches != (found > 0) {
-				failures = append(failures, ExampleFailure{s.id, p.files[s.module].path, ex.line, ex.matches, found})
+				failures = append(failures, ExampleFailure{Rule: s.id, Module: p.files[s.module].path, Line: ex.line, Matches: ex.matches, Found: found})
 			}
 		}
 	}

@@ -2,8 +2,6 @@
 package build
 
 import (
-	"bytes"
-	"cmp"
 	"context"
 	"fmt"
 	"maps"
@@ -14,16 +12,25 @@ import (
 
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
-	"github.com/srnnkls/henia/internal/components"
-	"github.com/srnnkls/henia/internal/config"
-	"github.com/srnnkls/henia/internal/defaults"
-	"github.com/srnnkls/henia/internal/library"
-	"github.com/srnnkls/henia/internal/markup"
+	"github.com/srnnkls/henia/internal/pipeline"
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/profile"
 	"github.com/srnnkls/henia/internal/target"
 	"github.com/srnnkls/henia/internal/templates"
 	"github.com/srnnkls/henia/internal/transform"
+)
+
+type (
+	Dependency  = pipeline.Dependency
+	Unit        = pipeline.Unit
+	Target      = pipeline.Target
+	Diagnostics = pipeline.Diagnostics
+)
+
+var (
+	Expand  = pipeline.Expand
+	Known   = pipeline.Known
+	Targets = pipeline.Targets
 )
 
 type writeJob struct {
@@ -40,10 +47,6 @@ type Result struct {
 }
 
 // Run compiles local source directories. Each harness writes beneath output/name.
-type Dependency struct {
-	Root      string
-	Harnesses map[string]henia.Harness
-}
 
 func Run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, dependencies ...Dependency) (*Result, error) {
 	return RunSelected(ctx, sources, output, harnesses, harnesses, false, dependencies...)
@@ -66,35 +69,6 @@ func RunSelected(ctx context.Context, sources []string, output string, harnesses
 		}
 	}
 	return run(ctx, sources, output, harnesses, configured, clean, dependencies, nil)
-}
-
-func layered(harness henia.Harness, name, path string, dependencies []Dependency) henia.Harness {
-	for _, d := range dependencies {
-		own, ok := d.Harnesses[name]
-		if !ok || !strings.HasPrefix(path, d.Root+string(filepath.Separator)) {
-			continue
-		}
-		for _, field := range []struct{ project, dependency *map[string]string }{
-			{&harness.Variables, &own.Variables}, {&harness.Tools, &own.Tools}, {&harness.References, &own.References},
-		} {
-			merged := maps.Clone(*field.dependency)
-			if merged == nil {
-				merged = map[string]string{}
-			}
-			maps.Copy(merged, *field.project)
-			*field.project = merged
-		}
-	}
-	return harness
-}
-
-func templateRoot(project, path string, dependencies []Dependency) string {
-	for _, d := range dependencies {
-		if strings.HasPrefix(path, d.Root+string(filepath.Separator)) {
-			return d.Root
-		}
-	}
-	return project
 }
 
 func run(ctx context.Context, sources []string, output string, harnesses, configured map[string]henia.Harness, clean bool, dependencies []Dependency, extra []*artifact.Artifact) (*Result, error) {
@@ -147,7 +121,7 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 			return nil, err
 		}
 	}
-	targets, err := Targets(configured, dependencies)
+	targets, err := pipeline.Targets(configured, dependencies)
 	if err != nil {
 		return nil, err
 	}
@@ -192,12 +166,12 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 		known := map[string]map[string]bool{}
 		for _, art := range allArtifacts {
 			if art.Type != artifact.TypeUnknown && !slices.Contains(filtered, art) {
-				units = append(units, unitFor(art, harnessName, outputPath, layered(harness, harnessName, art.SourcePath, dependencies), served, allArtifacts, targets, known, dependencies))
+				units = append(units, unitFor(art, harnessName, outputPath, pipeline.Layered(harness, harnessName, art.SourcePath, dependencies), served, allArtifacts, targets, known, dependencies))
 			}
 		}
 		for _, art := range filtered {
-			h := layered(harness, harnessName, art.SourcePath, dependencies)
-			root := templateRoot(h.ProjectRoot, art.SourcePath, dependencies)
+			h := pipeline.Layered(harness, harnessName, art.SourcePath, dependencies)
+			root := pipeline.Root(h.ProjectRoot, art.SourcePath, dependencies)
 			effective, tr, err := transformerFor(harnessName, outputPath, h, art.Type)
 			if err == nil {
 				tr.Served = served
@@ -207,7 +181,7 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 			}
 			if err != nil {
 				documentError(err)
-				units = append(units, &Unit{Artifact: art, Package: packageName(root, dependencies), Err: err})
+				units = append(units, &Unit{Artifact: art, Package: pipeline.PackageName(root, dependencies), Err: err})
 				continue
 			}
 			hybrid := art.Type == artifact.TypeSkill && art.Name != CatalogName && harness.Mode("skills", art.Name) == henia.Hybrid
@@ -372,8 +346,8 @@ func resolvedPath(path string) (string, error) {
 }
 
 func unitFor(art *artifact.Artifact, name, output string, h henia.Harness, served map[string]bool, all []*artifact.Artifact, targets map[string]map[string]string, known map[string]map[string]bool, dependencies []Dependency) *Unit {
-	root := templateRoot(h.ProjectRoot, art.SourcePath, dependencies)
-	failed := &Unit{Artifact: art, Package: packageName(root, dependencies)}
+	root := pipeline.Root(h.ProjectRoot, art.SourcePath, dependencies)
+	failed := &Unit{Artifact: art, Package: pipeline.PackageName(root, dependencies)}
 	effective, tr, err := transformerFor(name, output, h, art.Type)
 	if err != nil {
 		failed.Err = err
@@ -392,9 +366,9 @@ func unitFor(art *artifact.Artifact, name, output string, h henia.Harness, serve
 
 func pipelineUnit(art *artifact.Artifact, tr *transform.Transformer, effective henia.Harness, root string, all []*artifact.Artifact, targets map[string]map[string]string, known map[string]map[string]bool, dependencies []Dependency) *Unit {
 	if known[root] == nil {
-		known[root] = Known(packageArtifacts(all, root, effective.ProjectRoot, dependencies), targets)
+		known[root] = pipeline.Known(pipeline.PackageArtifacts(all, root, effective.ProjectRoot, dependencies), targets)
 	}
-	u := &Unit{Artifact: art, Transformer: tr, Package: packageName(root, dependencies), Root: root, Known: known[root], Variables: effective.Variables}
+	u := &Unit{Artifact: art, Transformer: tr, Package: pipeline.PackageName(root, dependencies), Root: root, Known: known[root], Variables: effective.Variables}
 	if root == effective.ProjectRoot {
 		u.User = effective.UserRoot
 	}
@@ -455,337 +429,9 @@ func Renderer(art *artifact.Artifact, name string, h henia.Harness, served map[s
 }
 
 func Legacy(art *artifact.Artifact, shared map[string]string) bool {
-	layout, _ := heniaSettings(art.Frontmatter)["layout"].(string)
+	settings, _ := art.Frontmatter["henia"].(map[string]any)
+	layout, _ := settings["layout"].(string)
 	return len(shared) > 0 || layout != ""
-}
-
-func heniaSettings(frontmatter map[string]any) map[string]any {
-	settings, _ := frontmatter["henia"].(map[string]any)
-	return settings
-}
-
-type Unit struct {
-	Artifact    *artifact.Artifact
-	Transformer *transform.Transformer
-	Package     string
-	Root, User  string
-	Known       map[string]bool
-	Variables   map[string]string
-	Err         error
-
-	result *artifact.Artifact
-	values map[string]any
-	doc    *markup.Document
-	path   string
-	source []byte
-	offset int
-	err    error
-	diags  []components.Diagnostic
-	calls  []string
-	edges  []edge
-	done   bool
-	failed Diagnostics
-}
-
-type edge struct {
-	to   *Unit
-	call markup.Origin
-}
-
-type Target struct {
-	Name      string
-	Harnesses map[string]map[string]string
-	Resolve   func(from components.Unit, ref string) (components.Key, string, error)
-	Load      func(components.Key) *Unit
-}
-
-type componentSet struct {
-	decls    map[string]components.Declaration
-	problems []components.Diagnostic
-	known    map[string]bool
-	docs     []components.Document
-	checked  bool
-}
-
-func loadComponents(root, user string) *componentSet {
-	decls, problems := components.Load(root, user)
-	set := &componentSet{decls: decls, known: map[string]bool{}}
-	for _, p := range problems {
-		set.problems = append(set.problems, components.Diagnostic{ID: p.ID, Level: components.LevelError, Path: p.Path, Message: p.Message})
-	}
-	return set
-}
-
-type expansion struct {
-	sets   map[[2]string]*componentSet
-	byKey  map[components.Key]*Unit
-	byPath map[string]*Unit
-	decl   map[string][]components.Diagnostic
-	units  []*Unit
-}
-
-func Expand(units []*Unit, t Target) {
-	e := &expansion{sets: map[[2]string]*componentSet{}, byKey: map[components.Key]*Unit{}, byPath: map[string]*Unit{}, decl: map[string][]components.Diagnostic{}}
-	expandable := make([]components.Unit, 0, len(units))
-	for _, u := range units {
-		expandable = append(expandable, e.add(u))
-	}
-	for _, set := range e.sets {
-		e.check(set, set.docs)
-	}
-	env := components.Environment{
-		Target: t.Name, Harnesses: t.Harnesses, Resolve: t.Resolve,
-		Load: func(k components.Key) (components.Unit, bool) {
-			if t.Load == nil {
-				return components.Unit{}, false
-			}
-			u := t.Load(k)
-			if u == nil {
-				return components.Unit{}, false
-			}
-			loaded := e.add(u)
-			if u.doc != nil {
-				e.check(e.sets[[2]string{u.Root, u.User}], []components.Document{{Path: u.path, Source: u.source}})
-			}
-			return loaded, true
-		},
-		Included: func(from, to components.Key, call markup.Origin) {
-			if u, dep := e.byKey[from], e.byKey[to]; u != nil && dep != nil && dep != u {
-				u.edges = append(u.edges, edge{dep, call})
-			}
-		},
-		Called: func(from components.Key, decl components.Declaration) {
-			if u := e.byKey[from]; u != nil && !slices.Contains(u.calls, decl.Path) {
-				u.calls = append(u.calls, decl.Path)
-			}
-		},
-	}
-	for _, d := range components.ExpandDocuments(expandable, env) {
-		if u := e.byPath[d.Path]; u != nil {
-			d.Line += u.offset
-			u.report(d)
-			continue
-		}
-		e.decl[d.Path] = append(e.decl[d.Path], d)
-	}
-	for _, u := range e.units {
-		e.failures(u, map[*Unit]bool{})
-	}
-}
-
-func (e *expansion) add(u *Unit) components.Unit {
-	e.units = append(e.units, u)
-	art := u.Artifact
-	key := components.Key{Package: u.Package, Name: unitName(art)}
-	e.byKey[key] = u
-	u.path = art.SourcePath
-	if art.IsDirectory {
-		u.path = filepath.Join(u.path, artifact.MainFileName(art.Type))
-	}
-	if u.err = u.Err; u.err == nil {
-		u.prepare()
-	}
-	if u.err != nil {
-		return components.Unit{Name: key.Name, Package: key.Package}
-	}
-	set := e.sets[[2]string{u.Root, u.User}]
-	if set == nil {
-		set = loadComponents(u.Root, u.User)
-		e.sets[[2]string{u.Root, u.User}] = set
-	}
-	maps.Copy(set.known, u.Known)
-	u.diags = append(u.diags, set.problems...)
-	set.docs = append(set.docs, components.Document{Path: u.path, Source: u.source})
-	e.byPath[u.path] = u
-	values := maps.Clone(u.values)
-	for name := range u.Known {
-		if _, ok := values[name]; !ok {
-			values[name] = nil
-		}
-	}
-	return components.Unit{
-		Name: key.Name, Package: key.Package, Document: u.doc, Components: set.decls, Values: values, Variables: u.Variables,
-		Finish: func(doc *markup.Document) []components.Diagnostic {
-			transform.Listings(doc, art.Name, art.Type == artifact.TypeSkill)
-			return nil
-		},
-	}
-}
-
-func (e *expansion) check(set *componentSet, docs []components.Document) {
-	for _, d := range components.Check(docs, set.decls, set.known) {
-		if d.Level != components.LevelError {
-			continue
-		}
-		if u := e.byPath[d.Path]; u != nil {
-			u.report(d)
-			continue
-		}
-		if !set.checked {
-			e.decl[d.Path] = append(e.decl[d.Path], d)
-		}
-	}
-	set.checked = true
-}
-
-func (u *Unit) report(d components.Diagnostic) {
-	if !slices.ContainsFunc(u.diags, func(c components.Diagnostic) bool {
-		return c.ID == d.ID && c.Path == d.Path && c.Line == d.Line && c.Column == d.Column
-	}) {
-		u.diags = append(u.diags, d)
-	}
-}
-
-func (e *expansion) failures(u *Unit, visiting map[*Unit]bool) Diagnostics {
-	if u.done || visiting[u] {
-		return u.failed
-	}
-	visiting[u] = true
-	failed := slices.Clone(u.diags)
-	if u.err != nil {
-		failed = append(failed, components.Diagnostic{Level: components.LevelError, Path: u.path, Message: u.err.Error()})
-	}
-	for _, path := range u.calls {
-		failed = append(failed, e.decl[path]...)
-	}
-	for _, dep := range u.edges {
-		line := dep.call.Line
-		if dep.call.File == u.path {
-			line += u.offset
-		}
-		note := fmt.Sprintf("included from %s:%d:%d", dep.call.File, line, dep.call.Column)
-		for _, d := range e.failures(dep.to, visiting) {
-			d.Notes = append(slices.Clone(d.Notes), note)
-			failed = append(failed, d)
-		}
-	}
-	slices.SortStableFunc(failed, func(a, b components.Diagnostic) int {
-		return cmp.Or(cmp.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column))
-	})
-	u.failed, u.done = failed, true
-	delete(visiting, u)
-	return failed
-}
-
-func (u *Unit) prepare() {
-	if u.result, u.values, u.err = u.Transformer.Prepare(u.Artifact); u.err != nil {
-		return
-	}
-	body := []byte(u.Artifact.Body)
-	u.source = body
-	if data, err := os.ReadFile(u.path); err == nil && bytes.HasSuffix(data, body) {
-		u.source, u.offset = data, bytes.Count(data[:len(data)-len(body)], []byte{'\n'})
-	}
-	u.doc, _ = markup.Parse(u.path, body)
-}
-
-func (u *Unit) Render() (*artifact.Artifact, error) {
-	switch {
-	case u.err != nil:
-		return nil, u.err
-	case len(u.failed) > 0:
-		return nil, u.failed
-	}
-	body, err := u.Transformer.RenderDocument(u.doc, u.Artifact)
-	if err != nil {
-		return nil, err
-	}
-	u.result.Body = body
-	return u.result, nil
-}
-
-func unitName(art *artifact.Artifact) string {
-	if art.Type == artifact.TypeSkill {
-		return art.Name
-	}
-	return string(art.Type) + "/" + art.Name
-}
-
-type Diagnostics []components.Diagnostic
-
-func (ds Diagnostics) Error() string {
-	var b strings.Builder
-	for i, d := range ds {
-		if i > 0 {
-			b.WriteByte('\n')
-		}
-		b.WriteString(d.Path)
-		if d.Line > 0 {
-			fmt.Fprintf(&b, ":%d:%d", d.Line, d.Column)
-		}
-		fmt.Fprintf(&b, ": %s ", d.Level)
-		if d.ID != "" {
-			fmt.Fprintf(&b, "[%s] ", d.ID)
-		}
-		b.WriteString(d.Message)
-		for _, note := range d.Notes {
-			fmt.Fprintf(&b, "\n  note: %s", note)
-		}
-	}
-	return b.String()
-}
-
-func Known(arts []*artifact.Artifact, harnesses map[string]map[string]string) map[string]bool {
-	known := map[string]bool{}
-	for _, art := range arts {
-		if art.Type != artifact.TypeSkill {
-			continue
-		}
-		for name := range art.Frontmatter {
-			known[name] = true
-		}
-		if vars, ok := heniaSettings(art.Frontmatter)["variables"].(map[string]any); ok {
-			for name := range vars {
-				known[name] = true
-			}
-		}
-	}
-	for _, vars := range harnesses {
-		for name := range vars {
-			known[name] = true
-		}
-	}
-	return known
-}
-
-func Targets(harnesses map[string]henia.Harness, dependencies []Dependency) (map[string]map[string]string, error) {
-	builtin, err := config.Harnesses([]byte(defaults.ConfigTOML))
-	if err != nil {
-		return nil, err
-	}
-	layers := []map[string]henia.Harness{builtin}
-	for _, d := range dependencies {
-		layers = append(layers, d.Harnesses)
-	}
-	targets := map[string]map[string]string{}
-	for _, layer := range append(layers, harnesses) {
-		for name, h := range layer {
-			if targets[name] == nil {
-				targets[name] = map[string]string{}
-			}
-			maps.Copy(targets[name], h.Variables)
-		}
-	}
-	return targets, nil
-}
-
-func packageArtifacts(all []*artifact.Artifact, root, project string, dependencies []Dependency) []*artifact.Artifact {
-	var arts []*artifact.Artifact
-	for _, art := range all {
-		if templateRoot(project, art.SourcePath, dependencies) == root {
-			arts = append(arts, art)
-		}
-	}
-	return arts
-}
-
-func packageName(root string, dependencies []Dependency) string {
-	for _, d := range dependencies {
-		if d.Root == root {
-			return filepath.Base(root)
-		}
-	}
-	return library.Project
 }
 
 func Served(all, projected []*artifact.Artifact) map[string]bool {

@@ -1,5 +1,6 @@
 ---
 description: Content and names repeated across the scanned artifacts.
+stage: source
 params:
   min-words: 12
 ---

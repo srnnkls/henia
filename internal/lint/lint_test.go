@@ -255,3 +255,23 @@ func TestWalkLintsArtifactsAndSkillResources(t *testing.T) {
 		t.Fatalf("explicit document: %+v, %v", diagnostics, err)
 	}
 }
+
+func TestRuleWithoutStageFailsLintTest(t *testing.T) {
+	modules := t.TempDir()
+	write(t, modules, "team/headings.md", "## shouting\n\n```hq\n(rule shouting :message \"m\" (heading) @h)\n```\n\n### Matches\n\n```md\n# Loud\n```\n")
+	var reported []string
+	plan, err := lint.Compile(lint.Options{Modules: []lint.ModuleDir{{Dir: modules}}})
+	if err == nil {
+		var failures []lint.ExampleFailure
+		failures, _, err = plan.Test()
+		for _, f := range failures {
+			reported = append(reported, f.Error())
+		}
+	}
+	if err != nil {
+		reported = append(reported, err.Error())
+	}
+	if !slices.ContainsFunc(reported, func(s string) bool { return strings.Contains(s, "shouting") && strings.Contains(s, "stage") }) {
+		t.Fatalf("lint test reported %q, want a failure naming rule shouting and its missing stage", reported)
+	}
+}

@@ -124,16 +124,12 @@ func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selec
 		harnesses[name] = h
 	}
 	sources := []string{source}
-	var layers []build.Dependency
 	for _, dependency := range dependencies {
 		sources = append(sources, dependency.Root)
-		own := map[string]henia.Harness{}
-		if data, err := os.ReadFile(dependency.Config); err == nil {
-			if own, err = config.Harnesses(data); err != nil {
-				return nil, fmt.Errorf("package %s: %w", dependency.Name, err)
-			}
-		}
-		layers = append(layers, build.Dependency{Root: dependency.Root, Harnesses: own})
+	}
+	layers, err := dependencyLayers(dependencies)
+	if err != nil {
+		return nil, err
 	}
 	result, err := build.RunSelected(cmd.Context(), sources, destination, harnesses, cfg.Harness, clean, layers...)
 	if err != nil {

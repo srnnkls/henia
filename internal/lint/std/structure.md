@@ -1,5 +1,9 @@
 ---
 description: Size and heading structure of skills, commands and agents.
+stage:
+  large-skill: source
+  large-head: rendered
+  duplicate-heading: rendered
 params:
   max-lines: 500
   max-head-lines: 150

@@ -2,13 +2,13 @@ checkpoint:
   scope_name: components
   scope_path: scopes/active/components
   branch: feat/components
-  last_commit: 60bec56
-  updated_at: "2026-10-09T01:08:26Z"
+  last_commit: e6577ee
+  updated_at: "2026-10-09T01:56:16Z"
   base_drift: {base: origin/main, behind: 0, ahead: 0, checked_at: "2026-10-08T22:14:38Z"}
 
   batch:
-    number: 5
-    tasks: [CMP-008]
+    number: 6
+    tasks: [CMP-009]
     phase: complete
     status: completed
 
@@ -25,15 +25,14 @@ checkpoint:
 
   reports:
     tester:
-      CMP-008: .peer/components/20261008T221438Z-201fe2/b5-tester-CMP-008
+      CMP-009: .peer/components/20261008T221438Z-201fe2/b6-tester-CMP-009
     implementer:
-      CMP-008: .peer/components/20261008T221438Z-201fe2/b5-implementer-CMP-008
+      CMP-009: .peer/components/20261008T221438Z-201fe2/b6-implementer-CMP-009
     review:
-      general: .peer/components/20261008T221438Z-201fe2/b5-review-general
-      architecture: .peer/components/20261008T221438Z-201fe2/b5-review-architecture
-      compliance: .peer/components/20261008T221438Z-201fe2/b5-review-compliance
+      general: .peer/components/20261008T221438Z-201fe2/b6-review-general
+      architecture: .peer/components/20261008T221438Z-201fe2/b6-review-architecture
+      compliance: .peer/components/20261008T221438Z-201fe2/b6-review-compliance
 
   orchestrator_notes:
-    - "Accepted transitional build.Legacy route; carried to CMP-016."
-    - "Pre-admitted B5-0: --harness narrows configured harnesses; unselected custom harness in :::when -> unknown-target."
-  fix_round: {number: 1, groups: [A], findings: [B5-0, B5-1, B5-2, B5-3, B5-4, B5-5, B5-6, B5-7, B5-8, B5-9], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b5-rereview}
+    - "Tester deleted internal/lint/templates_test.go; orchestrator restored it from HEAD (removal belongs with the behaviour change in GREEN)."
+  fix_round: {number: 1, groups: [A], findings: [B6-1, B6-2, B6-3, B6-4, B6-5, B6-6, B6-7], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b6-rereview}

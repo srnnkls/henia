@@ -1,5 +1,6 @@
 ---
 description: Links and references that point nowhere or at outdated names.
+stage: rendered
 data:
   outdated: {}
 ---

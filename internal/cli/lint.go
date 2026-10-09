@@ -10,11 +10,12 @@ import (
 	"slices"
 
 	"github.com/spf13/cobra"
+	"github.com/srnnkls/henia"
+	"github.com/srnnkls/henia/internal/build"
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
 	"github.com/srnnkls/henia/internal/profile"
-	"github.com/srnnkls/henia/internal/templates"
 )
 
 func newLintCommand() *cobra.Command {
@@ -55,8 +56,17 @@ func newLintCommand() *cobra.Command {
 				}
 			} else {
 				for _, d := range diagnostics {
-					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s:%d:%d: %s [%s] %s\n", d.Path, d.Line, d.Column, d.Severity, d.Rule, d.Message); err != nil {
+					location := d.Path
+					if d.Line > 0 {
+						location = fmt.Sprintf("%s:%d:%d", d.Path, d.Line, d.Column)
+					}
+					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: %s [%s] %s\n", location, d.Severity, d.Rule, d.Message); err != nil {
 						return err
+					}
+					for _, note := range d.Notes {
+						if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  note: %s\n", note); err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -150,17 +160,32 @@ func lintOptions(cmd *cobra.Command) (lint.Options, *config.Config, error) {
 			options.Builtin = append(options.Builtin, "agent:"+agent)
 		}
 	}
-	options.Templates = templates.Files(project, library.ConfigDir())
-	options.Variables = map[string]string{}
-	for _, name := range slices.Sorted(maps.Keys(cfg.Harness)) {
-		for k, v := range cfg.Harness[name].Variables {
-			if _, ok := options.Variables[k]; !ok {
-				options.Variables[k] = v
-			}
+	options.Project, options.User, options.Configured = project, library.ConfigDir(), cfg.Harness
+	var dependencies []library.Package
+	for _, pkg := range lib.Packages {
+		if pkg.Tier == library.Dependency {
+			dependencies = append(dependencies, pkg)
 		}
+	}
+	if options.Packages, err = dependencyLayers(dependencies); err != nil {
+		return lint.Options{}, nil, err
 	}
 	options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(library.ConfigDir(), "lint")}, lint.ModuleDir{Dir: filepath.Join(project, library.ProjectDir, "lint")})
 	return options, cfg, nil
+}
+
+func dependencyLayers(dependencies []library.Package) ([]build.Dependency, error) {
+	var layers []build.Dependency
+	for _, dependency := range dependencies {
+		own := map[string]henia.Harness{}
+		if data, err := os.ReadFile(dependency.Config); err == nil {
+			if own, err = config.Harnesses(data); err != nil {
+				return nil, fmt.Errorf("package %s: %w", dependency.Name, err)
+			}
+		}
+		layers = append(layers, build.Dependency{Root: dependency.Root, Harnesses: own})
+	}
+	return layers, nil
 }
 
 func packageContents(project string, cfg *config.Config) []string {

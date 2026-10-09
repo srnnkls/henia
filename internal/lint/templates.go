@@ -19,91 +19,6 @@ type templateName struct {
 	implicit bool
 }
 
-type templateSource struct {
-	file    *markup.Element
-	source  []byte
-	offset  int
-	defines []templateName
-	uses    []templateName
-	shared  *templates.File
-}
-
-func addTemplates(root *markup.Element, documents []document, shared []templates.File) {
-	files := map[string]*markup.Element{}
-	root.Walk(func(e *markup.Element) bool {
-		if e.Type == "file" {
-			files[e.Attrs["file"]] = e
-		}
-		return true
-	})
-	var sources []*templateSource
-	for _, d := range documents {
-		file := files[d.path]
-		if file == nil {
-			continue
-		}
-		s := &templateSource{file: file, source: d.source, offset: d.offset}
-		s.defines, s.uses = templateNames(string(d.body))
-		if layout := layoutName(d); layout != "" {
-			s.uses = append(s.uses, templateName{name: layout, offset: bytes.Index(d.source[:d.offset], []byte(layout)) - d.offset})
-		}
-		sources = append(sources, s)
-	}
-	known := map[string]bool{}
-	for i := range shared {
-		data, err := os.ReadFile(shared[i].Path)
-		if err != nil {
-			continue
-		}
-		attrs := map[string]string{"file": shared[i].Path, "path": shared[i].Path, "kind": "template", "name": shared[i].Name}
-		if shared[i].User {
-			attrs["dependency"] = "true"
-		}
-		file := &markup.Element{Type: "file", Attrs: attrs, Line: 1, EndLine: 1, Parent: root, Index: len(root.Children)}
-		root.Children = append(root.Children, file)
-		s := &templateSource{file: file, source: data, shared: &shared[i]}
-		s.defines, s.uses = templateNames(string(data))
-		known[shared[i].Name] = true
-		for _, define := range s.defines {
-			known[define.name] = true
-		}
-		sources = append(sources, s)
-	}
-	used := map[string]bool{}
-	for _, s := range sources {
-		own := map[string]bool{}
-		for _, define := range s.defines {
-			own[define.name] = true
-		}
-		for _, use := range s.uses {
-			if s.shared == nil || !own[use.name] {
-				used[use.name] = true
-			}
-			if !use.implicit {
-				s.add("use", use, map[string]string{"resolved": strconv.FormatBool(known[use.name] || own[use.name])})
-			}
-		}
-	}
-	for _, s := range sources {
-		if s.shared == nil {
-			continue
-		}
-		reached := used[s.shared.Name]
-		for _, define := range s.defines {
-			reached = reached || used[define.name]
-		}
-		s.add("template", templateName{name: s.shared.Name}, map[string]string{"used": strconv.FormatBool(reached)})
-	}
-}
-
-func (s *templateSource) add(role string, n templateName, attrs map[string]string) {
-	offset := min(max(s.offset+n.offset, 0), len(s.source))
-	line := bytes.Count(s.source[:offset], []byte{'\n'}) + 1
-	column := offset - bytes.LastIndexByte(s.source[:offset], '\n')
-	attrs["role"], attrs["name"] = role, n.name
-	s.file.Children = append(s.file.Children, &markup.Element{Type: "template", Attrs: attrs, Text: n.name, Line: line, EndLine: line, Column: column, Parent: s.file, Index: len(s.file.Children)})
-}
-
 // sectionAnchors over-approximates the anchors d renders: its own headings and
 // those of every shared template it reaches, whichever branch emits them.
 func sectionAnchors(d document, shared []templates.File) map[string]bool {
@@ -115,6 +30,7 @@ func sectionAnchors(d document, shared []templates.File) map[string]bool {
 		}
 	}
 	collect(d.body)
+	maps.Copy(anchors, d.expandedAnchors)
 	owner := map[string]int{}
 	sources := make([][]byte, len(shared))
 	for i, f := range shared {

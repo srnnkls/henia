@@ -322,6 +322,64 @@ $ D="$T/dep"; mk "$D/skills/dep/SKILL.md" '---\nname: dep\ndescription: Dep.\n--
 Dep flavored.
 ```
 
+## Lint
+
+Source lint reports a call to an undeclared component and a project component
+nothing calls; a component only another component's template includes counts
+as called.
+
+```scrut
+$ proj lint-source && lint() { henia lint "$@" 2>&1 | sed "s|$P/||g"; }
+> mk .henia/components/note.md '---\nform: container\nbody:\n  kind: markdown\n---\n> Note\n\n::body\n'
+> mk .henia/components/part.md '---\nform: leaf\nbody:\n  kind: none\n---\nPart.\n'
+> mk .henia/components/box.md '---\nform: leaf\nbody:\n  kind: none\n---\n::include{template="part"}\n'
+> mk .henia/components/stale.md '---\nform: leaf\nbody:\n  kind: none\n---\nOld.\n'
+> skill deploy '' ':::note\nNote.\n:::\n\n::box\n\n:::gone\nText.\n:::\n'
+> lint skills --strict
+.henia/components/stale.md: warning [unused-component] component stale is never called
+skills/deploy/SKILL.md:11:1: error [unknown-component] unknown component gone
+Error: lint found 2 diagnostic(s)
+```
+
+Expanded lint checks every target. A finding in a component's output points at
+the skill's call, with a note naming the component line.
+
+```scrut
+$ proj lint-expanded
+> mk .henia/components/title.md '---\nform: leaf\nattributes:\n  title:\n    type: string\nbody:\n  kind: none\n---\n# {{.title}}\n'
+> mk .henia/components/bad.md '---\nform: leaf\nbody:\n  kind: none\n---\n::include{template="title" title="X" nope=1}\n'
+> skill gen '' '::bad\n\n:::when{target="clod"}\nx\n:::\n\n:::when{nope=true}\ny\n:::\n'
+> lint skills | sed 's/; want one of .*//'
+skills/gen/SKILL.md:5:1: error [unknown-attribute] title does not declare attribute nope
+  note: expanded from component .henia/components/bad.md:6
+skills/gen/SKILL.md:7:1: error [unknown-target] unknown target clod
+skills/gen/SKILL.md:11:1: error [unknown-variable] no harness declares variable nope
+Error: lint found 3 diagnostic(s)
+```
+
+A slot a component's output applies counts as applied, rendered with the
+skill's values and the harness variables.
+
+```scrut
+$ proj lint-partial && printf 'artifacts = ["skills"]\n\n[harness.claude]\nartifacts = ["skills"]\n\n[harness.claude.variables]\nlabel = "Providers"\n' > henia.toml
+> mk .henia/components/context.md '---\nform: leaf\nattributes:\n  slots:\n    type: list\n    of: slot\nbody:\n  kind: none\n---\n{{.label}}:\n\n:slot[{{range .slots}}{{.}} {{end}}]\n'
+> skill git 'henia:\n  slots:\n    git.commits:\n    git.branching:\n' '::context{slots="git.commits"}\n\n# Git\n'
+> lint skills --strict
+skills/git/SKILL.md:7:5: warning [unused-slot] slot git.branching is declared but no scanned skill applies it
+Error: lint found 1 diagnostic(s)
+```
+
+`missing-section` reports a slot offer whose section the skill does not
+render. A heading that comes from a component counts.
+
+```scrut
+$ proj lint-sections && mk .henia/components/article.md '---\nform: leaf\nbody:\n  kind: none\n---\n# {{.name}}\n\n## Commits\n'
+> skill git 'henia:\n  slots:\n    git.commits:\n    git.branching:\n  provides:\n    git.commits: {section: commits}\n    git.branching: {section: branching}\n' '::article\n\n:slot[git.commits git.branching]\n'
+> lint skills
+skills/git/SKILL.md:10:30: error [missing-section] slot git.branching offers section #branching, which the skill does not render
+Error: lint found 1 diagnostic(s)
+```
+
 ```scrut
 $ rm -rf "$T"
 ```

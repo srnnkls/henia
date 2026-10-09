@@ -117,3 +117,25 @@ batches:
     gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
     validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 167/167"
     status: complete
+  - batch: 6
+    tasks: [CMP-009]
+    run: 20261008T221438Z-201fe2
+    reports: .peer/components/20261008T221438Z-201fe2/b6-review-{general,architecture,compliance}
+    coverage: {native: [claude-opus x3], peer: [peer-gpt6.1-sol x3, peer-gpt6-astra x3]}
+    gates_initial: {correctness: fail, security: pass, performance: pass, architecture: fail, style: pass}
+    admitted:
+      - {id: B6-1, severity: high, group: A, found_by: [claude-opus, sol, astra], location: "internal/lint/components.go:361-376,505-568", trigger: "project skill a with ::include{ref=\"dep:a\"}; command foo.md beside skill foo; ambiguous unqualified name", wrong_outcome: "qualifier stripped, local-first, bare-name unit keys, first-match on ambiguity; false include-cycle/missing-include; diverges from build/show", verified: "by code reading (3 reviewers)"}
+      - {id: B6-2, severity: high, group: A, found_by: [claude-opus, sol, astra], location: "internal/cli/lint.go:168; lint expand.prepare", trigger: "dependency declares harness/variable used in :::when; dependency section inside :::when{flavor=dep}", wrong_outcome: "build.Targets without dependencies -> false unknown-target/unknown-variable; dependency expanded with project variables -> false missing-include", verified: "by code reading"}
+      - {id: B6-3, severity: high, group: A, found_by: [astra], location: "internal/lint/compile.go:261", trigger: "module with stage: expanded and a heading rule; heading emitted by a component", wrong_outcome: "expanded-stage hq rules run on the source corpus; generated heading never seen", verified: "by code reading"}
+      - {id: B6-4, severity: high, group: A, found_by: [sol, astra], location: "internal/lint/components.go:460-474", trigger: "slots=\"git.nope\" with git non-keyed list; ::include{template=\"tags\" slots=\"nope\"}; literal ::tags{slots=\"nope\"} inside a text-kind body", wrong_outcome: "undeclared slot accepted (prefix test, include forwarding bypass); false invalid-attribute inside text bodies", verified: "by code reading"}
+      - {id: B6-5, severity: high, group: A, found_by: [sol], location: "internal/lint/components.go:164", trigger: "generated ::include{template=\"title\" extra=1 nope=2}", wrong_outcome: "dedupe on rule/path/line/col drops one of two distinct unknown-attribute errors", verified: "by code reading"}
+      - {id: B6-6, severity: high, group: A, found_by: [sol], location: "internal/lint/components.go:134", trigger: "project a includes dep:b; b has undeclared ::gone", wrong_outcome: "dependency source/expansion errors discarded; lint passes while build/show reject", verified: "by code reading"}
+      - {id: B6-7, severity: high, group: A, found_by: [sol], location: "internal/lint/components.go:236", trigger: "henia lint on one SKILL.md whose component reads a value only a sibling skill declares", wrong_outcome: "known values from selected files only -> false unknown-field/invalid-template (AD-3: package-wide)", verified: "by code reading"}
+    residual: []
+    rereview_round_1: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b6-rereview, resolved: [B6-1, B6-2, B6-3, B6-4, B6-5, B6-6, B6-7]}
+    residual:
+      - "expanded lint runs for every built-in target, including unbuilt ones -> false missing-include (carried to CMP-010: stages run for the harnesses build builds)"
+      - "component paths/notes printed symlink-resolved absolute (carried to CMP-010)"
+    gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
+    validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 166/166; henia lint test 34/34"
+    status: complete

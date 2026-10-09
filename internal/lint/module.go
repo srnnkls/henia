@@ -17,7 +17,6 @@ import (
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/pattern"
 	"github.com/srnnkls/henia/internal/similarity"
-	"github.com/srnnkls/henia/internal/templates"
 )
 
 //go:embed std/*.md
@@ -36,6 +35,7 @@ type InlineRule struct {
 
 type spec struct {
 	id       string
+	stage    string
 	rules    []*pattern.Rule
 	module   string
 	params   map[string]pattern.Value
@@ -137,7 +137,7 @@ func (r *registry) specs(inline []InlineRule) ([]*spec, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := add(&spec{id: rule.ID, rules: []*pattern.Rule{rule}, module: "henia.toml", params: params, data: data}); err != nil {
+		if err := add(&spec{id: rule.ID, stage: StageSource, rules: []*pattern.Rule{rule}, module: "henia.toml", params: params, data: data}); err != nil {
 			return nil, err
 		}
 	}
@@ -244,10 +244,36 @@ func (r *registry) parse(file moduleFile) ([]*spec, map[string]pattern.Define, e
 			s.rules = append(s.rules, rule)
 			continue
 		}
-		byID[rule.ID] = &spec{id: rule.ID, rules: []*pattern.Rule{rule}, module: file.name, params: params, data: data, examples: examples[rule.ID]}
+		stage, err := ruleStage(art.Frontmatter["stage"], rule.ID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", file.path, err)
+		}
+		byID[rule.ID] = &spec{id: rule.ID, stage: stage, rules: []*pattern.Rule{rule}, module: file.name, params: params, data: data, examples: examples[rule.ID]}
 		specs = append(specs, byID[rule.ID])
 	}
 	return specs, module.Defines, nil
+}
+
+func ruleStage(raw any, rule string) (string, error) {
+	var stage any
+	switch declared := raw.(type) {
+	case nil:
+		return "", nil
+	case string:
+		stage = declared
+	case map[string]any:
+		stage = declared[rule]
+		if stage == nil {
+			return "", nil
+		}
+	default:
+		return "", fmt.Errorf("stage must be a stage or a table of rule stages, not %T", raw)
+	}
+	name, ok := stage.(string)
+	if !ok || !validStage(name) {
+		return "", fmt.Errorf("stage of rule %s must be %s, not %v", rule, strings.Join(stages, ", "), stage)
+	}
+	return name, nil
 }
 
 type evaluation struct {
@@ -301,7 +327,7 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 		if at == nil || disabledHere(at, rule.ID) || dependency(at) {
 			continue
 		}
-		d := Diagnostic{Severity: rule.Severity, Rule: rule.ID}
+		d := Diagnostic{Severity: rule.Severity, Rule: rule.ID, Stage: s.stage}
 		location := locate(at)
 		if rule.Focus != "" {
 			location = focus(at, location, row.Vars[rule.Focus])
@@ -446,9 +472,13 @@ type ExampleFailure struct {
 	Line    int
 	Matches bool
 	Found   int
+	Problem string
 }
 
 func (f ExampleFailure) Error() string {
+	if f.Problem != "" {
+		return fmt.Sprintf("%s: %s %s", f.Module, f.Rule, f.Problem)
+	}
 	if f.Matches {
 		return fmt.Sprintf("%s:%d: %s should report this example, but did not", f.Module, f.Line, f.Rule)
 	}
@@ -472,12 +502,12 @@ func (s *spec) try(ex example, options Options) (int, error) {
 	if err := trial.apply(ex.params, fmt.Sprintf("example at line %d", ex.line)); err != nil {
 		return 0, err
 	}
-	ev := &evaluation{corpus: corpus([]library.Document{{Path: path, Kind: "skill"}}, nil, nil)}
+	ev := &evaluation{corpus: corpus([]library.Document{{Path: path, Kind: "skill"}}, nil)}
 	diagnostics, err := ev.run(&trial, options)
 	return len(diagnostics), err
 }
 
-func corpus(docs []library.Document, shared []templates.File, variables map[string]string) *library.Corpus {
+func corpus(docs []library.Document, expanded map[string]*unit) *library.Corpus {
 	c := library.Documents(docs)
 	var documents []document
 	for _, doc := range docs {
@@ -489,10 +519,14 @@ func corpus(docs []library.Document, shared []templates.File, variables map[stri
 		if err != nil {
 			continue
 		}
-		documents = append(documents, document{path: doc.Path, source: data, art: art, body: []byte(art.Body), offset: len(data) - len(art.Body)})
+		d := document{path: doc.Path, source: data, art: art, body: []byte(art.Body), offset: len(data) - len(art.Body)}
+		if u := expanded[doc.Path]; u != nil {
+			d.expandedSlots, d.expandedAnchors = u.applied, u.anchors
+		}
+		documents = append(documents, d)
 	}
-	addSlots(c.Root, documents, shared, variables)
-	addTemplates(c.Root, documents, shared)
+	addSlots(c.Root, documents, nil, nil)
+	addExpandedSlots(c.Root, documents)
 	return c
 }
 

@@ -58,16 +58,16 @@ tasks:
     files: [internal/transform/transform.go, internal/transform/pipeline_test.go, internal/build/build.go, internal/build/head.go, internal/build/dependency_test.go, internal/cli/runtime.go, tests/components.md, tests/fixtures/components/, internal/cli/build_lint_test.go, tests/runtime.md]
   - id: CMP-009
     content: "Lint stages (dedupe call diagnostics that both components.Check at source stage and ExpandDocument at expanded stage report for authored calls): stage on every std rule, Diagnostic notes and stage, source and expanded checks per target, components replace template nodes; lint drops Options.Templates, the corpus shared parameter and templates.Files so no lint package imports internal/templates after CMP-010, per-package component roots in lint (FR-9, AD-8)"
-    status: pending
+    status: done
     active_form: "Staging lint"
     depends_on: [CMP-008]
     files: [internal/lint/lint.go, internal/lint/lint_test.go, internal/lint/compile.go, internal/lint/module.go, internal/lint/components.go, internal/lint/components_test.go, internal/lint/templates.go, internal/lint/templates_test.go, internal/lint/std/components.md, internal/lint/std/templates.md, internal/lint/std/duplicates.md, internal/lint/std/metadata.md, internal/lint/std/similarity.md, internal/cli/lint.go]
   - id: CMP-010
-    content: "Rendered lint stage per harness: unused-slot, unknown-slot, missing-section, duplicate-heading, anchors, head size, references on each skill's full per-harness body as henia show renders it (no build projection filter; dynamic and hybrid skills included), hybrid heads separately for head size; lint/slots.go drops templates.File (FR-9, AD-8)"
+    content: "Rendered lint stage per harness (expanded and rendered stages run for the harnesses henia build builds, not every built-in target; diagnostics print paths project-relative like build, not symlink-resolved absolute): unused-slot, unknown-slot, missing-section, duplicate-heading, anchors, head size, references on each skill's full per-harness body as henia show renders it (no build projection filter; dynamic and hybrid skills included), hybrid heads separately for head size; lint/slots.go drops templates.File and internal/lint/templates.go drops its internal/templates import (sectionAnchors, templateSlots) (FR-9, AD-8)"
     status: pending
     active_form: "Linting rendered output per harness"
     depends_on: [CMP-009]
-    files: [internal/lint/slots.go, internal/lint/rendered.go, internal/lint/rendered_test.go, internal/lint/std/slots.md, internal/lint/std/structure.md, internal/lint/std/references.md, internal/lint/compile.go, internal/cli/lint.go]
+    files: [internal/lint/slots.go, internal/lint/templates.go, internal/lint/rendered.go, internal/lint/rendered_test.go, internal/lint/std/slots.md, internal/lint/std/structure.md, internal/lint/std/references.md, internal/lint/compile.go, internal/cli/lint.go]
   - id: CMP-011
     content: "hq typed directive attributes from declarations on canonical sources: bare keys and booleans, numbers, lists; henia q --canonical '(directive :name \"routes\" :ordered true)' (FR-10)"
     status: done
@@ -107,7 +107,7 @@ tasks:
 meta:
   created: 2026-10-08
   last_updated: "2026-10-09"
-  progress: 11/16
+  progress: 12/16
 phases:
   - id: syntax
     tasks: [CMP-001, CMP-002, CMP-012]

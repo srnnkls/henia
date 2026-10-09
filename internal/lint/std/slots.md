@@ -1,5 +1,10 @@
 ---
 description: Slot declarations, providers and applications in skills.
+stage:
+  invalid-slot: source
+  unused-slot: rendered
+  unknown-slot: rendered
+  missing-section: rendered
 ---
 
 # Slots

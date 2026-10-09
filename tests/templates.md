@@ -218,20 +218,6 @@ $ proj directive-missing && skill broken '' ':::head{template="absent"}\nText.\n
 Error: skills/broken: transform broken for md: expand template directives: directive head: execute template: template: content:1:11: executing "content" at <{{template "absent" .}}>: template "absent" not defined
 ```
 
-Lint resolves directive templates like `{{template}}` calls: an unknown one is
-reported, and a template only a directive uses, by name or by its own
-directive name, counts as used. A directive without a template of its name is
-not a reference.
-
-```scrut
-$ proj lint-directive && mk .henia/templates/banner.md.tmpl '{{.content}}'
-> mk .henia/templates/note.md.tmpl '> {{.content}}'
-> skill deploy '' ':::head{template="banner"}\nLead.\n:::\n\n:::note{template="gone"}\nNote.\n:::\n\n:::note\nImplicit.\n:::\n\n:::warning\nNo template.\n:::\n'
-> lint skills --strict
-skills/deploy/SKILL.md:9:1: error [unknown-template] template "gone" is neither a shared template nor defined in this file
-Error: lint found 1 diagnostic(s)
-```
-
 ## Runtime
 
 `henia show` renders a library skill with its package's templates and the
@@ -256,67 +242,22 @@ $ mk "$G/.henia/templates/article.md.tmpl" '# Revised guide\n\n{{block "lead" .}
 Read me.
 ```
 
-## Lint
+## Partials
 
-`unknown-template` reports a `{{template}}` call or a layout that resolves to
-nothing; a block the skill defines itself resolves.
-
-```scrut
-$ proj lint-unknown && mk .henia/templates/head.md.tmpl 'Context.\n'
-> skill calls 'henia:\n  layout: paper\n' '{{define "own"}}Own.{{end}}{{define "lead"}}{{template "head" .}}{{template "own" .}}{{template "gone" .}}{{end}}\n'
-> lint skills
-skills/calls/SKILL.md:5:11: error [unknown-template] template "paper" is neither a shared template nor defined in this file
-skills/calls/SKILL.md:7:97: error [unknown-template] template "gone" is neither a shared template nor defined in this file
-Error: lint found 2 diagnostic(s)
-```
-
-`unused-template` reports a project template that no scanned skill or other
-template uses. A template used only by another template, or reached through a
-block it defines, counts as used; global templates are never reported.
+A directive's template renders with the skill's values and the project's
+harness variables, and the slots it applies expand.
 
 ```scrut
-$ proj lint-unused
-> mk .henia/templates/article.md.tmpl '{{block "lead" .}}{{end}}{{template "part" .}}'
-> mk .henia/templates/part.md.tmpl 'Part.\n'
-> mk .henia/templates/hooks.md.tmpl '{{define "hook"}}Hook.{{end}}'
-> mk .henia/templates/stale.md.tmpl 'Old.\n'
-> skill deploy 'henia:\n  layout: article\n' '{{define "lead"}}{{template "hook" .}}{{end}}\n'
-> lint skills --strict
-.henia/templates/stale.md.tmpl:1:1: warning [unused-template] template stale is not used by any scanned skill or template
-Error: lint found 1 diagnostic(s)
-```
-
-A slot a directive's template applies counts as applied: lint renders the
-template with the skill's values and the project's harness variables.
-
-```scrut
-$ proj lint-partial && printf 'artifacts = ["skills"]\n\n[harness.md]\nartifacts = ["skills"]\n\n[harness.md.variables]\nlabel = "Providers"\n' > henia.toml
+$ proj partial && printf 'artifacts = ["skills"]\n\n[harness.md]\nartifacts = ["skills"]\n\n[harness.md.variables]\nlabel = "Providers"\n' > henia.toml
 > mk .henia/templates/head.md.tmpl '{{with .args.slots}}{{template "slots" $}}{{end}}{{.content}}'
 > mk .henia/templates/slots.md.tmpl '{{.label}}:\n\n:slot[{{.args.slots}}]\n\n'
 > skill git 'henia:\n  slots:\n    git.commits:\n    git.branching:\n' ':::head{slots="git.commits"}\n# Git\n:::\n'
-> lint skills --strict
-skills/git/SKILL.md:7:5: warning [unused-slot] slot git.branching is declared but no scanned skill applies it
-Error: lint found 1 diagnostic(s)
-```
-
-```scrut
-$ out git
+> out git
 Providers:
 
 run first: `henia slots --markdown git.commits`
 
 # Git
-```
-
-`missing-section` reports a slot offer whose section the skill does not
-render. A heading that comes from the skill's layout counts.
-
-```scrut
-$ proj lint-sections && mk .henia/templates/article.md.tmpl '# {{.name}}\n\n## Commits\n\n{{block "commits" .}}{{end}}\n'
-> skill git 'henia:\n  layout: article\n  slots:\n    git.commits:\n    git.branching:\n  provides:\n    git.commits: {section: commits}\n    git.branching: {section: branching}\n' '{{define "commits"}}:slot[git.commits git.branching]{{end}}\n'
-> lint skills
-skills/git/SKILL.md:11:30: error [missing-section] slot git.branching offers section #branching, which the skill does not render
-Error: lint found 1 diagnostic(s)
 ```
 
 ## Ignore rules

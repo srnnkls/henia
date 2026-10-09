@@ -13,8 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
-	"github.com/srnnkls/henia/internal/templates"
+	"github.com/srnnkls/henia/internal/pipeline"
 )
 
 type Diagnostic struct {
@@ -29,6 +30,8 @@ type Diagnostic struct {
 	Method        string     `json:"method,omitempty"`
 	SharedPhrases []string   `json:"shared_phrases,omitempty"`
 	Model         string     `json:"model,omitempty"`
+	Stage         string     `json:"stage,omitempty"`
+	Notes         []string   `json:"notes,omitempty"`
 }
 
 type Location struct {
@@ -50,19 +53,23 @@ type Options struct {
 	Semantic     SemanticOptions           `toml:"semantic,omitempty"`
 	Builtin      []string                  `toml:"-"`
 	Dependencies []string                  `toml:"-"`
-	Templates    []templates.File          `toml:"-"`
-	Variables    map[string]string         `toml:"-"`
+	Project      string                    `toml:"-"`
+	User         string                    `toml:"-"`
+	Packages     []pipeline.Dependency     `toml:"-"`
+	Configured   map[string]henia.Harness  `toml:"-"`
 	Now          time.Time                 `toml:"-"`
 }
 
 func (o Options) Validate() error { return o.Semantic.validate() }
 
 type document struct {
-	path   string
-	source []byte
-	body   []byte
-	offset int
-	art    *artifact.Artifact
+	path            string
+	source          []byte
+	body            []byte
+	offset          int
+	art             *artifact.Artifact
+	expandedSlots   map[string]bool
+	expandedAnchors map[string]bool
 }
 
 // Run checks Markdown files and directories recursively. Artifact references are
