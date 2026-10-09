@@ -8,11 +8,9 @@ import (
 	"path"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"text/template"
-	"text/template/parse"
 
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/canonical"
@@ -31,72 +29,37 @@ type ReferenceConfig struct {
 }
 
 type Transformer struct {
-	Profile      string
-	Strict       bool
-	Compiler     *profile.Compiler
-	Context      profile.Context
-	OutputFormat string
-	Variables    map[string]string
-	Keys         map[string]string
-	Values       map[string]map[string]string
-	References   map[string]ReferenceConfig
-	Tools        map[string]string
-	Served       map[string]bool
-	Head         bool
-	LibraryLinks bool
-	Templates    map[string]string
+	Profile       string
+	Strict        bool
+	Compiler      *profile.Compiler
+	Context       profile.Context
+	OutputFormat  string
+	Variables     map[string]string
+	Keys          map[string]string
+	Values        map[string]map[string]string
+	References    map[string]ReferenceConfig
+	Tools         map[string]string
+	Served        map[string]bool
+	Head          bool
+	LibraryLinks  bool
+	AuthoredLinks bool
 }
 
 func ExecuteTemplate[T any](content string, vars map[string]T) (string, error) {
-	return Compose(content, vars, nil, "")
-}
-
-// Compose executes content with the shared templates in scope. With a layout,
-// content may only define blocks, and the layout template renders them.
-func Compose[T any](content string, vars map[string]T, shared map[string]string, layout string) (string, error) {
-	tmpl := template.New("content").Funcs(templating.Funcs).Funcs(template.FuncMap{"required": requiredBlock})
-	for _, name := range slices.Sorted(maps.Keys(shared)) {
-		if _, err := tmpl.New(name).Parse(shared[name]); err != nil {
-			return "", fmt.Errorf("parse template %s: %w", name, err)
-		}
-	}
-	if _, err := tmpl.Parse(content); err != nil {
+	tmpl, err := template.New("content").Funcs(templating.Funcs).Funcs(template.FuncMap{"required": requiredBlock}).Parse(content)
+	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
 	}
 	templating.BlankAbsent(tmpl)
-	entry := tmpl
-	if layout != "" {
-		if !blocksOnly(tmpl.Tree.Root) {
-			return "", fmt.Errorf("layout %s: text outside define blocks", layout)
-		}
-		if entry = tmpl.Lookup(layout); entry == nil || entry.Tree == nil {
-			return "", fmt.Errorf("unknown layout %q", layout)
-		}
-	}
-
 	var buf bytes.Buffer
-	if err := entry.Execute(&buf, vars); err != nil {
+	if err := tmpl.Execute(&buf, vars); err != nil {
 		return "", fmt.Errorf("execute template: %w", err)
 	}
-
 	return buf.String(), nil
 }
 
 func requiredBlock(name string) (string, error) {
 	return "", fmt.Errorf("block %q is required", name)
-}
-
-func blocksOnly(root *parse.ListNode) bool {
-	if root == nil {
-		return true
-	}
-	for _, node := range root.Nodes {
-		text, ok := node.(*parse.TextNode)
-		if !ok || len(bytes.TrimSpace(text.Text)) > 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func ApplyMappings(fm map[string]any, mappings map[string]string) map[string]any {
@@ -146,28 +109,11 @@ func ApplyValueMappings(fm map[string]any, values map[string]map[string]string) 
 }
 
 func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, error) {
-	result, templateContext, err := t.Prepare(art)
+	result, _, err := t.Prepare(art)
 	if err != nil {
 		return nil, err
 	}
-	layout, _ := henia(art.Frontmatter)["layout"].(string)
-	body, err := Compose(art.Body, templateContext, t.Templates, layout)
-	if err != nil {
-		return nil, fmt.Errorf("transform body: %w", err)
-	}
-	var shared func(string) bool
-	if len(t.Templates) > 0 {
-		shared = func(name string) bool { _, ok := t.Templates[name]; return ok }
-	}
-	body, err = markup.Expand(body, shared, func(name string, args map[string]string, content string) (string, error) {
-		data := maps.Clone(templateContext)
-		data["args"], data["content"] = args, content
-		return Compose("{{template "+strconv.Quote(name)+" .}}", data, t.Templates, "")
-	})
-	if err != nil {
-		return nil, fmt.Errorf("expand template directives: %w", err)
-	}
-	body = slots.Expand(body, slots.Preload)
+	body := slots.Expand(art.Body, slots.Preload)
 	if art.Type == artifact.TypeSkill {
 		body = expandListings(body, art.Name)
 	}
@@ -381,7 +327,7 @@ func (t *Transformer) executeReferenceTemplate(tmpl string, ref reference.Refere
 }
 
 func (t *Transformer) renderLinks(body, skill string) string {
-	if !strings.Contains(body, "](") {
+	if t.AuthoredLinks || !strings.Contains(body, "](") {
 		return body
 	}
 	var out strings.Builder

@@ -24,7 +24,13 @@ func BenchmarkRender(b *testing.B) {
 			b.SetBytes(int64(len(art.Body)))
 			b.ReportAllocs()
 			for b.Loop() {
-				if _, err := build.Render(art, name, harness, served, false); err != nil {
+				tr, err := build.Renderer(art, name, harness, served, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				u := &build.Unit{Artifact: art, Transformer: tr, Root: root}
+				build.Expand([]*build.Unit{u}, build.Target{Name: name})
+				if _, err := u.Render(); err != nil {
 					b.Fatal(err)
 				}
 			}

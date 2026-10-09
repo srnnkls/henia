@@ -8,7 +8,7 @@ import (
 )
 
 func TestMarkupPipeline(t *testing.T) {
-	art := &artifact.Artifact{Frontmatter: map[string]any{"enabled": true, "items": []string{"one", "two"}, "priority": "critical"}, Body: "{{if .enabled}}:::instruction{priority={{.priority}}}\n{{range .items}}- {{.}}\n{{end}}Use `!read` and `$review`.\n:::\n{{end}}"}
+	art := &artifact.Artifact{Frontmatter: map[string]any{"priority": "{{.priority}}"}, Body: ":::instruction{priority=high}\n- one\n- two\nUse `!read` and `$review`.\n:::\n"}
 	tr := Transformer{OutputFormat: "xml", Variables: map[string]string{"priority": "high"}, Tools: map[string]string{"read": "Read"}, References: map[string]ReferenceConfig{"skill": {Output: "/{{.Name}}"}}}
 	got, err := tr.Transform(art)
 	if err != nil {
@@ -18,8 +18,8 @@ func TestMarkupPipeline(t *testing.T) {
 	if got.Body != want {
 		t.Fatalf("got %q, want %q", got.Body, want)
 	}
-	if art.Frontmatter["priority"] != "critical" {
-		t.Fatal("mutated input frontmatter")
+	if got.Frontmatter["priority"] != "high" || art.Frontmatter["priority"] != "{{.priority}}" {
+		t.Fatalf("frontmatter: got %v, input %v", got.Frontmatter["priority"], art.Frontmatter["priority"])
 	}
 	tr.OutputFormat = "directives"
 	got, err = tr.Transform(art)
@@ -35,19 +35,13 @@ func TestUnknownFormat(t *testing.T) {
 	}
 }
 
-func TestTemplateCompositionAndNestedMetadata(t *testing.T) {
+func TestNestedFrontmatterTemplates(t *testing.T) {
 	art := &artifact.Artifact{
 		Frontmatter: map[string]any{
-			"enabled":  true,
-			"checks":   []any{"correctness", "coverage"},
 			"metadata": map[string]any{"audience": "{{.audience}}"},
 			"henia":    map[string]any{"variables": map[string]any{"audience": "author"}},
 		},
-		Body: `{{define "check"}}:::instruction{audience={{$.audience}}}
-{{range .checks}}- {{.}}
-{{end}}Use ` + "`!read`" + `.
-:::
-{{end}}{{if .enabled}}{{template "check" .}}{{end}}`,
+		Body: ":::instruction{audience=reviewer}\n- correctness\n- coverage\nUse `!read`.\n:::\n",
 	}
 	tr := Transformer{OutputFormat: "xml", Variables: map[string]string{"audience": "reviewer"}, Tools: map[string]string{"read": "Read"}}
 	got, err := tr.Transform(art)
@@ -64,15 +58,14 @@ func TestTemplateCompositionAndNestedMetadata(t *testing.T) {
 	if art.Frontmatter["metadata"].(map[string]any)["audience"] != "{{.audience}}" {
 		t.Fatal("input was mutated")
 	}
-	art.Frontmatter["enabled"] = false
-	got, err = tr.Transform(art)
-	if err != nil || got.Body != "" {
-		t.Fatalf("disabled template: %q, %v", got.Body, err)
+	delete(tr.Variables, "audience")
+	if got, err = tr.Transform(art); err != nil || got.Frontmatter["metadata"].(map[string]any)["audience"] != "author" {
+		t.Fatalf("henia.variables fallback: %+v, %v", got, err)
 	}
 }
 
 func BenchmarkPipeline(b *testing.B) {
-	art := &artifact.Artifact{Frontmatter: map[string]any{"priority": "critical"}, Body: strings.Repeat(":::instruction{priority={{.priority}}}\nUse :term[TTL]{abbr=\"time to live\"}.\n:::\n\n", 140)}
+	art := &artifact.Artifact{Frontmatter: map[string]any{"priority": "critical"}, Body: strings.Repeat(":::instruction{priority=critical}\nUse :term[TTL]{abbr=\"time to live\"}.\n:::\n\n", 140)}
 	tr := Transformer{OutputFormat: "xml"}
 	for b.Loop() {
 		if _, err := tr.Transform(art); err != nil {

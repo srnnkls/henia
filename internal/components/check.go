@@ -16,6 +16,7 @@ import (
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/templating"
+	"gopkg.in/yaml.v3"
 )
 
 type Document struct {
@@ -70,12 +71,15 @@ func (d *document) at(id string, e *markup.Element, format string, args ...any) 
 }
 
 func checkDocument(doc Document, decls map[string]Declaration, used map[string]bool) []Diagnostic {
-	_, body, err := artifact.SplitFrontmatter(string(doc.Source))
+	header, body, err := artifact.SplitFrontmatter(string(doc.Source))
 	if err != nil {
 		return []Diagnostic{{ID: InvalidMarkup, Level: LevelError, Path: doc.Path, Line: 1, Column: 1, Message: err.Error()}}
 	}
 	d := &document{path: doc.Path, source: []byte(body)}
 	d.offset = bytes.Count(doc.Source[:len(doc.Source)-len(body)], []byte{'\n'})
+	if line, column, ok := layoutKey(header); ok {
+		d.diags = append(d.diags, Diagnostic{ID: RemovedComposition, Level: LevelError, Path: doc.Path, Line: line, Column: column, Message: "henia.layout is removed; compose with components"})
+	}
 	root, err := markup.Tree(d.source)
 	d.markupErrors(err)
 	var code [][2]int
@@ -103,6 +107,35 @@ func checkDocument(doc Document, decls map[string]Declaration, used map[string]b
 	visit(root)
 	d.templateActions(code)
 	return d.diags
+}
+
+func layoutKey(header string) (int, int, bool) {
+	var root yaml.Node
+	if yaml.Unmarshal([]byte(header), &root) != nil || len(root.Content) == 0 {
+		return 0, 0, false
+	}
+	henia := mappingValue(root.Content[0], "henia")
+	if henia == nil {
+		return 0, 0, false
+	}
+	for i := 0; i+1 < len(henia.Content); i += 2 {
+		if key := henia.Content[i]; key.Value == "layout" {
+			return key.Line + 1, key.Column, true
+		}
+	}
+	return 0, 0, false
+}
+
+func mappingValue(node *yaml.Node, key string) *yaml.Node {
+	if node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key && node.Content[i+1].Kind == yaml.MappingNode {
+			return node.Content[i+1]
+		}
+	}
+	return nil
 }
 
 func (d *document) markupErrors(err error) {

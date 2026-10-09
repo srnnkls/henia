@@ -233,16 +233,7 @@ func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render
 	}
 	file, _ := markup.Tree([]byte(body), c.references(body, syntax)...)
 	var problems []*markup.Element
-	directives := []byte(body)
-	if typed {
-		masked, err := markup.MaskTemplates(directives)
-		if err != nil {
-			problems = append(problems, problem("template", err.Error(), 1, 1))
-		} else {
-			directives = masked
-		}
-	}
-	if _, err := markup.Render(string(directives), "directives"); err != nil {
+	if _, err := markup.Render(body, "directives"); err != nil {
 		line, column := 1, 1
 		if location, ok := errors.AsType[*markup.Error](err); ok {
 			line, column = location.Line, location.Column

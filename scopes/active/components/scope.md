@@ -191,4 +191,4 @@ The migration baseline is the Tropos build with henia built at `b24ebfe`, captur
 
 ## Gaps
 
-- G-1: Tropos's working tree on `feat/head-templates` has uncommitted changes in `skills/peer/SKILL.md`, `skills/peer/scripts/peer` and `skills/peer/scripts/peer-herdr-test`, and untracked `.henia/.gitignore` and `dist/`. CMP-014 cannot branch until the owner commits or sets them aside.
+- G-1 (resolved 2026-10-09: feat/head-templates clean at b023942): Tropos's working tree on `feat/head-templates` has uncommitted changes in `skills/peer/SKILL.md`, `skills/peer/scripts/peer` and `skills/peer/scripts/peer-herdr-test`, and untracked `.henia/.gitignore` and `dist/`. CMP-014 cannot branch until the owner commits or sets them aside.

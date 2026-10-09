@@ -126,7 +126,7 @@ func TestTransformArtifact(t *testing.T) {
 			"model":         "{{.model_strong}}",
 			"allowed_tools": []string{"read"},
 		},
-		Body: "Use {{.model_strong}} model.\n",
+		Body: "Use the strong model.\n",
 	}
 
 	tr := &Transformer{
@@ -149,7 +149,7 @@ func TestTransformArtifact(t *testing.T) {
 	if _, ok := result.Frontmatter["tools"]; !ok {
 		t.Error("tools key missing after mapping")
 	}
-	if result.Body != "Use opus model.\n" {
+	if result.Body != "Use the strong model.\n" {
 		t.Errorf("Body = %q", result.Body)
 	}
 }

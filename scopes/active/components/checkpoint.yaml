@@ -2,13 +2,13 @@ checkpoint:
   scope_name: components
   scope_path: scopes/active/components
   branch: feat/components
-  last_commit: 302fb09
-  updated_at: "2026-10-09T02:41:22Z"
+  last_commit: 2237ff8
+  updated_at: "2026-10-09T03:17:19Z"
   base_drift: {base: origin/main, behind: 0, ahead: 0, checked_at: "2026-10-08T22:14:38Z"}
 
   batch:
-    number: 7
-    tasks: [CMP-010]
+    number: 8
+    tasks: [CMP-016]
     phase: complete
     status: completed
 
@@ -25,14 +25,15 @@ checkpoint:
 
   reports:
     tester:
-      CMP-010: .peer/components/20261008T221438Z-201fe2/b7-tester-CMP-010
+      CMP-016: .peer/components/20261008T221438Z-201fe2/b8-tester-CMP-016
     implementer:
-      CMP-010: .peer/components/20261008T221438Z-201fe2/b7-implementer-CMP-010
+      CMP-016: .peer/components/20261008T221438Z-201fe2/b8-implementer-CMP-016
+      migration: .peer/components/20261008T221438Z-201fe2/b8-tester-migrate
     review:
-      general: .peer/components/20261008T221438Z-201fe2/b7-review-general
-      architecture: .peer/components/20261008T221438Z-201fe2/b7-review-architecture
-      compliance: .peer/components/20261008T221438Z-201fe2/b7-review-compliance
+      general: .peer/components/20261008T221438Z-201fe2/b8-review-general
+      architecture: .peer/components/20261008T221438Z-201fe2/b8-review-architecture
+      compliance: .peer/components/20261008T221438Z-201fe2/b8-review-compliance
 
-  fix_round: {number: 1, groups: [A], findings: [B7-1, B7-2, B7-3, B7-4], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b7-rereview}
   orchestrator_notes:
-    - "b7 fixer ran git checkout on internal/lint/components.go and rewrote it; all 27 lines added by the b7 GREEN diff verified present."
+    - "CMP-016 implementer blocked on six tests asserting removed behaviour; orchestrator dispatched a tester to migrate them (spec-settled by FR-8)."
+  fix_round: {number: 1, groups: [A], findings: [B8-1, B8-2, B8-3], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b8-rereview}

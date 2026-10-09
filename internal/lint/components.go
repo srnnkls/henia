@@ -32,7 +32,7 @@ var checkIDs = []string{
 	components.InvalidBody, components.DisallowedChild, components.WrongForm, components.TemplateAction,
 	components.InvalidTemplate, components.UnknownField, components.UnusedComponent, components.InvalidMarkup,
 	components.MissingInclude, components.InvalidInclude, components.UnknownTarget, components.UnknownVariable,
-	components.ComponentCycle, components.IncludeCycle, components.InvalidComponent,
+	components.ComponentCycle, components.IncludeCycle, components.InvalidComponent, components.RemovedComposition,
 	"duplicate-attribute", "unclosed-directive",
 }
 
@@ -287,6 +287,9 @@ func (p *Plan) expand(packages []*componentPackage, target string, configured he
 				Known: pkg.known, Variables: h.Variables,
 			}
 			pu.Transformer, pu.Err = pipeline.Renderer(art, target, h, served, false)
+			if pu.Err == nil {
+				pu.Transformer.AuthoredLinks = true
+			}
 			if u := byPath[mainPath(art)]; u != nil {
 				scanned[pu] = u
 				u.view(target).syntax = pipeline.ReferenceSyntax(h.References["skill"])

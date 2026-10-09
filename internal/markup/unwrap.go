@@ -2,6 +2,8 @@ package markup
 
 import "strings"
 
+const HeadBlock = "head"
+
 func Unwrap(source, name string) (string, []string) {
 	if !strings.Contains(source, name) {
 		return source, nil

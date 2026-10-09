@@ -90,37 +90,6 @@ description: An example skill.
 # Example
 ```
 
-## invalid-template
-
-A Go template that does not parse breaks every render of the artifact.
-
-```hq
-(rule invalid-template
-  :severity error
-  :message "{@p.message}"
-  (file (problem :kind template) @p))
-```
-
-### Matches
-
-```md
----
-name: example
-description: An example skill.
----
-{{if .flavor}}unclosed
-```
-
-### Passes
-
-```md
----
-name: example
-description: An example skill.
----
-{{if .flavor}}closed{{end}}
-```
-
 ## invalid-markup
 
 A directive that does not parse breaks rendering for every harness.

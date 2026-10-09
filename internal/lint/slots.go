@@ -36,9 +36,6 @@ func addSlots(root *markup.Element, documents []document) {
 			return 0
 		}
 		body := d.art.Body
-		if masked, err := markup.MaskTemplates([]byte(body)); err == nil {
-			body = string(masked)
-		}
 		metadata := slots.Read(d.art.Frontmatter, body, slots.Normal)
 		for _, problem := range metadata.Problems {
 			add(map[string]string{"role": problem.Role, "slot": problem.Slot, "error": problem.Message}, inFrontmatter(problem.Slot))

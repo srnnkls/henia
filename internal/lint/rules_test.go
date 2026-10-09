@@ -26,13 +26,12 @@ func TestStdlibExamples(t *testing.T) {
 }
 
 func TestInlineRules(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "SKILL.md")
-	source := "---\nname: example\ndescription: Example\n---\n\n:::instruction{priority=low}\nText.\n:::instruction{priority=high}\nNested.\n:::\n:::\n\n:instruction[missing]\n\n```md\n:::instruction\n:::\n```\n\n:::instruction{priority={{.priority}}}\nDynamic.\n:::\n"
-	if err := os.WriteFile(path, []byte(source), 0644); err != nil {
-		t.Fatal(err)
-	}
-	rule := InlineRule{ID: "instruction-priority", Message: "Invalid priority {@d.priority}", Query: `(directive :name "instruction" :priority (not /^(normal|high|critical)$/) :dynamic (not "true")) @d`}
-	opts := Options{Rules: []InlineRule{rule}, Disable: []string{"metadata"}}
+	root := t.TempDir()
+	writeFile(t, root, ".henia/components/instruction.md", "---\nform: container\nattributes:\n  priority:\n    type: string\nbody:\n  kind: markdown\nrender: keep\n---\n")
+	path := filepath.Join(root, "skills", "example", "SKILL.md")
+	writeFile(t, root, "skills/example/SKILL.md", "---\nname: example\ndescription: Example\n---\n\n:::instruction{priority=low}\nText.\n:::instruction{priority=high}\nNested.\n:::\n:::\n\n:::instruction\nmissing\n:::\n\n```md\n:::instruction\n:::\n```\n\n:::instruction{priority=critical}\nTyped.\n:::\n")
+	rule := InlineRule{ID: "instruction-priority", Message: "Invalid priority {@d.priority}", Query: `(directive :name "instruction" :priority (not /^(normal|high|critical)$/)) @d`}
+	opts := Options{Project: root, Rules: []InlineRule{rule}, Disable: []string{"metadata"}}
 	diagnostics, err := Run(t.Context(), []string{path}, opts)
 	if err != nil {
 		t.Fatal(err)

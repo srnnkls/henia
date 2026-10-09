@@ -16,7 +16,6 @@ import (
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/profile"
 	"github.com/srnnkls/henia/internal/target"
-	"github.com/srnnkls/henia/internal/templates"
 	"github.com/srnnkls/henia/internal/transform"
 )
 
@@ -175,28 +174,16 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 			h := pipeline.Layered(harness, harnessName, art.SourcePath, dependencies)
 			root := pipeline.Root(h.ProjectRoot, art.SourcePath, dependencies)
 			effective, tr, err := pipeline.Transformer(harnessName, outputPath, h, art.Type)
-			if err == nil {
-				tr.Served = served
-				if tr.Templates, err = templates.Load(root, effective.UserRoot); err != nil {
-					err = fmt.Errorf("%s: templates for %s: %w", art.SourcePath, harnessName, err)
-				}
-			}
 			if err != nil {
 				documentError(err)
 				units = append(units, &Unit{Artifact: art, Package: pipeline.PackageName(root, dependencies), Err: err})
 				continue
 			}
+			tr.Served = served
 			hybrid := art.Type == artifact.TypeSkill && art.Name != CatalogName && harness.Mode("skills", art.Name) == henia.Hybrid
 			tr.Head, tr.LibraryLinks = hybrid, hybrid
 			p := pending{art: art, transformed: art, effective: effective, tgt: target.NewFromConfig(harnessName, outputPath, effective), hybrid: hybrid}
-			switch {
-			case art.Type == artifact.TypeUnknown:
-			case Legacy(art, tr.Templates):
-				if p.transformed, err = tr.Transform(art); err != nil {
-					documentError(fmt.Errorf("%s: transform %s for %s: %w", art.SourcePath, art.Name, harnessName, err))
-					continue
-				}
-			default:
+			if art.Type != artifact.TypeUnknown {
 				p.unit = pipelineUnit(art, tr, effective, root, allArtifacts, targets, known, dependencies)
 				units = append(units, p.unit)
 			}
@@ -356,13 +343,6 @@ func unitFor(art *artifact.Artifact, name, output string, h henia.Harness, serve
 		return failed
 	}
 	tr.Served = served
-	if tr.Templates, failed.Err = templates.Load(root, effective.UserRoot); failed.Err != nil {
-		return failed
-	}
-	if Legacy(art, tr.Templates) {
-		failed.Err = fmt.Errorf("%s composes with legacy templates", art.Name)
-		return failed
-	}
 	return pipelineUnit(art, tr, effective, root, all, targets, known, dependencies)
 }
 
@@ -410,29 +390,8 @@ func projectPreloads(art *artifact.Artifact, h henia.Harness) {
 	}
 }
 
-func Render(art *artifact.Artifact, name string, h henia.Harness, served map[string]bool, head bool) (*artifact.Artifact, error) {
-	tr, err := Renderer(art, name, h, served, head)
-	if err != nil {
-		return nil, err
-	}
-	return tr.Transform(art)
-}
-
 func Renderer(art *artifact.Artifact, name string, h henia.Harness, served map[string]bool, head bool) (*transform.Transformer, error) {
-	tr, err := pipeline.Renderer(art, name, h, served, head)
-	if err != nil {
-		return nil, err
-	}
-	if tr.Templates, err = templates.Load(h.ProjectRoot, h.UserRoot); err != nil {
-		return nil, err
-	}
-	return tr, nil
-}
-
-func Legacy(art *artifact.Artifact, shared map[string]string) bool {
-	settings, _ := art.Frontmatter["henia"].(map[string]any)
-	layout, _ := settings["layout"].(string)
-	return len(shared) > 0 || layout != ""
+	return pipeline.Renderer(art, name, h, served, head)
 }
 
 func Projects(harness henia.Harness, name string) bool { return harness.Builds("skills", name) }

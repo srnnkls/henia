@@ -71,7 +71,7 @@ henia lint .henia/build/codex --strict
 | Module | Rules | Params and data |
 |---|---|---|
 | `std/structure` | `large-skill`, `large-head`, `duplicate-heading` | `max-lines` (500), `max-head-lines` (150) |
-| `std/metadata` | `metadata`, `stale-review`, `invalid-template`, `invalid-markup` | `max-age-days` (180) |
+| `std/metadata` | `metadata`, `stale-review`, `invalid-markup` | `max-age-days` (180) |
 | `std/references` | `broken-link`, `missing-reference`, `outdated-reference` | `outdated` map |
 | `std/duplicates` | `duplicate-skill`, `duplicate-content` | `min-words` (12) |
 | `std/slots` | `invalid-slot`, `unknown-slot`, `missing-section` | |

@@ -157,3 +157,20 @@ batches:
     gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
     validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 166/166; henia lint test 34/34; build/show output identical to 302fb09"
     status: complete
+  - batch: 8
+    tasks: [CMP-016]
+    run: 20261008T221438Z-201fe2
+    reports: .peer/components/20261008T221438Z-201fe2/b8-review-{general,architecture,compliance}
+    coverage: {native: [claude-opus x3], peer: [peer-gpt6.1-sol x3, peer-gpt6-astra x3]}
+    gates_initial: {correctness: fail, security: pass, performance: pass, architecture: fail, style: fail}
+    admitted:
+      - {id: B8-1, severity: high, group: A, found_by: [claude-opus, sol, astra], location: "internal/components/check.go:112", trigger: "CRLF frontmatter with henia.layout at 5:3", wrong_outcome: "layoutKey cuts literal '---\\n'; no removed-composition; layout silently ignored", verified: "orchestrator read code"}
+      - {id: B8-2, severity: high, group: A, found_by: [sol, astra], location: "internal/lint/components.go:291", trigger: "gamma line 8 'See [x](../delta/gone.md)' where delta is dynamic/served and gone.md absent", wrong_outcome: "reported as 'henia show delta.gone' at column 9 instead of '../delta/gone.md' at column 6; LibraryLinks=false does not stop served-owner rewriting", verified: "reviewers"}
+      - {id: B8-3, severity: medium, group: A, found_by: [claude-opus], location: "internal/build/build.go:393", trigger: "exported build.Render called on a component skill", wrong_outcome: "legacy Transform-only render remnant; only BenchmarkRender uses it (build.Renderer stays: runtime.go:636 uses it)", verified: "git grep"}
+    residual: []
+    rereview_round_1: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b8-rereview, resolved: [B8-1, B8-2, B8-3]}
+    residual:
+      - "BenchmarkRender and BenchmarkBuildAll against the Tropos corpus fail until CMP-014 migrates it"
+    gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
+    validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 19/19 ok; mise run test:integration 151/151; henia lint test 32/32; no Go reference to internal/templates"
+    status: complete

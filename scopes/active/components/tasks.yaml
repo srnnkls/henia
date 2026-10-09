@@ -76,7 +76,7 @@ tasks:
     files: [internal/library/corpus.go, internal/library/corpus_test.go, internal/pattern/read.go, internal/pattern/match.go, internal/pattern/directive_test.go, docs/query.md]
   - id: CMP-016
     content: "Fix carried from batch 7: rendered-stage link diagnostics report the authored target and source position (not the rendered henia show form at a shifted column). Remove legacy composition after its last consumer (including the transitional build.Legacy route CMP-008 kept for packages with .henia/templates, user templates or henia.layout): internal/templates, Compose (absent-blanking stays in internal/templating), henia.layout, markup.Expand, MaskTemplates and its corpus caller, templates/ gitignore exemption; removed-composition (FR-8, AD-4)"
-    status: pending
+    status: done
     active_form: "Removing Go template composition"
     depends_on: [CMP-010, CMP-011]
     files: [internal/templates/templates.go, internal/templates/templates_test.go, internal/transform/transform.go, internal/transform/compose_test.go, internal/markup/expand.go, internal/markup/expand_test.go, internal/markup/template.go, internal/library/corpus.go, internal/library/library.go, internal/build/build.go, internal/cli/runtime.go, internal/components/check.go, internal/components/check_test.go, tests/templates.md]
@@ -97,7 +97,6 @@ tasks:
     status: pending
     active_form: "Converting Tropos to components"
     depends_on: [CMP-012, CMP-016]
-    blocked_by_gap: G-1
     files:
       - /Users/srnnkls/projects/tropos/.henia/components/
       - /Users/srnnkls/projects/tropos/.henia/templates/
@@ -107,7 +106,7 @@ tasks:
 meta:
   created: 2026-10-08
   last_updated: "2026-10-09"
-  progress: 13/16
+  progress: 14/16
 phases:
   - id: syntax
     tasks: [CMP-001, CMP-002, CMP-012]

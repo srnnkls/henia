@@ -28,7 +28,6 @@ import (
 	"github.com/srnnkls/henia/internal/pipeline"
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/reference"
-	"github.com/srnnkls/henia/internal/templates"
 )
 
 const outputBudget = 28000
@@ -541,8 +540,7 @@ type cached struct {
 }
 
 func (r *renderer) rendered(e library.Entry, head bool) (string, string) {
-	canonical, err := os.ReadFile(e.Path)
-	if err != nil {
+	if _, err := os.Stat(e.Path); err != nil {
 		return e.Artifact.Body, ""
 	}
 	name, harness, packageConfig := r.harnessFor(e)
@@ -554,13 +552,8 @@ func (r *renderer) rendered(e library.Entry, head bool) (string, string) {
 			}
 		}
 	}
-	shared, _ := templates.Load(harness.ProjectRoot, harness.UserRoot)
-	legacy := build.Legacy(e.Artifact, shared)
 	key := digest([]byte(rootCmd.Version+executableStamp()), []byte(r.harness), []byte(name), []byte(strconv.FormatBool(head)), packageConfig, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " ")), []byte(e.ID), []byte(e.Path))
 	inputs := func(refs []resolution) (string, bool) {
-		if legacy {
-			return digest(canonical, []byte(templates.Digest(shared))), true
-		}
 		closure := []library.Entry{e}
 		for _, ref := range refs {
 			target, err := r.locate(ref.Package, ref.Name)
@@ -582,13 +575,7 @@ func (r *renderer) rendered(e library.Entry, head bool) (string, string) {
 			}
 		}
 	}
-	var rendered *artifact.Artifact
-	var refs []resolution
-	if legacy {
-		rendered, err = build.Render(e.Artifact, name, harness, served, head)
-	} else {
-		rendered, refs, err = r.expand(e, served, head)
-	}
+	rendered, refs, err := r.expand(e, served, head)
 	if diagnostics, ok := errors.AsType[build.Diagnostics](err); ok {
 		return "", fmt.Sprintf("henia: rendering %s for %q stopped:\n%v\n", e.ID, r.harness, diagnostics)
 	}

@@ -47,21 +47,22 @@ func TestDependencyHarnessDefaults(t *testing.T) {
 	}
 }
 
-func TestDependencyTemplates(t *testing.T) {
+func TestDependencyComponents(t *testing.T) {
 	root := t.TempDir()
 	project, dependency, user := filepath.Join(root, "project"), filepath.Join(root, "project", ".henia", "sources", "dep"), filepath.Join(root, "config")
-	put(t, filepath.Join(project, ".henia/templates/head.md.tmpl"), "Project static.")
-	put(t, filepath.Join(dependency, ".henia/templates/head.md.tmpl"), "Dependency static.")
-	put(t, filepath.Join(user, "templates/footer.md.tmpl"), "User footer.")
-	put(t, filepath.Join(project, "skills/own/SKILL.md"), "---\nname: own\ndescription: Own skill.\n---\n\n{{template \"head\" .}} {{template \"footer\" .}}\n")
-	put(t, filepath.Join(dependency, "skills/dep/SKILL.md"), "---\nname: dep\ndescription: Dependency skill.\n---\n\n{{template \"head\" .}} {{template \"footer\" .}}\n")
-	output := filepath.Join(root, "build")
+	static := func(text string) string { return "---\nform: text\nbody:\n  kind: none\n---\n" + text + "\n" }
+	put(t, filepath.Join(project, ".henia/components/intro.md"), static("Project static."))
+	put(t, filepath.Join(dependency, ".henia/components/intro.md"), static("Dependency static."))
+	put(t, filepath.Join(user, "components/footer.md"), static("User footer."))
+	put(t, filepath.Join(project, "skills/own/SKILL.md"), "---\nname: own\ndescription: Own skill.\n---\n\n:intro[] :footer[]\n")
+	put(t, filepath.Join(dependency, "skills/dep/SKILL.md"), "---\nname: dep\ndescription: Dependency skill.\n---\n\n:intro[]\n")
 	harnesses := map[string]henia.Harness{"claude": {Artifacts: []string{"skills"}, ProjectRoot: project, UserRoot: user}}
+	output := filepath.Join(root, "build")
 	result, err := Run(t.Context(), []string{project, dependency}, output, harnesses, Dependency{Root: dependency})
 	if err != nil || len(result.Errors) != 0 {
 		t.Fatalf("%v %v", err, result.Errors)
 	}
-	for skill, want := range map[string]string{"own": "Project static. User footer.", "dep": "Dependency static. User footer."} {
+	for skill, want := range map[string]string{"own": "Project static. User footer.", "dep": "Dependency static."} {
 		data, err := os.ReadFile(filepath.Join(output, "claude", "skills", skill, "SKILL.md"))
 		if err != nil {
 			t.Fatal(err)
@@ -69,5 +70,20 @@ func TestDependencyTemplates(t *testing.T) {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("%s: %q lacks %q", skill, data, want)
 		}
+	}
+
+	put(t, filepath.Join(dependency, ".henia/templates/head.md.tmpl"), "Dependency template.")
+	result, err = Run(t.Context(), []string{project, dependency}, filepath.Join(root, "removed"), harnesses, Dependency{Root: dependency})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var removed []string
+	for _, e := range result.Errors {
+		if strings.Contains(e.Error(), "[removed-composition]") {
+			removed = append(removed, e.Error())
+		}
+	}
+	if len(removed) != 1 || !strings.Contains(removed[0], filepath.Join(dependency, ".henia", "templates")) {
+		t.Fatalf("dependency templates directory: %v", result.Errors)
 	}
 }

@@ -233,3 +233,20 @@ func TestCheckAssociatedTemplates(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckRemovedLayout(t *testing.T) {
+	const skill = "/pkg/skills/demo/SKILL.md"
+	frontmatter := "---\nname: demo\nhenia:\n  modes: [hybrid]\n  layout: frame\n---\nBody.\n"
+	for name, source := range map[string]string{
+		"LF":   frontmatter,
+		"CRLF": strings.ReplaceAll(frontmatter, "\n", "\r\n"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			diags := Check([]Document{{Path: skill, Source: []byte(source)}}, nil, nil)
+			want := []string{"removed-composition error " + skill + ":5:3"}
+			if got := located(diags, func(d Diagnostic) bool { return d.Path == skill }); !slices.Equal(got, want) {
+				t.Fatalf("diagnostics = %q, want %q", got, want)
+			}
+		})
+	}
+}

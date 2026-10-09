@@ -380,6 +380,54 @@ skills/git/SKILL.md:10:30: error [missing-section] slot git.branching offers sec
 Error: lint found 1 diagnostic(s)
 ```
 
+Rendered lint reports an authored link at its source position with the target
+as written.
+
+```scrut
+$ proj lint-links && skill gamma '' '# Gamma\n\n## Use\nSee [x](gone.md)\n'
+> lint skills | grep broken-link
+skills/gamma/SKILL.md:8:6: warning [broken-link] local reference does not exist: gone.md
+```
+
+A link into a served skill keeps its authored target and position.
+
+```scrut
+$ proj lint-served && printf '\n[harness.claude.skills]\nstatic = ["gamma"]\n\n[harness.codex.skills]\nstatic = ["gamma"]\n' >> henia.toml
+> skill delta '' '# Delta\n\nDelta body.\n'
+> skill gamma '' '# Gamma\n\n## Use\nSee [x](../delta/gone.md)\n'
+> lint skills | grep broken-link
+skills/gamma/SKILL.md:8:6: warning [broken-link] local reference does not exist: ../delta/gone.md
+```
+
+## Removed composition
+
+A `.henia/templates` directory raises `removed-composition` at its path on
+build, lint and `henia show`, and no skill renders through its templates.
+
+```scrut
+$ proj removed-dir && mk .henia/templates/head.md.tmpl 'Project context.\n'
+> skill notes '' '{{template "head" .}}\n# Notes\n'
+> out claude notes | grep -o -E '[^ ]+ error \[removed-composition\]' | sort -u
+> cat "$(built claude notes)" 2>/dev/null | grep -c 'Project context'
+> lint skills | grep -o -E '^[^ ]+ error \[removed-composition\]' | sort -u
+> mk .henia/skills/hybrid/SKILL.md '---\nname: hybrid\ndescription: Hybrid.\n---\n\n# Hybrid\n'
+> henia show hybrid 2>&1 | sed "s|$P/||g" | grep -o -E '[^ ]+ error \[removed-composition\]' | sort -u
+.henia/templates: error [removed-composition]
+0
+.henia/templates: error [removed-composition]
+.henia/templates: error [removed-composition]
+```
+
+A `henia.layout` key raises `removed-composition` at the key's line and column.
+
+```scrut
+$ proj removed-layout && skill deploy 'henia:\n  layout: article\n' '# Deploy\n'
+> lint skills | grep -o -E '^[^ ]+ error \[removed-composition\]'
+> out claude deploy | grep -o -E '[^ ]+ error \[removed-composition\]' | sort -u
+skills/deploy/SKILL.md:5:3: error [removed-composition]
+skills/deploy/SKILL.md:5:3: error [removed-composition]
+```
+
 ```scrut
 $ rm -rf "$T"
 ```

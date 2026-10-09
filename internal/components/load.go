@@ -30,6 +30,12 @@ func Load(project, user string) (map[string]Declaration, []Problem) {
 	if project != "" {
 		dirs = append(dirs, filepath.Join(project, ".henia", Dir))
 	}
+	if project != "" {
+		templates := filepath.Join(project, ".henia", "templates")
+		if info, err := os.Stat(templates); err == nil && info.IsDir() {
+			problems = append(problems, Problem{ID: RemovedComposition, Path: templates, Message: "shared templates are removed; declare components in .henia/components"})
+		}
+	}
 	for _, dir := range dirs {
 		problems = append(problems, loadDir(dir, decls)...)
 	}
