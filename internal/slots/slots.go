@@ -272,14 +272,26 @@ func Applications(body string) []Application {
 	root, _ := markup.Tree([]byte(body))
 	var found []Application
 	root.Walk(func(e *markup.Element) bool {
-		if e.Type == "directive" && e.Attrs["name"] == "slot" && e.Attrs["inline"] == "true" {
-			if match := applicationText.FindStringSubmatch(e.Text); match != nil && !strings.Contains(match[1], "{{") {
-				found = append(found, Application{Slots: strings.Fields(match[1]), Inline: slices.Contains(strings.Fields(e.Attrs["class"]), "inline"), Start: e.Start, End: e.End})
+		if e.Type == "directive" {
+			if a, ok := application(e.Attrs, e.Text); ok {
+				a.Start, a.End = e.Start, e.End
+				found = append(found, a)
 			}
 		}
 		return true
 	})
 	return found
+}
+
+func application(attrs map[string]string, text string) (Application, bool) {
+	if attrs["name"] != "slot" || attrs["inline"] != "true" {
+		return Application{}, false
+	}
+	match := applicationText.FindStringSubmatch(text)
+	if match == nil || strings.Contains(match[1], "{{") {
+		return Application{}, false
+	}
+	return Application{Slots: strings.Fields(match[1]), Inline: slices.Contains(strings.Fields(attrs["class"]), "inline")}, true
 }
 
 func Preload(a Application) string {
@@ -294,10 +306,38 @@ func Expand(body string, render func(Application) string) string {
 	if !strings.Contains(body, ":slot[") {
 		return body
 	}
-	applications := Applications(body)
-	for i := len(applications) - 1; i >= 0; i-- {
-		a := applications[i]
-		body = body[:a.Start] + render(a) + body[a.End:]
+	doc, _ := markup.Parse("", []byte(body))
+	expanded := Rewrite(doc, body, func(it *markup.Item, span string) (string, bool) {
+		a, ok := application(it.Attrs, span)
+		if !ok {
+			return "", false
+		}
+		a.Start, a.End = it.Origin.Start, it.Origin.End
+		return render(a), true
+	})
+	if !expanded {
+		return body
 	}
-	return body
+	return string(markup.Write(doc))
+}
+
+// Rewrite replaces each inline directive of doc, parsed from source, for which
+// replace returns text, and reports whether it replaced any.
+func Rewrite(doc *markup.Document, source string, replace func(it *markup.Item, span string) (string, bool)) bool {
+	changed := false
+	var visit func(items []*markup.Item, nested bool)
+	visit = func(items []*markup.Item, nested bool) {
+		for i, it := range items {
+			if nested && it.Kind == "directive" && it.Attrs["inline"] == "true" {
+				if text, ok := replace(it, source[it.Origin.Start:it.Origin.End]); ok {
+					items[i] = it.Replace(&markup.Item{Kind: "text", Text: text, Origin: it.Origin})[0]
+					changed = true
+					continue
+				}
+			}
+			visit(it.Children, true)
+		}
+	}
+	visit(doc.Children, false)
+	return changed
 }

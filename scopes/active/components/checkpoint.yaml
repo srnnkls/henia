@@ -2,13 +2,13 @@ checkpoint:
   scope_name: components
   scope_path: scopes/active/components
   branch: feat/components
-  last_commit: da04e43
-  updated_at: "2026-10-08T22:38:41Z"
+  last_commit: b18acae
+  updated_at: "2026-10-09T00:04:27Z"
   base_drift: {base: origin/main, behind: 0, ahead: 0, checked_at: "2026-10-08T22:14:38Z"}
 
   batch:
-    number: 2
-    tasks: [CMP-002, CMP-004]
+    number: 3
+    tasks: [CMP-005, CMP-007, CMP-012]
     phase: complete
     status: completed
 
@@ -25,18 +25,20 @@ checkpoint:
 
   reports:
     tester:
-      CMP-002: .peer/components/20261008T221438Z-201fe2/b2-tester-CMP-002
-      CMP-004: .peer/components/20261008T221438Z-201fe2/b2-tester-CMP-004
+      CMP-005: .peer/components/20261008T221438Z-201fe2/b3-tester-CMP-005
+      CMP-007: .peer/components/20261008T221438Z-201fe2/b3-tester-CMP-007
+      CMP-012: .peer/components/20261008T221438Z-201fe2/b3-tester-CMP-012
     implementer:
-      CMP-002: .peer/components/20261008T221438Z-201fe2/b2-implementer-CMP-002
-      CMP-004: .peer/components/20261008T221438Z-201fe2/b2-implementer-CMP-004
+      CMP-005: .peer/components/20261008T221438Z-201fe2/b3-implementer-CMP-005
+      CMP-007: .peer/components/20261008T221438Z-201fe2/b3-implementer-CMP-007
+      CMP-012: .peer/components/20261008T221438Z-201fe2/b3-implementer-CMP-012
     review:
-      general: .peer/components/20261008T221438Z-201fe2/b2-review-general
-      architecture: .peer/components/20261008T221438Z-201fe2/b2-review-architecture
-      compliance: .peer/components/20261008T221438Z-201fe2/b2-review-compliance
+      general: .peer/components/20261008T221438Z-201fe2/b3-review-general
+      architecture: .peer/components/20261008T221438Z-201fe2/b3-review-architecture
+      compliance: .peer/components/20261008T221438Z-201fe2/b3-review-compliance
 
   orchestrator_notes:
-    - "CMP-002 GREEN blocked on container labels ':::inner[Label]' and ':::b[L]' in write_test.go; design gives containers no label, so orchestrator removed the labels from the test inputs."
-  fix_round_1: {number: 1, groups: [A, B], status: green, rereview: .peer/components/20261008T221438Z-201fe2/b2-rereview}
-  fix_round_2: {number: 2, groups: [A2], findings: [B2-1], status: still_failing_after_rereview, rereview: .peer/components/20261008T221438Z-201fe2/b2-rereview-2}
-  fix_round: {number: 3, authorized_by: user, groups: [A3], findings: [B2-1], status: green, rereview: .peer/components/20261008T221438Z-201fe2/b2-rereview-3}
+    - "CMP-012 blocked on tests/build.md --help snapshot missing the new fmt line; orchestrator added the line (direct consequence of FR-11)."
+    - "CMP-007 residual: setext heading with a replaced inline directive written as ATX; forwarded to running CMP-005 implementer (owns write.go)."
+  fix_round_1: {number: 1, groups: [A], findings: [B3-1, B3-2, B3-3, B3-4, B3-5], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b3-rereview}
+  fix_round: {number: 2, groups: [A2], findings: [B3-1], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b3-rereview-2}

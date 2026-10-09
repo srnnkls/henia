@@ -423,28 +423,42 @@ var listings = map[string]func(skill string) string{
 var listingText = regexp.MustCompile(`^:[a-z]+\[([^\]]*)\]`)
 
 func expandListings(body, self string) string {
-	if !strings.Contains(body, ":contents[") && !strings.Contains(body, ":related[") {
+	if !strings.Contains(body, ":contents[") && !strings.Contains(body, ":related[") && !strings.Contains(body, ":::related") {
 		return body
 	}
-	root, _ := markup.Tree([]byte(body))
-	type listing struct {
-		start, end int
-		text       string
-	}
-	var found []listing
-	root.Walk(func(e *markup.Element) bool {
-		render, ok := listings[e.Attrs["name"]]
-		if e.Type != "directive" || !ok || e.Attrs["inline"] != "true" {
-			return true
+	doc, _ := markup.Parse("", []byte(body))
+	listed := slots.Rewrite(doc, body, func(it *markup.Item, span string) (string, bool) {
+		render, ok := listings[it.Attrs["name"]]
+		if !ok {
+			return "", false
 		}
-		if m := listingText.FindStringSubmatch(e.Text); m != nil {
-			skill := cmp.Or(strings.TrimSpace(m[1]), self)
-			found = append(found, listing{e.Start, e.End, render(skill)})
+		m := listingText.FindStringSubmatch(span)
+		if m == nil {
+			return "", false
 		}
-		return true
+		return render(cmp.Or(strings.TrimSpace(m[1]), self)), true
 	})
-	for i := len(found) - 1; i >= 0; i-- {
-		body = body[:found[i].start] + found[i].text + body[found[i].end:]
+	related := relatedSections(&doc.Children, body)
+	if !listed && !related {
+		return body
 	}
-	return body
+	return string(markup.Write(doc))
+}
+
+func relatedSections(items *[]*markup.Item, source string) bool {
+	changed := false
+	for i := 0; i < len(*items); i++ {
+		it := (*items)[i]
+		if relatedSections(&it.Children, source) {
+			changed = true
+		}
+		if it.Kind != "directive" || it.Attrs["name"] != "related" || it.Attrs["inline"] == "true" || !strings.HasPrefix(source[it.Origin.Start:], ":::") {
+			continue
+		}
+		heading := &markup.Item{Kind: "heading", Attrs: map[string]string{"level": "2"}, Text: "Related"}
+		*items = slices.Replace(*items, i, i+1, it.Replace(append([]*markup.Item{heading}, it.Children...)...)...)
+		i += len(it.Children)
+		changed = true
+	}
+	return changed
 }

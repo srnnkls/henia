@@ -29,29 +29,102 @@ func Write(doc *Document) []byte {
 type writer struct{ out bytes.Buffer }
 
 func (w *writer) region(p *parsed, children []*Item) {
+	if p.inline {
+		w.inline(p, children)
+		return
+	}
 	var prev *Item
 	for i, c := range children {
+		own := c.parsed != nil && slices.Contains(p.children, c)
+		at := position(c, p.children)
 		switch {
-		case c.parsed != nil && (p.inline && slices.Contains(p.children, c) || !p.inline && c.parsed.pred == prev):
-			w.out.Write(c.parsed.gap)
-		case p.inline:
+		case at >= 0 && p.children[at].parsed.pred == prev && (own || c == first(children, at, p.children)):
+			w.out.Write(p.children[at].parsed.gap)
 		case i > 0:
 			w.out.WriteString(p.sep)
 		default:
 			w.out.WriteString(p.lead)
 		}
-		if c.parsed == nil && p.list {
-			w.prefixed(c, marker(p.attrs, i), strings.Repeat(" ", len(marker(p.attrs, i))))
-		} else {
+		switch {
+		case own:
 			w.item(c)
+		case c.parsed == nil && p.list:
+			m := marker(p.attrs, i)
+			w.moved(c, m, p.prefix+strings.Repeat(" ", len(m)))
+		default:
+			w.moved(c, "", p.prefix)
 		}
 		prev = c
+		if at >= 0 {
+			prev = p.children[at]
+		}
 	}
 	trail := p.src.text[p.trail:p.hi]
 	if len(children) == 0 && len(p.children) > 0 && p.lo > 0 && p.src.text[p.lo-1] == '\n' {
 		trail = trail[bytes.IndexByte(trail, '\n')+1:]
 	}
+	if len(children) > 0 && len(p.children) == 0 && !bytes.HasPrefix(trail, []byte("\n")) {
+		w.out.WriteByte('\n')
+	}
 	w.out.Write(trail)
+}
+
+func (w *writer) inline(p *parsed, children []*Item) {
+	kept := make([]bool, len(p.children))
+	for _, c := range children {
+		if at := position(c, p.children); at >= 0 {
+			kept[at] = true
+		}
+	}
+	next := 0
+	gaps := func(upto int) {
+		for ; next < upto; next++ {
+			w.out.Write(p.children[next].parsed.gap)
+		}
+	}
+	for _, c := range children {
+		at := position(c, p.children)
+		switch {
+		case at >= next:
+			gaps(at + 1)
+		case at < 0 && next < len(p.children) && !kept[next]:
+			gaps(next + 1)
+		}
+		w.item(c)
+	}
+	gaps(len(p.children))
+	w.out.Write(p.src.text[p.trail:p.hi])
+}
+
+func first(children []*Item, at int, parsed []*Item) *Item {
+	for _, c := range children {
+		if position(c, parsed) == at {
+			return c
+		}
+	}
+	return nil
+}
+
+func (w *writer) moved(it *Item, first, rest string) {
+	from := ""
+	if it.parsed != nil {
+		from = linePrefix(it.parsed.src.text, it.parsed.start)
+	}
+	inner := &writer{}
+	inner.item(it)
+	if first == "" && from == rest {
+		w.out.Write(inner.out.Bytes())
+		return
+	}
+	lines := strings.Split(inner.out.String(), "\n")
+	for i, line := range lines[1:] {
+		line, ok := strings.CutPrefix(line, from)
+		if !ok {
+			line = strings.TrimPrefix(line, strings.TrimRight(from, " \t"))
+		}
+		lines[i+1] = line
+	}
+	w.prefix(strings.Join(lines, "\n"), first, rest)
 }
 
 func (w *writer) item(it *Item) {
@@ -62,6 +135,11 @@ func (w *writer) item(it *Item) {
 	}
 	retext, reattr := it.Text != p.text, !maps.Equal(it.Attrs, p.attrs)
 	if p.directive == nil {
+		if underline, ok := setext(it); ok && retext && !reattr {
+			w.out.WriteString(it.Text)
+			w.out.Write(underline)
+			return
+		}
 		if (retext || reattr) && p.inline {
 			w.generated(it)
 			return
@@ -78,6 +156,19 @@ func (w *writer) item(it *Item) {
 		w.region(p, it.Children)
 	}
 	w.out.WriteString(tail)
+}
+
+func setext(it *Item) ([]byte, bool) {
+	p := it.parsed
+	span := p.src.text[p.start:p.end]
+	if it.Kind != "heading" || bytes.HasPrefix(span, []byte("#")) {
+		return nil, false
+	}
+	line := bytes.LastIndexByte(span, '\n')
+	if line < 0 {
+		return nil, false
+	}
+	return span[line:], true
 }
 
 func fences(it *Item, rewrite bool) (string, string) {

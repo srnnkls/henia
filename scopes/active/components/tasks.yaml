@@ -28,7 +28,7 @@ tasks:
     files: [internal/components/diagnostic.go, internal/components/check.go, internal/components/check_test.go]
   - id: CMP-005
     content: "Fixpoint expansion (also fixes carried writer defects from batch 2 review B2-1: a generated child inserted into an empty parsed container must keep the newline and prefix before the closing fence; a generated multi-paragraph item inserted into a list inside a quote must keep '> ' on every line): when/unless per target, include{template}, components inside out, ::body grafting, .body, missingkey=error with absent skill values as nil and blanked by internal/templating, head rule, output form checks, backtraces, component-cycle (FR-5, AD-3, AD-5)"
-    status: pending
+    status: done
     active_form: "Expanding components to a fixpoint"
     depends_on: [CMP-002, CMP-004]
     files: [internal/components/expand.go, internal/components/expand_test.go, internal/markup/write.go, internal/markup/document.go, internal/markup/write_test.go]
@@ -40,7 +40,7 @@ tasks:
     files: [internal/components/include.go, internal/components/graph.go, internal/components/include_test.go]
   - id: CMP-007
     content: ":slot, :contents, text :related and container :::related as tree transforms; build output unchanged (FR-7, AD-5)"
-    status: pending
+    status: done
     active_form: "Moving slot and listing expansion onto the tree"
     depends_on: [CMP-002]
     files: [internal/slots/slots.go, internal/slots/slots_test.go, internal/transform/transform.go, internal/transform/transform_test.go]
@@ -57,7 +57,7 @@ tasks:
     depends_on: [CMP-006, CMP-015]
     files: [internal/transform/transform.go, internal/transform/pipeline_test.go, internal/build/build.go, internal/build/head.go, internal/build/dependency_test.go, internal/cli/runtime.go, tests/components.md, tests/fixtures/components/, internal/cli/build_lint_test.go, tests/runtime.md]
   - id: CMP-009
-    content: "Lint stages: stage on every std rule, Diagnostic notes and stage, source and expanded checks per target, components replace template nodes; lint drops Options.Templates, the corpus shared parameter and templates.Files so no lint package imports internal/templates after CMP-010, per-package component roots in lint (FR-9, AD-8)"
+    content: "Lint stages (dedupe call diagnostics that both components.Check at source stage and ExpandDocument at expanded stage report for authored calls): stage on every std rule, Diagnostic notes and stage, source and expanded checks per target, components replace template nodes; lint drops Options.Templates, the corpus shared parameter and templates.Files so no lint package imports internal/templates after CMP-010, per-package component roots in lint (FR-9, AD-8)"
     status: pending
     active_form: "Staging lint"
     depends_on: [CMP-008]
@@ -82,7 +82,7 @@ tasks:
     files: [internal/templates/templates.go, internal/templates/templates_test.go, internal/transform/transform.go, internal/transform/compose_test.go, internal/markup/expand.go, internal/markup/expand_test.go, internal/markup/template.go, internal/library/corpus.go, internal/library/library.go, internal/build/build.go, internal/cli/runtime.go, internal/components/check.go, internal/components/check_test.go, tests/templates.md]
   - id: CMP-012
     content: "henia fmt [paths] with --check: rewrite directive fence lengths from the tree, idempotent (FR-11, AD-1)"
-    status: pending
+    status: done
     active_form: "Adding henia fmt"
     depends_on: [CMP-002]
     files: [internal/cli/fmt.go, internal/cli/fmt_test.go, internal/cli/root.go, tests/fmt.md]
@@ -107,7 +107,7 @@ tasks:
 meta:
   created: 2026-10-08
   last_updated: "2026-10-09"
-  progress: 4/16
+  progress: 7/16
 phases:
   - id: syntax
     tasks: [CMP-001, CMP-002, CMP-012]

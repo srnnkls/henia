@@ -56,3 +56,21 @@ batches:
     gates_final: {correctness: "pass with B2-1a/b carried to CMP-005 (user decision)", security: pass, performance: pass, architecture: pass, style: pass}
     validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 136/136"
     status: complete
+  - batch: 3
+    tasks: [CMP-005, CMP-007, CMP-012]
+    run: 20261008T221438Z-201fe2
+    reports: .peer/components/20261008T221438Z-201fe2/b3-review-{general,architecture,compliance}
+    coverage: {native: [claude-opus x3], peer: [peer-gpt6.1-sol x3, peer-gpt6-astra x3]}
+    gates_initial: {correctness: fail, security: pass, performance: pass, architecture: fail, style: pass}
+    admitted:
+      - {id: B3-1, severity: high, group: A, found_by: [claude-opus, sol, astra], location: internal/markup/write.go inline region, trigger: "'See :badge[a] and *x* :badge[b] end.' expanded; or 'A :empty[] Z' with empty output", wrong_outcome: "text between replaced inline children dropped ('See **a****b** end.'); deleted inline child takes preceding text with it", verified: true}
+      - {id: B3-2, severity: high, group: A, found_by: [claude-opus], location: internal/markup/document.go html items, trigger: "moved/grafted HTML block (comment, <pre>)", wrong_outcome: "closing line ('-->', '</pre>') lost", verified: "fix RED test"}
+      - {id: B3-3, severity: high, group: A, found_by: [sol, astra], location: internal/slots/slots.go Rewrite, trigger: "slots.Expand(':note[:slot[a]] :slot[b]\\n', Preload)", wrong_outcome: "nested slot[a] left unexpanded (regression vs b18acae)", verified: true}
+      - {id: B3-4, severity: high, group: A, found_by: [sol, astra], location: internal/components/expand.go bodyItems, trigger: "::wrap[before :inner[] after] with markdown body '::body'", wrong_outcome: "inner expansion discarded; ':inner[]' remains and is never expanded", verified: "fix RED test"}
+      - {id: B3-5, severity: high, group: A, found_by: [sol, astra], location: internal/components/expand.go:77, trigger: "kept/expanding container whose children change across rounds (when promotion, generated calls)", wrong_outcome: "allowed-children validated on intermediate tree: final disallowed child passes; intermediate disallowed child false-positive", verified: "fix RED test"}
+    residual: []
+    rereview_round_1: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b3-rereview, resolved: [B3-2, B3-3, B3-4, B3-5], still_failing: [B3-1]}
+    rereview_round_2: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b3-rereview-2, resolved: [B3-1]}
+    gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
+    validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 143/143"
+    status: complete

@@ -14,6 +14,7 @@ Available Commands:
   build       Compile local canonical artifacts for multiple harnesses
   completion  Generate the autocompletion script for the specified shell
   context     Print a skill's runtime context
+  fmt         Rewrite directive fence lengths to their canonical nesting
   help        Help about any command
   install     Write the global skill packages into harness directories
   lint        Check skill metadata, references, duplication and freshness

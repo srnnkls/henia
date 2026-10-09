@@ -1,6 +1,9 @@
 package transform
 
 import (
+	"cmp"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/srnnkls/henia/internal/artifact"
@@ -444,5 +447,40 @@ func TestExecuteTemplateKeepsRequired(t *testing.T) {
 	}
 	if result != "ok" {
 		t.Errorf("ExecuteTemplate() = %q, want %q", result, "ok")
+	}
+}
+
+func TestTransformRelatedForms(t *testing.T) {
+	body := "# Skill\n\nSee :related[git] first.\n\n:::related\n- `git`: version control\n- `pr`: review threads\n:::\n"
+	for _, format := range []string{"", "markdown"} {
+		t.Run(cmp.Or(format, "directives"), func(t *testing.T) {
+			art := &artifact.Artifact{Name: "code", Type: artifact.TypeSkill, Frontmatter: map[string]any{"name": "code"}, Body: body}
+			result, err := (&Transformer{OutputFormat: format}).Transform(art)
+			if err != nil {
+				t.Fatalf("Transform() error = %v", err)
+			}
+			if !strings.Contains(result.Body, "See !`henia context git` first.") {
+				t.Errorf("text :related not expanded:\n%s", result.Body)
+			}
+			if !regexp.MustCompile("(?m)^## Related\n+- `git`: version control\n- `pr`: review threads\n").MatchString(result.Body) {
+				t.Errorf("container :::related did not render a Related heading followed by its list:\n%s", result.Body)
+			}
+			if strings.Contains(result.Body, ":::") || strings.Contains(result.Body, "<related") {
+				t.Errorf("container :::related left directive syntax:\n%s", result.Body)
+			}
+		})
+	}
+}
+
+func TestTransformListingsByteIdentical(t *testing.T) {
+	body := "# Route\n\n:slot[code.style code.check]\n\nUse :slot[code.check]{.inline} now.\n\nSections:\n\n:contents[]\n\nChecks: :contents[checks]\n\nRelated:\n\n:related[]\n\n- see :related[git]\n\nLiteral `:related[git]` stays.\n"
+	want := "# Route\n\n!`henia slots --markdown code.style code.check`\n\nUse !`henia slots --inline code.check` now.\n\nSections:\n\n!`henia show route --toc`\n\nChecks: !`henia show checks --toc`\n\nRelated:\n\n!`henia context route`\n\n- see !`henia context git`\n\nLiteral `:related[git]` stays.\n"
+	art := &artifact.Artifact{Name: "route", Type: artifact.TypeSkill, Frontmatter: map[string]any{"name": "route"}, Body: body}
+	result, err := (&Transformer{}).Transform(art)
+	if err != nil {
+		t.Fatalf("Transform() error = %v", err)
+	}
+	if result.Body != want {
+		t.Errorf("Transform() body =\n%q\nwant:\n%q", result.Body, want)
 	}
 }

@@ -202,3 +202,9 @@ func TestApplicationsInline(t *testing.T) {
 		t.Fatalf("expand: %q", got)
 	}
 }
+
+func TestExpandNestedApplication(t *testing.T) {
+	if got := Expand(":note[:slot[a]] :slot[b]\n", Preload); got != ":note[!`henia slots --markdown a`] !`henia slots --markdown b`\n" {
+		t.Fatalf("Expand = %q", got)
+	}
+}

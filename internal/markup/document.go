@@ -36,6 +36,7 @@ type Item struct {
 	Backtrace []Call
 
 	parsed *parsed
+	anchor *Item
 }
 
 // Document is a parsed file whose items keep their origins.
@@ -64,6 +65,7 @@ type parsed struct {
 	gap        []byte
 	sep        string
 	lead       string
+	prefix     string
 	pred       *Item
 	attrs      map[string]string
 	text       string
@@ -147,6 +149,9 @@ func convert(src *source, e *Element, directives map[int]*directive, indent int)
 		default:
 			end = underline(src.text, end)
 		}
+	case "table":
+		start = min(start, afterIndent(src.text, bytes.LastIndexByte(src.text[:start], '\n')+1, indent))
+		end += lineLength(src.text[min(end, len(src.text)):])
 	case "code":
 		if _, fenced := e.Attrs["lang"]; fenced {
 			start = afterIndent(src.text, start, indent)
@@ -321,16 +326,22 @@ func (p *parsed) adopt(children []*Item) {
 		at, pred = max(at, c.parsed.end), c
 	}
 	p.trail = min(at, p.hi)
-	if len(children) > 0 && len(bytes.Trim(children[0].parsed.gap, " \t\r\n>")) == 0 {
+	switch {
+	case len(children) > 0:
+		p.prefix = linePrefix(p.src.text, children[0].parsed.start)
+	case p.directive != nil:
+		p.prefix = linePrefix(p.src.text, p.hi)
+	}
+	switch {
+	case len(children) == 0:
+		p.lead = p.prefix
+	case len(bytes.Trim(children[0].parsed.gap, " \t\r\n>")) == 0:
 		p.lead = string(children[0].parsed.gap)
 	}
 	if p.sep != "" || p.inline {
 		return
 	}
-	prefix := ""
-	if len(children) > 0 {
-		prefix = linePrefix(p.src.text, children[0].parsed.start)
-	}
+	prefix := p.prefix
 	p.sep = "\n" + prefix
 	if !p.list {
 		p.sep = "\n" + strings.TrimRight(prefix, " \t") + p.sep
@@ -360,4 +371,67 @@ func locateOrigin(src *source, start, end int) Origin {
 		Line:   bytes.Count(src.text[:start], []byte{'\n'}) + 1,
 		Column: start - bytes.LastIndexByte(src.text[:start], '\n'),
 	}
+}
+
+func (it *Item) Fenced() bool { return container(it) }
+
+func (it *Item) Replace(items ...*Item) []*Item {
+	for _, r := range items {
+		if !it.anchoredTo(r) {
+			r.anchor = it
+		}
+	}
+	return items
+}
+
+func (it *Item) anchoredTo(other *Item) bool {
+	for a := it; a != nil; a = a.anchor {
+		if a == other {
+			return true
+		}
+	}
+	return false
+}
+
+func position(it *Item, children []*Item) int {
+	for a := it; a != nil; a = a.anchor {
+		if at := slices.Index(children, a); at >= 0 {
+			return at
+		}
+	}
+	return -1
+}
+
+func (it *Item) Label() *Item {
+	label := &Item{Kind: "paragraph", Attrs: map[string]string{}, Text: it.Text, Children: it.Children, Origin: it.Origin, Backtrace: it.Backtrace}
+	p := it.parsed
+	if p == nil || p.directive == nil || p.directive.fence >= 3 {
+		return label
+	}
+	q := *p
+	q.directive, q.attrs, q.gap, q.pred = nil, label.Attrs, nil, nil
+	q.start, q.end = p.lo, p.hi
+	label.parsed = &q
+	return label
+}
+
+func (it *Item) Content() string {
+	p := it.parsed
+	if p == nil || p.directive == nil || p.directive.fence < 3 {
+		if it.Text != "" || len(it.Children) == 0 {
+			return it.Text
+		}
+		w := &writer{}
+		w.blocks(it.Children, "\n\n")
+		return w.out.String()
+	}
+	lines := strings.SplitAfter(string(p.src.text[p.lo:p.hi]), "\n")
+	for i, line := range lines {
+		if rest, ok := strings.CutPrefix(line, p.prefix); ok {
+			lines[i] = rest
+		} else {
+			lines[i] = strings.TrimPrefix(line, strings.TrimRight(p.prefix, " \t"))
+		}
+	}
+	return strings.Join(lines, "")
 }

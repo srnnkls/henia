@@ -283,3 +283,125 @@ func reorderIn(path []int, order ...int) func(t *testing.T, doc *markup.Document
 		*items = moved
 	}
 }
+
+func TestWriteInsertsGeneratedChildren(t *testing.T) {
+	appendTo := func(path []int, item *markup.Item) func(t *testing.T, doc *markup.Document) {
+		return func(t *testing.T, doc *markup.Document) {
+			items := &doc.Children
+			for _, i := range path {
+				items = &(*items)[i].Children
+			}
+			*items = append(*items, item)
+		}
+	}
+	paragraph := func(text string) *markup.Item { return &markup.Item{Kind: "paragraph", Text: text} }
+	twoParagraphs := &markup.Item{Kind: "item", Children: []*markup.Item{paragraph("b"), paragraph("c")}}
+	cases := []struct {
+		name, src string
+		mutate    func(t *testing.T, doc *markup.Document)
+		want      string
+	}{
+		{"empty container", ":::note\n:::\n", appendTo([]int{0}, paragraph("new")), ":::note\nnew\n:::\n"},
+		{"empty container in item", "- :::note\n  :::\n", appendTo([]int{0, 0, 0}, paragraph("new")), "- :::note\n  new\n  :::\n"},
+		{"empty container in quote", "> :::note\n> :::\n", appendTo([]int{0, 0}, paragraph("new")), "> :::note\n> new\n> :::\n"},
+		{"multi-paragraph item in list in quote", "> - a\n", appendTo([]int{0, 0}, twoParagraphs), "> - a\n> - b\n>\n>   c\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := parseDoc(t, "doc.md", c.src)
+			c.mutate(t, doc)
+			if got := string(markup.Write(doc)); got != c.want {
+				t.Errorf("got\n%q\nwant\n%q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestWriteChangedSetextHeadingKeepsUnderline(t *testing.T) {
+	retext := func(text string) func(t *testing.T, doc *markup.Document) {
+		return func(t *testing.T, doc *markup.Document) { doc.Children[0].Text = text }
+	}
+	cases := []struct {
+		name, src string
+		mutate    func(t *testing.T, doc *markup.Document)
+		want      string
+	}{
+		{"level one", "Title :slot[x]\n=====\n\nbody\n", retext("Title X"), "Title X\n=====\n\nbody\n"},
+		{"level two", "Title :slot[x]\n-----\n", retext("Title X"), "Title X\n-----\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := parseDoc(t, "doc.md", c.src)
+			c.mutate(t, doc)
+			if got := string(markup.Write(doc)); got != c.want {
+				t.Errorf("got\n%q\nwant\n%q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestWriteMovedHTMLKeepsClosingLine(t *testing.T) {
+	cases := []struct{ name, src, want string }{
+		{"comment", ":::note\n<!--\nnote\n-->\n:::\n", "<!--\nnote\n-->\n"},
+		{"pre", ":::note\n<pre>\nx\n</pre>\n:::\n", "<pre>\nx\n</pre>\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := parseDoc(t, "doc.md", c.src)
+			doc.Children = doc.Children[0].Children
+			if got := string(markup.Write(doc)); got != c.want {
+				t.Errorf("got\n%q\nwant\n%q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestWriteInlineChildrenKeepTheirText(t *testing.T) {
+	text := func(s string) *markup.Item { return &markup.Item{Kind: "text", Text: s} }
+	cases := []struct {
+		name, src string
+		mutate    func(p *markup.Item)
+		want      string
+	}{
+		{"replace both", "See :a[] and *x* :b[] end.\n", func(p *markup.Item) { p.Children = []*markup.Item{text("A"), text("B")} }, "See A and *x* B end.\n"},
+		{"delete", "A :empty[] Z\n", func(p *markup.Item) { p.Children = nil }, "A  Z\n"},
+		{"delete first", "A :a[] B :b[] C\n", func(p *markup.Item) { p.Children = p.Children[1:] }, "A  B :b[] C\n"},
+		{"delete across lines", "A :a[]\nZ\n", func(p *markup.Item) { p.Children = nil }, "A \nZ\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := parseDoc(t, "doc.md", c.src)
+			c.mutate(doc.Children[0])
+			if got := string(markup.Write(doc)); got != c.want {
+				t.Errorf("got\n%q\nwant\n%q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestWriteReplacementsTakeTheirAnchorsPosition(t *testing.T) {
+	text := func(s string) *markup.Item { return &markup.Item{Kind: "text", Text: s} }
+	paragraph := func(s string) *markup.Item { return &markup.Item{Kind: "paragraph", Text: s} }
+	cases := []struct {
+		name, src string
+		mutate    func(doc *markup.Document)
+		want      string
+	}{
+		{"inline delete then replace", "A :a[] B :b[] C\n", func(doc *markup.Document) {
+			p := doc.Children[0]
+			p.Children = p.Children[1].Replace(text("X"))
+		}, "A  B X C\n"},
+		{"block delete then replace", "a\n\nb\n\n\n\nc\n", func(doc *markup.Document) {
+			doc.Children = append([]*markup.Item{doc.Children[1]}, doc.Children[2].Replace(paragraph("Z"))...)
+		}, "b\n\n\n\nZ\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := parseDoc(t, "doc.md", c.src)
+			c.mutate(doc)
+			if got := string(markup.Write(doc)); got != c.want {
+				t.Errorf("got\n%q\nwant\n%q", got, c.want)
+			}
+		})
+	}
+}

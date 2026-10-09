@@ -212,6 +212,9 @@ func (b *builder) block(node ast.Node) *Element {
 	if h, ok := node.(*ast.Heading); ok {
 		e.Text = string(h.Lines().Value(b.source))
 	}
+	if html, ok := node.(*ast.HTMLBlock); ok && html.HasClosure() {
+		e.End = max(e.End, html.ClosureLine.Stop)
+	}
 	return e
 }
 

@@ -18,9 +18,15 @@ const (
 	UnknownField     = "unknown-field"
 	UnusedComponent  = "unused-component"
 	InvalidMarkup    = "invalid-markup"
+	MissingInclude   = "missing-include"
+	InvalidInclude   = "invalid-include"
+	UnknownTarget    = "unknown-target"
+	UnknownVariable  = "unknown-variable"
+	ComponentCycle   = "component-cycle"
 )
 
 type Diagnostic struct {
 	ID, Level, Path, Message string
 	Line, Column             int
+	Notes                    []string
 }
