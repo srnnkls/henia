@@ -28,9 +28,11 @@ type (
 )
 
 var (
-	Expand  = pipeline.Expand
-	Known   = pipeline.Known
-	Targets = pipeline.Targets
+	Expand    = pipeline.Expand
+	Known     = pipeline.Known
+	Targets   = pipeline.Targets
+	Served    = pipeline.Served
+	Invocable = pipeline.Invocable
 )
 
 type writeJob struct {
@@ -133,7 +135,7 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 			return nil, err
 		}
 		outputPath := filepath.Join(output, harnessName)
-		filtered := filterArtifacts(allArtifacts, harness)
+		filtered := pipeline.Projected(allArtifacts, harness)
 		served := Served(allArtifacts, filtered)
 		if entries, err := dynamicEntries(allArtifacts, filtered); err == nil {
 			result.Dynamic[harnessName] = entries
@@ -145,7 +147,7 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 			filtered = append(filtered, index)
 		}
 
-		references := &transform.Transformer{Tools: harness.Tools, References: convertReferences(harness.References), Served: served}
+		references := &transform.Transformer{Tools: harness.Tools, References: pipeline.References(harness.References), Served: served}
 		files, err := supportFiles(sources, harness.Files, references)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
@@ -172,7 +174,7 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 		for _, art := range filtered {
 			h := pipeline.Layered(harness, harnessName, art.SourcePath, dependencies)
 			root := pipeline.Root(h.ProjectRoot, art.SourcePath, dependencies)
-			effective, tr, err := transformerFor(harnessName, outputPath, h, art.Type)
+			effective, tr, err := pipeline.Transformer(harnessName, outputPath, h, art.Type)
 			if err == nil {
 				tr.Served = served
 				if tr.Templates, err = templates.Load(root, effective.UserRoot); err != nil {
@@ -348,7 +350,7 @@ func resolvedPath(path string) (string, error) {
 func unitFor(art *artifact.Artifact, name, output string, h henia.Harness, served map[string]bool, all []*artifact.Artifact, targets map[string]map[string]string, known map[string]map[string]bool, dependencies []Dependency) *Unit {
 	root := pipeline.Root(h.ProjectRoot, art.SourcePath, dependencies)
 	failed := &Unit{Artifact: art, Package: pipeline.PackageName(root, dependencies)}
-	effective, tr, err := transformerFor(name, output, h, art.Type)
+	effective, tr, err := pipeline.Transformer(name, output, h, art.Type)
 	if err != nil {
 		failed.Err = err
 		return failed
@@ -417,11 +419,10 @@ func Render(art *artifact.Artifact, name string, h henia.Harness, served map[str
 }
 
 func Renderer(art *artifact.Artifact, name string, h henia.Harness, served map[string]bool, head bool) (*transform.Transformer, error) {
-	_, tr, err := transformerFor(name, "", h, art.Type)
+	tr, err := pipeline.Renderer(art, name, h, served, head)
 	if err != nil {
 		return nil, err
 	}
-	tr.Served, tr.Head, tr.LibraryLinks = served, head, true
 	if tr.Templates, err = templates.Load(h.ProjectRoot, h.UserRoot); err != nil {
 		return nil, err
 	}
@@ -434,112 +435,7 @@ func Legacy(art *artifact.Artifact, shared map[string]string) bool {
 	return len(shared) > 0 || layout != ""
 }
 
-func Served(all, projected []*artifact.Artifact) map[string]bool {
-	served := make(map[string]bool)
-	for _, art := range all {
-		if art.Type == artifact.TypeSkill && (!slices.Contains(projected, art) || !Invocable(art.Frontmatter)) {
-			served[art.FullName()] = true
-		}
-	}
-	return served
-}
-
-func Invocable(frontmatter map[string]any) bool {
-	settings, _ := frontmatter["henia"].(map[string]any)
-	auto, set := settings["auto_invoke"].(bool)
-	return !set || auto
-}
-
-func filterArtifacts(arts []*artifact.Artifact, harness henia.Harness) []*artifact.Artifact {
-	var filtered []*artifact.Artifact
-
-	allowedTypes := harness.Artifacts
-	if len(allowedTypes) == 0 {
-		allowedTypes = []string{"skills", "commands", "agents"}
-	}
-
-	typeSet := make(map[string]bool)
-	for _, t := range allowedTypes {
-		normalized := t
-		if before, ok := strings.CutSuffix(t, "s"); ok {
-			normalized = before
-		}
-		typeSet[normalized] = true
-	}
-
-	for _, art := range arts {
-		if !typeSet[string(art.Type)] {
-			continue
-		}
-		if !harness.Builds(artifact.TypeDirName(art.Type), art.Name) {
-			continue
-		}
-		filtered = append(filtered, art)
-	}
-
-	return filtered
-}
-
 func Projects(harness henia.Harness, name string) bool { return harness.Builds("skills", name) }
-
-func convertReferences(refs map[string]string) map[string]transform.ReferenceConfig {
-	if refs == nil {
-		return nil
-	}
-	result := make(map[string]transform.ReferenceConfig)
-	for k, v := range refs {
-		result[k] = transform.ReferenceConfig{Output: v}
-	}
-	return result
-}
-
-func markupFormat(directives string) string {
-	switch directives {
-	case "keep":
-		return "directives"
-	case "md":
-		return "markdown"
-	}
-	return directives
-}
-
-func transformerFor(name, output string, h henia.Harness, kind artifact.Type) (henia.Harness, *transform.Transformer, error) {
-	mapping := h.Type(artifact.TypeDirName(kind))
-	if kind != artifact.TypeSkill {
-		h.Profile = ""
-	}
-	if mapping.Profile != "" {
-		h.Profile = mapping.Profile
-	}
-	if mapping.Layout != "" {
-		h.Layout = mapping.Layout
-	}
-	h.Frontmatter.Rename = mergeMap(h.Frontmatter.Rename, mapping.Frontmatter.Rename)
-	h.Frontmatter.Values = mergeMap(h.Frontmatter.Values, mapping.Frontmatter.Values)
-	tr := &transform.Transformer{
-		Profile: h.Profile, Strict: h.Strict, Variables: h.Variables,
-		OutputFormat: markupFormat(h.Directives), Keys: h.Frontmatter.Rename, Values: h.Frontmatter.Values,
-		Tools: h.Tools, References: convertReferences(h.References),
-	}
-	if h.Profile != "" {
-		loaded, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot)
-		if err == nil {
-			tr.Compiler, err = profile.NewCompiler(loaded)
-		}
-		if err != nil {
-			return h, nil, fmt.Errorf("harness %s: %w", name, err)
-		}
-		tr.Context = profile.Context{Name: name, Profile: h.Profile, Path: output, Variables: h.Variables, Tools: h.Tools, Keys: h.Frontmatter.Rename}
-	}
-	return h, tr, nil
-}
-
-func mergeMap[V any](base, override map[string]V) map[string]V {
-	result := make(map[string]V, len(base)+len(override))
-	maps.Copy(result, base)
-	maps.Copy(result, override)
-	return result
-}
 
 func supportFiles(sources []string, files map[string]henia.File, references *transform.Transformer) (map[string][]byte, error) {
 	result := make(map[string][]byte, len(files))

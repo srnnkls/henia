@@ -507,7 +507,7 @@ func (s *spec) try(ex example, options Options) (int, error) {
 	return len(diagnostics), err
 }
 
-func corpus(docs []library.Document, expanded map[string]*unit) *library.Corpus {
+func corpus(docs []library.Document, views map[string]*view) *library.Corpus {
 	c := library.Documents(docs)
 	var documents []document
 	for _, doc := range docs {
@@ -519,14 +519,9 @@ func corpus(docs []library.Document, expanded map[string]*unit) *library.Corpus 
 		if err != nil {
 			continue
 		}
-		d := document{path: doc.Path, source: data, art: art, body: []byte(art.Body), offset: len(data) - len(art.Body)}
-		if u := expanded[doc.Path]; u != nil {
-			d.expandedSlots, d.expandedAnchors = u.applied, u.anchors
-		}
-		documents = append(documents, d)
+		documents = append(documents, document{path: doc.Path, source: data, art: art, body: []byte(art.Body), offset: len(data) - len(art.Body), view: views[doc.Path]})
 	}
-	addSlots(c.Root, documents, nil, nil)
-	addExpandedSlots(c.Root, documents)
+	addSlots(c.Root, documents)
 	return c
 }
 

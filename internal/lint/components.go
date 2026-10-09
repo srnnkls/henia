@@ -9,12 +9,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/components"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/pipeline"
 	"github.com/srnnkls/henia/internal/slots"
-	"github.com/srnnkls/henia/internal/transform"
 )
 
 const (
@@ -37,20 +37,18 @@ var checkIDs = []string{
 }
 
 type unit struct {
-	path    string
-	source  []byte
-	offset  int
-	art     *artifact.Artifact
-	pkg     *componentPackage
-	applied map[string]bool
-	anchors map[string]bool
-	trees   map[string]*markup.Element
+	path   string
+	source []byte
+	offset int
+	art    *artifact.Artifact
+	pkg    *componentPackage
+	views  map[string]*view
 }
 
 type componentResult struct {
 	diagnostics []Diagnostic
 	units       map[string]*unit
-	targets     []string
+	harnesses   []string
 }
 
 type componentPackage struct {
@@ -70,11 +68,15 @@ func (p *Plan) componentDiagnostics(files []string) (componentResult, error) {
 	if err != nil {
 		return componentResult{}, err
 	}
+	built, err := builtHarnesses(p.options.Configured)
+	if err != nil {
+		return componentResult{}, err
+	}
 	packages, err := p.packages(files, targets)
 	if err != nil {
 		return componentResult{}, err
 	}
-	result := componentResult{units: map[string]*unit{}, targets: slices.Sorted(maps.Keys(targets))}
+	result := componentResult{units: map[string]*unit{}, harnesses: slices.Sorted(maps.Keys(built))}
 	declared := declaredSlots(packages)
 	var out []Diagnostic
 	for _, pkg := range packages {
@@ -103,14 +105,17 @@ func (p *Plan) componentDiagnostics(files []string) (componentResult, error) {
 	for _, d := range out {
 		seen[d.key()] = true
 	}
-	for _, target := range result.targets {
-		for _, d := range p.expand(packages, target, targets) {
-			if found := diagnostic(d, StageExpanded); !seen[found.key()] {
-				seen[found.key()] = true
-				out = append(out, found)
+	var expanded perHarness
+	for _, name := range result.harnesses {
+		var found []Diagnostic
+		for _, d := range p.expand(packages, name, built[name], targets) {
+			if d := diagnostic(d, StageExpanded); !seen[d.key()] {
+				found = append(found, d)
 			}
 		}
+		expanded.add(name, found)
 	}
+	out = append(out, expanded.diagnostics(len(result.harnesses))...)
 	for _, d := range out {
 		if p.disabled[d.Rule] {
 			continue
@@ -210,7 +215,7 @@ func (p *Plan) packages(files []string, targets map[string]map[string]string) ([
 		if art.IsDirectory {
 			art.SourcePath = filepath.Dir(path)
 		}
-		u := &unit{path: path, source: source, art: parsed, pkg: pkg, trees: map[string]*markup.Element{}}
+		u := &unit{path: path, source: source, art: parsed, pkg: pkg, views: map[string]*view{}}
 		u.offset = bytes.Count(source[:len(source)-len(parsed.Body)], []byte{'\n'})
 		pkg.units = append(pkg.units, u)
 	}
@@ -260,9 +265,13 @@ func disabledRules(art *artifact.Artifact) []string {
 	return rules
 }
 
-func (p *Plan) expand(packages []*componentPackage, target string, targets map[string]map[string]string) []components.Diagnostic {
-	configured := p.options.Configured[target]
+func (p *Plan) expand(packages []*componentPackage, target string, configured henia.Harness, targets map[string]map[string]string) []components.Diagnostic {
 	var all []*pipeline.Unit
+	var arts []*artifact.Artifact
+	for _, pkg := range packages {
+		arts = append(arts, pkg.arts...)
+	}
+	served := pipeline.Served(arts, pipeline.Projected(arts, configured))
 	scanned := map[*pipeline.Unit]*unit{}
 	for _, pkg := range packages {
 		byPath := map[string]*unit{}
@@ -272,13 +281,15 @@ func (p *Plan) expand(packages []*componentPackage, target string, targets map[s
 		for _, art := range pkg.arts {
 			absolute, _ := filepath.Abs(art.SourcePath)
 			h := pipeline.Layered(configured, target, absolute, p.options.Packages)
+			h.ProjectRoot, h.UserRoot = pkg.root, p.options.User
 			pu := &pipeline.Unit{
-				Artifact: art, Transformer: &transform.Transformer{Variables: h.Variables},
-				Package: pipeline.PackageName(pkg.root, p.options.Packages), Root: pkg.root, User: pkg.user,
+				Artifact: art, Package: pipeline.PackageName(pkg.root, p.options.Packages), Root: pkg.root, User: pkg.user,
 				Known: pkg.known, Variables: h.Variables,
 			}
+			pu.Transformer, pu.Err = pipeline.Renderer(art, target, h, served, false)
 			if u := byPath[mainPath(art)]; u != nil {
 				scanned[pu] = u
+				u.view(target).syntax = pipeline.ReferenceSyntax(h.References["skill"])
 			}
 			all = append(all, pu)
 		}
@@ -287,7 +298,7 @@ func (p *Plan) expand(packages []*componentPackage, target string, targets map[s
 		Name: target, Harnesses: targets,
 		Expanded: func(pu *pipeline.Unit, doc *markup.Document) {
 			if u := scanned[pu]; u != nil {
-				u.observeSlots(markup.Write(doc))
+				u.view(target).observeSlots(markup.Write(doc))
 			}
 		},
 	})
@@ -303,9 +314,9 @@ func (p *Plan) expand(packages []*componentPackage, target string, targets map[s
 			}
 		}
 		if doc := pu.Document(); doc != nil {
-			written := markup.Write(doc)
-			u.observeAnchors(written)
-			u.trees[target] = expandedTree(doc, written, pu.Path(), pu.Offset())
+			v := u.view(target)
+			v.expanded = expandedTree(doc, markup.Write(doc), pu.Path(), pu.Offset())
+			v.render(u, pu, configured.Mode("skills", pu.Artifact.Name) == henia.Hybrid && pu.Artifact.Type == artifact.TypeSkill)
 		}
 	}
 	return out
@@ -318,27 +329,56 @@ type origin struct {
 
 func expandedTree(doc *markup.Document, written []byte, path string, offset int) *markup.Element {
 	tree, _ := markup.Tree(written)
-	reparsed, _ := markup.Parse(path, written)
-	if tree == nil || reparsed == nil {
+	if tree == nil {
 		return nil
 	}
-	expanded, rewritten := flatten(doc.Children), flatten(reparsed.Children)
-	var origins []origin
-	for i := range min(len(expanded), len(rewritten)) {
-		it := expanded[i]
-		if it.Kind != rewritten[i].Kind {
-			break
-		}
-		at, generated := it.Origin, len(it.Backtrace) > 0
-		if generated {
-			at = it.Backtrace[0].Directive
-		}
-		if at.File == path {
-			origins = append(origins, origin{rewritten[i].Origin.Line, offset + at.Line, at.Column, generated})
+	relocate(tree, origins(doc, written, path, offset), offset)
+	return tree
+}
+
+func origins(doc *markup.Document, written []byte, path string, offset int) []origin {
+	reparsed, _ := markup.Parse(path, written)
+	if reparsed == nil {
+		return nil
+	}
+	items := flatten(doc.Children)
+	var out []origin
+	next := 0
+	var visit func(written []*markup.Item)
+	visit = func(written []*markup.Item) {
+		for _, it := range written {
+			i := counterpart(items[next:], it)
+			if i < 0 {
+				visit(it.Children)
+				continue
+			}
+			source := items[next+i]
+			next += i + 1
+			at, generated := source.Origin, len(source.Backtrace) > 0
+			if generated {
+				at = source.Backtrace[0].Directive
+			}
+			if at.File == path {
+				out = append(out, origin{it.Origin.Line, offset + at.Line, at.Column, generated})
+			}
+			if source.Kind != "text" {
+				visit(it.Children)
+			}
 		}
 	}
-	slices.SortStableFunc(origins, func(a, b origin) int { return a.written - b.written })
-	tree.Walk(func(e *markup.Element) bool {
+	visit(reparsed.Children)
+	slices.SortStableFunc(out, func(a, b origin) int { return a.written - b.written })
+	return out
+}
+
+func counterpart(items []*markup.Item, written *markup.Item) int {
+	return slices.IndexFunc(items, func(it *markup.Item) bool {
+		return it.Kind == written.Kind && it.Text == written.Text || it.Kind == "text" && strings.Contains(it.Text, written.Text)
+	})
+}
+
+func relocate(e *markup.Element, origins []origin, offset int) {
+	e.Walk(func(e *markup.Element) bool {
 		i, _ := slices.BinarySearchFunc(origins, e.Line+1, func(o origin, line int) int { return o.written - line })
 		if i == 0 {
 			e.Line, e.EndLine = e.Line+offset, e.EndLine+offset
@@ -352,7 +392,6 @@ func expandedTree(doc *markup.Document, written []byte, path string, offset int)
 		e.Line, e.EndLine = o.line+e.Line-o.written, o.line+e.EndLine-o.written
 		return true
 	})
-	return tree
 }
 
 func flatten(items []*markup.Item) []*markup.Item {
@@ -362,83 +401,6 @@ func flatten(items []*markup.Item) []*markup.Item {
 		out = append(out, flatten(it.Children)...)
 	}
 	return out
-}
-
-func (u *unit) observeSlots(expanded []byte) {
-	if u.applied == nil {
-		u.applied = map[string]bool{}
-	}
-	for _, application := range slots.Applications(string(expanded)) {
-		for _, slot := range application.Slots {
-			u.applied[slot] = true
-		}
-	}
-}
-
-func (u *unit) observeAnchors(expanded []byte) {
-	if u.anchors == nil {
-		u.anchors = map[string]bool{}
-	}
-	sections, _ := markup.Sections(expanded)
-	for _, section := range sections {
-		u.anchors[section.Anchor] = true
-	}
-}
-
-func expandedFiles(root *markup.Element, units map[string]*unit, target string) {
-	root.Walk(func(file *markup.Element) bool {
-		if file.Type != "file" {
-			return true
-		}
-		u := units[file.Attrs["file"]]
-		if u == nil || u.trees[target] == nil {
-			return false
-		}
-		var head []*markup.Element
-		if len(file.Children) > 0 && file.Children[0].Type == "frontmatter" {
-			head = file.Children[:1]
-		}
-		file.Children = append(slices.Clone(head), u.trees[target].Children...)
-		for i, child := range file.Children {
-			child.Parent, child.Index = file, i
-		}
-		return false
-	})
-}
-
-func addExpandedSlots(root *markup.Element, documents []document) {
-	files := map[string]*markup.Element{}
-	root.Walk(func(e *markup.Element) bool {
-		if e.Type == "file" {
-			files[e.Attrs["file"]] = e
-		}
-		return true
-	})
-	for _, d := range documents {
-		file := files[d.path]
-		if file == nil || len(d.expandedSlots) == 0 || len(file.Children) == 0 || file.Children[0].Type != "frontmatter" {
-			continue
-		}
-		authored := map[string]bool{}
-		for _, application := range slots.Applications(string(d.body)) {
-			for _, slot := range application.Slots {
-				authored[slot] = true
-			}
-		}
-		head := file.Children[0]
-		for _, slot := range slices.Sorted(maps.Keys(d.expandedSlots)) {
-			if authored[slot] {
-				continue
-			}
-			at := d.offset
-			if index := bytes.Index(d.source[d.offset:], []byte(slot)); index >= 0 {
-				at += index
-			}
-			line := bytes.Count(d.source[:at], []byte{'\n'}) + 1
-			column := at - bytes.LastIndexByte(d.source[:at], '\n')
-			head.Children = append(head.Children, &markup.Element{Type: "slot", Attrs: map[string]string{"role": "apply", "slot": slot}, Text: slot, Line: line, EndLine: line, Column: column, Parent: head, Index: len(head.Children)})
-		}
-	}
 }
 
 func declaredSlots(packages []*componentPackage) *slots.Resolution {

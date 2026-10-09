@@ -170,8 +170,8 @@ henia:
 
 ## missing-section
 
-A `section` offer in `henia.provides` must name a heading the skill renders,
-either its own or one from a shared template or layout it uses.
+A `section` offer in `henia.provides` must name a heading the skill renders
+for the harness, either its own or one a component or include renders.
 
 ```hq
 (rule missing-section

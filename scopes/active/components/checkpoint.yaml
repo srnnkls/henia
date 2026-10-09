@@ -2,13 +2,13 @@ checkpoint:
   scope_name: components
   scope_path: scopes/active/components
   branch: feat/components
-  last_commit: e6577ee
-  updated_at: "2026-10-09T01:56:16Z"
+  last_commit: 302fb09
+  updated_at: "2026-10-09T02:41:22Z"
   base_drift: {base: origin/main, behind: 0, ahead: 0, checked_at: "2026-10-08T22:14:38Z"}
 
   batch:
-    number: 6
-    tasks: [CMP-009]
+    number: 7
+    tasks: [CMP-010]
     phase: complete
     status: completed
 
@@ -25,14 +25,14 @@ checkpoint:
 
   reports:
     tester:
-      CMP-009: .peer/components/20261008T221438Z-201fe2/b6-tester-CMP-009
+      CMP-010: .peer/components/20261008T221438Z-201fe2/b7-tester-CMP-010
     implementer:
-      CMP-009: .peer/components/20261008T221438Z-201fe2/b6-implementer-CMP-009
+      CMP-010: .peer/components/20261008T221438Z-201fe2/b7-implementer-CMP-010
     review:
-      general: .peer/components/20261008T221438Z-201fe2/b6-review-general
-      architecture: .peer/components/20261008T221438Z-201fe2/b6-review-architecture
-      compliance: .peer/components/20261008T221438Z-201fe2/b6-review-compliance
+      general: .peer/components/20261008T221438Z-201fe2/b7-review-general
+      architecture: .peer/components/20261008T221438Z-201fe2/b7-review-architecture
+      compliance: .peer/components/20261008T221438Z-201fe2/b7-review-compliance
 
+  fix_round: {number: 1, groups: [A], findings: [B7-1, B7-2, B7-3, B7-4], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b7-rereview}
   orchestrator_notes:
-    - "Tester deleted internal/lint/templates_test.go; orchestrator restored it from HEAD (removal belongs with the behaviour change in GREEN)."
-  fix_round: {number: 1, groups: [A], findings: [B6-1, B6-2, B6-3, B6-4, B6-5, B6-6, B6-7], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b6-rereview}
+    - "b7 fixer ran git checkout on internal/lint/components.go and rewrote it; all 27 lines added by the b7 GREEN diff verified present."

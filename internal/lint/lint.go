@@ -31,6 +31,7 @@ type Diagnostic struct {
 	SharedPhrases []string   `json:"shared_phrases,omitempty"`
 	Model         string     `json:"model,omitempty"`
 	Stage         string     `json:"stage,omitempty"`
+	Harness       string     `json:"harness,omitempty"`
 	Notes         []string   `json:"notes,omitempty"`
 }
 
@@ -63,13 +64,12 @@ type Options struct {
 func (o Options) Validate() error { return o.Semantic.validate() }
 
 type document struct {
-	path            string
-	source          []byte
-	body            []byte
-	offset          int
-	art             *artifact.Artifact
-	expandedSlots   map[string]bool
-	expandedAnchors map[string]bool
+	path   string
+	source []byte
+	body   []byte
+	offset int
+	art    *artifact.Artifact
+	view   *view
 }
 
 // Run checks Markdown files and directories recursively. Artifact references are
@@ -84,10 +84,10 @@ func Run(ctx context.Context, paths []string, options Options) ([]Diagnostic, er
 
 func sortDiagnostics(diagnostics []Diagnostic) []Diagnostic {
 	slices.SortFunc(diagnostics, func(a, b Diagnostic) int {
-		return cmp.Or(strings.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column), strings.Compare(a.Rule, b.Rule), strings.Compare(a.Message, b.Message))
+		return cmp.Or(strings.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column), strings.Compare(a.Rule, b.Rule), strings.Compare(a.Message, b.Message), strings.Compare(a.Harness, b.Harness))
 	})
 	return slices.CompactFunc(diagnostics, func(a, b Diagnostic) bool {
-		return a.Path == b.Path && a.Line == b.Line && a.Column == b.Column && a.Rule == b.Rule && a.Message == b.Message
+		return a.Path == b.Path && a.Line == b.Line && a.Column == b.Column && a.Rule == b.Rule && a.Message == b.Message && a.Harness == b.Harness
 	})
 }
 

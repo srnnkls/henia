@@ -2,21 +2,15 @@ package lint
 
 import (
 	"bytes"
-	"os"
+	"maps"
+	"slices"
 	"strconv"
 
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/slots"
-	"github.com/srnnkls/henia/internal/templates"
 )
 
-func addSlots(root *markup.Element, documents []document, shared []templates.File, variables map[string]string) {
-	sources := map[string]string{}
-	for _, f := range shared {
-		if data, err := os.ReadFile(f.Path); err == nil {
-			sources[f.Name] = string(data)
-		}
-	}
+func addSlots(root *markup.Element, documents []document) {
 	files := map[string]*markup.Element{}
 	root.Walk(func(e *markup.Element) bool {
 		if e.Type == "file" {
@@ -58,7 +52,7 @@ func addSlots(root *markup.Element, documents []document, shared []templates.Fil
 			at := inFrontmatter(offered.Slot)
 			if offered.Section != "" {
 				if anchors == nil {
-					anchors = sectionAnchors(d, shared)
+					anchors = sectionAnchors(d)
 				}
 				attrs["section"], attrs["found"] = offered.Section, strconv.FormatBool(anchors[offered.Section])
 				if provides := bytes.Index(d.source[:d.offset], []byte("provides:")); provides >= 0 {
@@ -72,17 +66,43 @@ func addSlots(root *markup.Element, documents []document, shared []templates.Fil
 			}
 			add(attrs, at)
 		}
+		if d.view == nil {
+			for _, application := range slots.Applications(body) {
+				for _, slot := range application.Slots {
+					add(map[string]string{"role": "apply", "slot": slot}, d.offset+application.Start)
+				}
+			}
+			continue
+		}
+		authored := map[string]int{}
 		for _, application := range slots.Applications(body) {
 			for _, slot := range application.Slots {
-				add(map[string]string{"role": "apply", "slot": slot}, d.offset+application.Start)
+				if _, ok := authored[slot]; !ok {
+					authored[slot] = d.offset + application.Start
+				}
 			}
 		}
-		for _, slot := range templateSlots(d, body, sources, variables) {
-			at := d.offset
-			if index := bytes.Index(d.source[d.offset:], []byte(slot)); index >= 0 {
-				at += index
+		for _, slot := range slices.Sorted(maps.Keys(d.view.applied)) {
+			at, ok := authored[slot]
+			if !ok {
+				at = d.offset
+				if index := bytes.Index(d.source[d.offset:], []byte(slot)); index >= 0 {
+					at += index
+				}
 			}
 			add(map[string]string{"role": "apply", "slot": slot}, at)
 		}
 	}
+}
+
+func sectionAnchors(d document) map[string]bool {
+	if d.view != nil && d.view.anchors != nil {
+		return d.view.anchors
+	}
+	anchors := map[string]bool{}
+	sections, _ := markup.Sections(d.body)
+	for _, section := range sections {
+		anchors[section.Anchor] = true
+	}
+	return anchors
 }

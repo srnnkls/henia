@@ -25,6 +25,7 @@ import (
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
+	"github.com/srnnkls/henia/internal/pipeline"
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/reference"
 	"github.com/srnnkls/henia/internal/templates"
@@ -738,16 +739,7 @@ func (r *renderer) reference(e library.Entry) *regexp.Regexp {
 	if err != nil {
 		return nil
 	}
-	template := harnesses[r.harness].References["skill"]
-	prefix, suffix, ok := strings.Cut(template, "{{.Name}}")
-	if !ok || strings.Contains(prefix+suffix, "{{") {
-		return nil
-	}
-	pattern := regexp.QuoteMeta(prefix) + `([a-z0-9][a-z0-9._-]*)` + regexp.QuoteMeta(suffix)
-	if !strings.ContainsAny(template, "*[]") {
-		pattern = "`" + pattern + "`"
-	}
-	return regexp.MustCompile(pattern)
+	return pipeline.ReferenceSyntax(harnesses[r.harness].References["skill"])
 }
 
 func executableStamp() string {

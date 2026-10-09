@@ -43,6 +43,7 @@ type Document struct {
 	Path       string
 	Kind       string
 	Dependency bool
+	Render     func() (string, *regexp.Regexp)
 }
 
 func (l *Library) Corpus(rendering *Rendering) *Corpus {
@@ -98,13 +99,27 @@ func Documents(docs []Document) *Corpus {
 		c.skills[id] = skill
 		dirs[filepath.Dir(d.Path)] = skill
 	}
+	rendered := map[string]func() (string, *regexp.Regexp){}
+	for _, d := range docs {
+		if d.Render == nil || d.Dependency {
+			continue
+		}
+		body, syntax := d.Render()
+		rendered[d.Path] = func() (string, *regexp.Regexp) { return body, syntax }
+		anchors := map[string]bool{}
+		sections, _ := markup.Sections([]byte(body))
+		for _, section := range sections {
+			anchors[section.Anchor] = true
+		}
+		c.anchors[filepath.Clean(d.Path)] = anchors
+	}
 	for _, d := range docs {
 		add := c.file
 		if d.Dependency {
 			add = c.stub
 		}
 		if skill := dirs[filepath.Dir(d.Path)]; skill != nil && filepath.Base(d.Path) == "SKILL.md" {
-			add(skill, d.Path, "SKILL.md", d.Kind, nil)
+			add(skill, d.Path, "SKILL.md", d.Kind, rendered[d.Path])
 			continue
 		}
 		owner := ""
@@ -116,10 +131,10 @@ func Documents(docs []Document) *Corpus {
 		}
 		if owner != "" && d.Kind == "" {
 			rel, _ := filepath.Rel(owner, d.Path)
-			add(dirs[owner], d.Path, filepath.ToSlash(rel), "resource", nil)
+			add(dirs[owner], d.Path, filepath.ToSlash(rel), "resource", rendered[d.Path])
 			continue
 		}
-		add(c.Root, d.Path, filepath.ToSlash(d.Path), cmp.Or(d.Kind, "document"), nil)
+		add(c.Root, d.Path, filepath.ToSlash(d.Path), cmp.Or(d.Kind, "document"), rendered[d.Path])
 	}
 	return c
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/srnnkls/henia"
@@ -48,6 +49,9 @@ func newLintCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			for i := range diagnostics {
+				projectRelative(&diagnostics[i], options.Project)
+			}
 			if format == "json" {
 				encoder := json.NewEncoder(cmd.OutOrStdout())
 				encoder.SetIndent("", "  ")
@@ -60,7 +64,11 @@ func newLintCommand() *cobra.Command {
 					if d.Line > 0 {
 						location = fmt.Sprintf("%s:%d:%d", d.Path, d.Line, d.Column)
 					}
-					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: %s [%s] %s\n", location, d.Severity, d.Rule, d.Message); err != nil {
+					message := d.Message
+					if d.Harness != "" {
+						message = d.Harness + ": " + message
+					}
+					if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: %s [%s] %s\n", location, d.Severity, d.Rule, message); err != nil {
 						return err
 					}
 					for _, note := range d.Notes {
@@ -172,6 +180,22 @@ func lintOptions(cmd *cobra.Command) (lint.Options, *config.Config, error) {
 	}
 	options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(library.ConfigDir(), "lint")}, lint.ModuleDir{Dir: filepath.Join(project, library.ProjectDir, "lint")})
 	return options, cfg, nil
+}
+
+func projectRelative(d *lint.Diagnostic, project string) {
+	relative := func(path string) string {
+		if rel, err := filepath.Rel(project, path); err == nil && filepath.IsAbs(path) && filepath.IsLocal(rel) {
+			return rel
+		}
+		return path
+	}
+	d.Path = relative(d.Path)
+	for i := range d.Related {
+		d.Related[i].Path = relative(d.Related[i].Path)
+	}
+	for i, note := range d.Notes {
+		d.Notes[i] = strings.ReplaceAll(note, project+string(filepath.Separator), "")
+	}
 }
 
 func dependencyLayers(dependencies []library.Package) ([]build.Dependency, error) {

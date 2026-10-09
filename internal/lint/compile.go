@@ -258,8 +258,10 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 		return nil, err
 	}
 	diagnostics := expanded.diagnostics
-	sources := []*evaluation{{corpus: corpus(docs, expanded.units)}}
-	var trees []*evaluation
+	sources := []*evaluation{{corpus: corpus(docs, nil)}}
+	staged := map[string][]*evaluation{}
+	harnessOf := map[*evaluation]string{}
+	var specific perHarness
 	for _, s := range p.specs {
 		if p.disabled[s.id] {
 			continue
@@ -268,28 +270,41 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 			return nil, err
 		}
 		evaluations := sources
-		if s.stage == StageExpanded && len(expanded.targets) > 0 {
-			if trees == nil {
-				for _, target := range expanded.targets {
-					c := corpus(docs, expanded.units)
-					expandedFiles(c.Root, expanded.units, target)
-					trees = append(trees, &evaluation{corpus: c})
+		if (s.stage == StageExpanded || s.stage == StageRendered) && len(expanded.harnesses) > 0 {
+			if staged[s.stage] == nil {
+				for _, harness := range expanded.harnesses {
+					views := expanded.views(harness)
+					stageDocs := docs
+					if s.stage == StageRendered {
+						stageDocs = renderedDocuments(docs, views)
+					}
+					ev := &evaluation{corpus: corpus(stageDocs, views)}
+					stageFiles(ev.corpus.Root, views, s.stage)
+					staged[s.stage] = append(staged[s.stage], ev)
+					harnessOf[ev] = harness
 				}
 			}
-			evaluations = trees
+			evaluations = staged[s.stage]
 		}
 		for _, ev := range evaluations {
 			found, err := ev.run(s, p.options)
 			if err != nil {
 				return nil, err
 			}
+			var kept []Diagnostic
 			for _, d := range found {
 				if !expanded.checked(d.Path) || !slices.Contains(supersededRules, d.Rule) {
-					diagnostics = append(diagnostics, d)
+					kept = append(kept, d)
 				}
 			}
+			if harness, ok := harnessOf[ev]; ok {
+				specific.add(harness, kept)
+				continue
+			}
+			diagnostics = append(diagnostics, kept...)
 		}
 	}
+	diagnostics = append(diagnostics, specific.diagnostics(len(expanded.harnesses))...)
 	return sortDiagnostics(diagnostics), nil
 }
 

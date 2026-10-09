@@ -139,3 +139,21 @@ batches:
     gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
     validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 166/166; henia lint test 34/34"
     status: complete
+  - batch: 7
+    tasks: [CMP-010]
+    run: 20261008T221438Z-201fe2
+    reports: .peer/components/20261008T221438Z-201fe2/b7-review-{general,architecture,compliance}
+    coverage: {native: [claude-opus x3], peer: [peer-gpt6.1-sol x3, peer-gpt6-astra x3]}
+    gates_initial: {correctness: fail, security: pass, performance: pass, architecture: fail, style: pass}
+    admitted:
+      - {id: B7-1, severity: high, group: A, found_by: [claude-opus], location: "internal/lint/rendered.go:497; components.go:330-344", trigger: "heading inside kept :::when{target=claude} then a duplicate '## Dup' at line 14", wrong_outcome: "duplicate-heading at 12:4 instead of 14:4 (regression vs 302fb09); alignment stops at first kind mismatch", verified: "reviewer, binaries compared"}
+      - {id: B7-2, severity: high, group: A, found_by: [claude-opus, sol, astra], location: "internal/lint/components.go:281-313", trigger: "harness with directives=md / tools mapping (read->read_file) / outdated-reference on a mapped tool", wrong_outcome: "lint Transformer has only Variables: false large-head, missed duplicate-heading, false missing-section, missed outdated-reference", disposition: "requirement settles it (same render path as henia show): the harness Transformer constructor moves to internal/pipeline and both build and lint use it; 'needs decision' tag covers mechanism only", verified: "reviewers"}
+      - {id: B7-3, severity: high, group: A, found_by: [sol, astra], location: "internal/lint/rendered.go:127-139", trigger: "component emits [guide](missing.md) or `$missing`; authored 'henia show foo#part' where #part is component-emitted", wrong_outcome: "generated broken links/missing references unreported; show-reference anchors evaluated on source, not rendered output", verified: "reviewer reproduced with fixture"}
+      - {id: B7-4, severity: medium, group: A, found_by: [claude-opus], location: "internal/lint/rendered_test.go:667", trigger: "harness moved back into Message", wrong_outcome: "mentions() substring check never reads Diagnostic.Harness; contract untested", verified: true}
+    residual: []
+    rereview_round_1: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b7-rereview, resolved: [B7-1, B7-2, B7-3, B7-4]}
+    residual:
+      - "authored broken-link diagnostics show the rendered LibraryLinks form ('henia show gamma.gone') at a shifted column instead of the authored target and position (regression from B7-3 fix; carried to CMP-016, which owns internal/library/corpus.go)"
+    gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
+    validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 166/166; henia lint test 34/34; build/show output identical to 302fb09"
+    status: complete
