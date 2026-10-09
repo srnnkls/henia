@@ -35,8 +35,7 @@ type Element struct {
 func Tree(source []byte, extra ...*Element) (*Element, error) {
 	pc := parser.NewContext()
 	doc, err := runContext(documentParser, source, pc)
-	b := &builder{source: source, references: pc.References()}
-	b.failures, _ = err.(errorList)
+	b := newBuilder(source, pc, err)
 	root := b.file()
 	b.blocks(root, doc, true)
 	b.finish(root)
@@ -110,6 +109,14 @@ type builder struct {
 	lines      []int
 	failures   errorList
 	references []parser.Reference
+	rules      map[ast.Node]text.Segment
+}
+
+func newBuilder(source []byte, pc parser.Context, err error) *builder {
+	b := &builder{source: source, references: pc.References()}
+	b.rules, _ = pc.Get(rules).(map[ast.Node]text.Segment)
+	b.failures, _ = err.(errorList)
+	return b
 }
 
 func (b *builder) file() *Element {
@@ -162,6 +169,15 @@ func (b *builder) block(node ast.Node) *Element {
 		}
 	case *ast.CodeBlock:
 		e.Type = "code"
+	case *ast.HTMLBlock:
+		e.Type = "html"
+	case *ast.ThematicBreak:
+		segment, ok := b.rules[v]
+		if !ok {
+			return nil
+		}
+		e.Type, e.Start, e.End = "rule", segment.Start, segment.Stop
+		return e
 	case *ast.List:
 		e.Type, e.Attrs["ordered"] = "list", strconv.FormatBool(v.IsOrdered())
 		b.blocks(e, v, false)
@@ -175,7 +191,7 @@ func (b *builder) block(node ast.Node) *Element {
 		e.Type = "table"
 		b.inlines(e, v)
 	case *blockNode:
-		e.Type, e.Attrs["name"], e.Start, e.End = "directive", v.name, v.open.start, v.close.stop
+		e.Type, e.Attrs["name"], e.Start, e.End = "directive", v.name, v.open.start, max(v.open.stop, v.close.stop)
 		for _, a := range v.attrs {
 			e.Attrs[a.name] = a.value
 		}
@@ -205,7 +221,7 @@ func (b *builder) fence(code *ast.FencedCodeBlock) (int, int) {
 	case code.Info != nil:
 		open = code.Info.Segment.Start
 	case code.Lines().Len() > 0:
-		open = max(code.Lines().At(0).Start-1, 0)
+		open = max(bytes.LastIndexByte(b.source[:code.Lines().At(0).Start], '\n'), 0)
 	}
 	open = bytes.LastIndexByte(b.source[:open], '\n') + 1
 	end := open
@@ -233,6 +249,11 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 			e = &Element{Type: "image", Attrs: map[string]string{"url": string(v.Destination)}}
 		case *ast.AutoLink:
 			e = &Element{Type: "link", Attrs: map[string]string{"url": string(v.URL(b.source))}}
+		case *ast.CodeSpan:
+			e = &Element{Type: "code", Attrs: map[string]string{"inline": "true"}}
+			e.Start, e.End = b.ticks(extent(n))
+			parent.add(e)
+			return ast.WalkSkipChildren, nil
 		case *inlineNode:
 			e = &Element{Type: "directive", Attrs: map[string]string{"name": v.name, "inline": "true"}}
 			for _, a := range v.attrs {
@@ -249,6 +270,19 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 		parent.add(e)
 		return ast.WalkSkipChildren, nil
 	})
+}
+
+func (b *builder) ticks(start, end int) (int, int) {
+	if start < 0 {
+		return start, end
+	}
+	for start > 0 && b.source[start-1] == '`' {
+		start--
+	}
+	for end < len(b.source) && b.source[end] == '`' {
+		end++
+	}
+	return start, end
 }
 
 func (b *builder) label(s span) ast.Node {
@@ -340,5 +374,27 @@ func place(e, extra *Element) {
 }
 
 func directiveOptions() []parser.Option {
-	return []parser.Option{parser.WithBlockParsers(util.Prioritized(&blockParser{}, 850)), parser.WithInlineParsers(util.Prioritized(&inlineParser{}, 150))}
+	return []parser.Option{
+		parser.WithBlockParsers(util.Prioritized(&blockParser{}, 850), util.Prioritized(ruleParser{parser.NewThematicBreakParser()}, 199)),
+		parser.WithInlineParsers(util.Prioritized(&inlineParser{}, 150)),
+	}
+}
+
+var rules = parser.NewContextKey()
+
+type ruleParser struct{ parser.BlockParser }
+
+func (p ruleParser) Open(parent ast.Node, reader text.Reader, pc parser.Context) (ast.Node, parser.State) {
+	_, segment := reader.PeekLine()
+	node, state := p.BlockParser.Open(parent, reader, pc)
+	if node != nil {
+		found, _ := pc.Get(rules).(map[ast.Node]text.Segment)
+		if found == nil {
+			found = map[ast.Node]text.Segment{}
+			pc.Set(rules, found)
+		}
+		segment = segment.TrimLeftSpace(reader.Source())
+		found[node] = segment.TrimRightSpace(reader.Source())
+	}
+	return node, state
 }

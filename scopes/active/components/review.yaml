@@ -25,3 +25,34 @@ batches:
     gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
     validation: "go vet ./... && go build ./... clean; go test ./... 20/20 ok; mise run test:integration 136/136"
     status: complete
+  - batch: 2
+    tasks: [CMP-002, CMP-004]
+    run: 20261008T221438Z-201fe2
+    reports: .peer/components/20261008T221438Z-201fe2/b2-review-{general,architecture,compliance}
+    coverage: {native: [claude-opus x3], peer: [peer-gpt6.1-sol x3, peer-gpt6-astra x3]}
+    gates_initial: {correctness: fail, security: pass, performance: pass, architecture: fail, style: fail}
+    admitted:
+      - {id: B2-1, severity: high, group: A, found_by: [claude-opus, sol, astra], location: internal/markup/write.go, trigger: "delete/replace/reorder a child, mutate directive Attrs or Children, or Write an Item built outside markup", wrong_outcome: "removed/replaced source re-emitted via gap copy; mutations ignored; nil-source panic", disposition: "AD-2 settles semantics (unchanged nodes verbatim, fences from tree, generated nodes from own origin); the architecture 'needs decision' tag covers mechanism only, owned by CMP-002", verified: true}
+      - {id: B2-2, severity: high, group: A, found_by: [sol, astra], location: internal/markup/document.go:83, trigger: "':::a\\n# H\\n:::b\\n:::c\\nx\\n:::\\n:::\\n:::\\n'", wrong_outcome: "section items copied verbatim; b keeps ::: instead of ::::", verified: true}
+      - {id: B2-3, severity: medium, group: A, found_by: [sol], location: internal/markup/document.go:50, trigger: "mutate the source buffer after Parse", wrong_outcome: "Write emits mutated bytes; Parse aliases caller storage", verified: "by code reading"}
+      - {id: B2-4, severity: medium, group: B, found_by: [claude-opus], location: internal/components/check.go:278, trigger: "'Write `{{.name}}` in a component.'", wrong_outcome: "template-action at 1:8 on inline code", verified: true}
+      - {id: B2-5, severity: high, group: B, found_by: [sol, astra], location: internal/components/check.go:98, trigger: "':slot[code.validation]\\n\\n:::rotues\\ntext\\n:::\\n'", wrong_outcome: "Walk false aborts traversal; no unknown-component", verified: true}
+      - {id: B2-6, severity: high, group: B, found_by: [sol, astra], location: internal/components/check.go:263, trigger: "'{{define \"part\"}}{{$.nope}}{{end}}{{template \"part\" .}}' or '{{block \"part\" .}}{{$.nope}}{{end}}'", wrong_outcome: "associated template trees unchecked; no unknown-field", verified: "fix RED test"}
+      - {id: B2-7, severity: high, group: B, found_by: [astra], location: "internal/components/check.go:168 / internal/markup/tree.go", trigger: "':::x\\n---\\n:::\\n' against body kind none or required body", wrong_outcome: "Tree omits thematic breaks; body seen as empty", verified: true}
+    residual: []
+    rereview_round_1: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b2-rereview, resolved: [B2-2, B2-3, B2-4, B2-5, B2-6, B2-7], still_failing: [B2-1]}
+    residual:
+      - "HTML block inside a container swallows the closing fence (CommonMark HTML-block semantics)"
+    rereview_round_2: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b2-rereview-2, still_failing: [B2-1], surviving_case: "container directive nested in list item or blockquote: deleting/reordering its first child drops the content-column prefix"}
+    residual_round_2:
+      - "Parse panics on '- :::note\\nb\\n  :::\\n' (tree.go:358 builder.finish slice bounds)"
+      - "ordered lists keep original numbers on reorder"
+      - "empty-source document plus generated children lacks trailing newline"
+    status: third_round_authorized_by_user
+    rereview_round_3: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b2-rereview-3, still_failing: [B2-1], surviving_cases: ["sourceless child inserted into an empty parsed container loses newline+prefix before the closing fence", "sourceless multi-paragraph item inserted into a list inside a quote loses '> ' on later paragraphs"]}
+    carried:
+      - {id: B2-1a, to: CMP-005, decided_by: user, case: "generated child inserted into an empty parsed container loses newline+prefix before the closing fence"}
+      - {id: B2-1b, to: CMP-005, decided_by: user, case: "generated multi-paragraph item inserted into a list inside a quote loses '> ' on later paragraphs"}
+    gates_final: {correctness: "pass with B2-1a/b carried to CMP-005 (user decision)", security: pass, performance: pass, architecture: pass, style: pass}
+    validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 136/136"
+    status: complete

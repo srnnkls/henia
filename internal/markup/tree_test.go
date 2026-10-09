@@ -1,6 +1,7 @@
 package markup_test
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -209,5 +210,52 @@ func TestTreeLabelsResolveReferenceLinks(t *testing.T) {
 				t.Errorf("links = %q, want the reference destination", urls)
 			}
 		})
+	}
+}
+
+func TestTreeKeepsEveryBlock(t *testing.T) {
+	root, err := markup.Tree([]byte(":::x\n---\n:::\n\n<div>\nhi\n</div>\n\n> ***\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	outline(root, 0, &b)
+	want := `file L1-9
+  directive L1-3
+    rule L2-2
+  html L5-7
+  quote L9-9
+    rule L9-9
+`
+	if b.String() != want {
+		t.Errorf("got\n%s\nwant\n%s", b.String(), want)
+	}
+}
+
+func TestTreeInlineCode(t *testing.T) {
+	source := "Write `{{.name}}` in ``a ` b``.\n"
+	root, err := markup.Tree([]byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, c := range root.Children[0].Children {
+		got = append(got, c.Type+":"+c.Attrs["inline"]+":"+source[c.Start:c.End])
+	}
+	want := []string{"code:true:`{{.name}}`", "code:true:``a ` b``"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestTreeUnclosedEmptyDirectiveInItem(t *testing.T) {
+	root, err := markup.Tree([]byte("- :::note\nb\n  :::\n"))
+	var located *markup.Error
+	if !errors.As(err, &located) || !strings.HasPrefix(located.Error(), "1:3: ") || !strings.Contains(located.Error(), "unclosed-directive") {
+		t.Fatalf("err = %v, want unclosed-directive at 1:3", err)
+	}
+	note := root.Children[0].Children[0].Children[0]
+	if note.Type != "directive" || note.Text != ":::note" || note.Start != 2 || note.End != 9 {
+		t.Errorf("directive = %s %q [%d,%d), want directive \":::note\" [2,9)", note.Type, note.Text, note.Start, note.End)
 	}
 }

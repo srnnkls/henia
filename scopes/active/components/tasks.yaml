@@ -10,7 +10,7 @@ tasks:
     files: [internal/markup/markup.go, internal/markup/attributes.go, internal/markup/tree.go, internal/markup/markup_test.go, internal/markup/tree_test.go]
   - id: CMP-002
     content: "Mutable document tree with origins and backtraces, and the span-preserving writer with canonical fence lengths (FR-2, AD-1, AD-2)"
-    status: pending
+    status: done
     active_form: "Building the document tree and writer"
     depends_on: [CMP-001]
     files: [internal/markup/document.go, internal/markup/write.go, internal/markup/document_test.go, internal/markup/write_test.go]
@@ -22,16 +22,16 @@ tasks:
     files: [internal/components/declaration.go, internal/components/load.go, internal/components/builtin.go, internal/components/declaration_test.go, internal/components/load_test.go, internal/library/library.go, internal/templating/absent.go, internal/templating/absent_test.go, internal/transform/transform.go]
   - id: CMP-004
     content: "Source-stage call checks without execution: unknown-component, attribute and body checks, wrong-form, template-action, invalid-template, unknown-field against known skill values on root-anchored field chains only (range/with rebind dot), unused-component (FR-4, AD-3, AD-4)"
-    status: pending
+    status: done
     active_form: "Checking component calls"
     depends_on: [CMP-001, CMP-003]
     files: [internal/components/diagnostic.go, internal/components/check.go, internal/components/check_test.go]
   - id: CMP-005
-    content: "Fixpoint expansion: when/unless per target, include{template}, components inside out, ::body grafting, .body, missingkey=error with absent skill values as nil and blanked by internal/templating, head rule, output form checks, backtraces, component-cycle (FR-5, AD-3, AD-5)"
+    content: "Fixpoint expansion (also fixes carried writer defects from batch 2 review B2-1: a generated child inserted into an empty parsed container must keep the newline and prefix before the closing fence; a generated multi-paragraph item inserted into a list inside a quote must keep '> ' on every line): when/unless per target, include{template}, components inside out, ::body grafting, .body, missingkey=error with absent skill values as nil and blanked by internal/templating, head rule, output form checks, backtraces, component-cycle (FR-5, AD-3, AD-5)"
     status: pending
     active_form: "Expanding components to a fixpoint"
     depends_on: [CMP-002, CMP-004]
-    files: [internal/components/expand.go, internal/components/expand_test.go]
+    files: [internal/components/expand.go, internal/components/expand_test.go, internal/markup/write.go, internal/markup/document.go, internal/markup/write_test.go]
   - id: CMP-006
     content: "include{ref}: section selection after the target's step 3 by henia show anchors, document graph in dependency order, include-cycle, missing-include, invalid-include (FR-6, AD-5)"
     status: pending
@@ -107,7 +107,7 @@ tasks:
 meta:
   created: 2026-10-08
   last_updated: "2026-10-09"
-  progress: 2/16
+  progress: 4/16
 phases:
   - id: syntax
     tasks: [CMP-001, CMP-002, CMP-012]
