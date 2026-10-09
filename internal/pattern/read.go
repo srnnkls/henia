@@ -63,7 +63,7 @@ type Link struct {
 type Attr struct {
 	Key       string
 	Value     string
-	Lo, Hi    int
+	Lo, Hi    float64
 	Range     bool
 	Re        *regexp.Regexp
 	Var       string
@@ -705,11 +705,10 @@ func (r *reader) attr(kind string) (Attr, error) {
 		attr.Param = value.text
 		r.params[value.text] = r.params[value.text] || false
 		return attr, nil
-	case tString, tSymbol, tInt:
+	case tString, tSymbol, tInt, tFloat:
 		attr.Value = value.text
-		attr.Lo, attr.Hi = value.lo, value.hi
 	case tRange:
-		attr.Range, attr.Lo, attr.Hi = true, value.lo, value.hi
+		attr.Range, attr.Lo, attr.Hi = true, float64(value.lo), float64(value.hi)
 	case tRegex:
 		re, err := regexp.Compile(value.text)
 		if err != nil {
@@ -724,8 +723,8 @@ func (r *reader) attr(kind string) (Attr, error) {
 		return attr, &Error{Offset: value.pos, Message: "ranges apply to :level and :words only"}
 	}
 	if slices.Contains(numericKeys, key.text) && !attr.Range {
-		n, err := strconv.Atoi(attr.Value)
-		if err != nil {
+		n, err := strconv.ParseFloat(attr.Value, 64)
+		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
 			return attr, &Error{Offset: value.pos, Message: fmt.Sprintf(":%s takes a number or a range", key.text), Hint: fmt.Sprintf(":%s 2, :%s 1..3 or :%s 80..", key.text, key.text, key.text)}
 		}
 		attr.Range, attr.Lo, attr.Hi = true, n, n

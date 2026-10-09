@@ -12,8 +12,12 @@ import (
 
 func TestWriteUnchangedIsVerbatim(t *testing.T) {
 	sources := map[string]string{
-		"nested.md": "# Title\n\nSome  *odd*   spacing\\\nand a hard break.\n\n::::outer{#top .wide flag}\nIntro :badge[new]{tone=info}.\n\n:::inner{x=\"a b\"}\n- one\n-   two\n:::\n\n::leaf[text]{k=v}\n::::\n\n```go\n:::not-a-directive\n```\n",
-		"plain.md":  "Para one\n\n\n\nPara   two\t\n\n> quote\n>   indented\n",
+		"nested.md":                         "# Title\n\nSome  *odd*   spacing\\\nand a hard break.\n\n::::outer{#top .wide flag}\nIntro :badge[new]{tone=info}.\n\n:::inner{x=\"a b\"}\n- one\n-   two\n:::\n\n::leaf[text]{k=v}\n::::\n\n```go\n:::not-a-directive\n```\n",
+		"plain.md":                          "Para one\n\n\n\nPara   two\t\n\n> quote\n>   indented\n",
+		"empty fence after code.md":         "```markdown\n```\n```\n",
+		"empty fences in sequence.md":       "Intro\n\n```\n```\n\n~~~\n~~~\n\n- ```\n  ```\n\n```\n",
+		"indented atx heading.md":           " # A clear that cannot remove the override must not report the route as gone.\n+    if peer:\n",
+		"indented headings of each kind.md": "   ## Deep\ntext\n\n Setext\n ===\n",
 	}
 	root := filepath.Join("..", "..", "tests", "fixtures")
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {

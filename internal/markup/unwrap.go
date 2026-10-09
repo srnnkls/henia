@@ -40,3 +40,26 @@ func Unwrap(source, name string) (string, []string) {
 	b.WriteString(source[last:])
 	return b.String(), inners
 }
+
+func UnwrapDocument(doc *Document, name string) *Document {
+	var inners []string
+	unwrapItems(doc.Children, name, &inners)
+	head := &Document{File: doc.File}
+	if text := strings.Join(inners, "\n"); text != "" {
+		head.Children = []*Item{{Kind: "text", Text: strings.TrimSuffix(text, "\n"), Origin: Origin{File: doc.File, Line: 1, Column: 1}}}
+	}
+	return head
+}
+
+func unwrapItems(items []*Item, name string, inners *[]string) {
+	for i, it := range items {
+		if it.Kind != "directive" || it.Attrs["name"] != name || it.Attrs["inline"] == "true" {
+			unwrapItems(it.Children, name, inners)
+			continue
+		}
+		_, rest, _ := strings.Cut(written(it), "\n")
+		inner := rest[:strings.LastIndexByte(rest, '\n')+1]
+		replaceText(items, i, unprefix(strings.TrimSuffix(inner, "\n"), itemPrefix(it)))
+		*inners = append(*inners, inner)
+	}
+}

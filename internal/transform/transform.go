@@ -237,6 +237,20 @@ func (t *Transformer) Transform(art *artifact.Artifact) (*artifact.Artifact, err
 	return result, nil
 }
 
+func (t *Transformer) renderDocument(doc *markup.Document, art *artifact.Artifact) (string, error) {
+	if head := markup.UnwrapDocument(doc, HeadBlock); t.Head {
+		doc = head
+	}
+	if art.Type == artifact.TypeSkill {
+		markup.RewriteText(doc, func(body string) string { return t.renderLinks(body, art.Name) })
+	}
+	if err := markup.RenderDocument(doc, t.OutputFormat); err != nil {
+		return "", fmt.Errorf("render directives: %w", err)
+	}
+	markup.RewriteText(doc, func(body string) string { return t.renderReferences(body, art.FullName()) })
+	return string(markup.Write(doc)), nil
+}
+
 func henia(frontmatter map[string]any) map[string]any {
 	h, _ := frontmatter["henia"].(map[string]any)
 	return h

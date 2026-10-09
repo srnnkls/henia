@@ -2,13 +2,13 @@ checkpoint:
   scope_name: components
   scope_path: scopes/active/components
   branch: feat/components
-  last_commit: b18acae
-  updated_at: "2026-10-09T00:04:27Z"
+  last_commit: c2fadfb
+  updated_at: "2026-10-09T00:38:51Z"
   base_drift: {base: origin/main, behind: 0, ahead: 0, checked_at: "2026-10-08T22:14:38Z"}
 
   batch:
-    number: 3
-    tasks: [CMP-005, CMP-007, CMP-012]
+    number: 4
+    tasks: [CMP-006, CMP-011, CMP-015]
     phase: complete
     status: completed
 
@@ -25,20 +25,21 @@ checkpoint:
 
   reports:
     tester:
-      CMP-005: .peer/components/20261008T221438Z-201fe2/b3-tester-CMP-005
-      CMP-007: .peer/components/20261008T221438Z-201fe2/b3-tester-CMP-007
-      CMP-012: .peer/components/20261008T221438Z-201fe2/b3-tester-CMP-012
+      CMP-006: .peer/components/20261008T221438Z-201fe2/b4-tester-CMP-006
+      CMP-011: .peer/components/20261008T221438Z-201fe2/b4-tester-CMP-011
+      CMP-015: .peer/components/20261008T221438Z-201fe2/b4-tester-CMP-015
     implementer:
-      CMP-005: .peer/components/20261008T221438Z-201fe2/b3-implementer-CMP-005
-      CMP-007: .peer/components/20261008T221438Z-201fe2/b3-implementer-CMP-007
-      CMP-012: .peer/components/20261008T221438Z-201fe2/b3-implementer-CMP-012
+      CMP-006: .peer/components/20261008T221438Z-201fe2/b4-implementer-CMP-006
+      CMP-011: .peer/components/20261008T221438Z-201fe2/b4-implementer-CMP-011
+      CMP-015: .peer/components/20261008T221438Z-201fe2/b4-implementer-CMP-015
     review:
-      general: .peer/components/20261008T221438Z-201fe2/b3-review-general
-      architecture: .peer/components/20261008T221438Z-201fe2/b3-review-architecture
-      compliance: .peer/components/20261008T221438Z-201fe2/b3-review-compliance
+      general: .peer/components/20261008T221438Z-201fe2/b4-review-general
+      architecture: .peer/components/20261008T221438Z-201fe2/b4-review-architecture
+      compliance: .peer/components/20261008T221438Z-201fe2/b4-review-compliance
 
   orchestrator_notes:
-    - "CMP-012 blocked on tests/build.md --help snapshot missing the new fmt line; orchestrator added the line (direct consequence of FR-11)."
-    - "CMP-007 residual: setext heading with a replaced inline directive written as ATX; forwarded to running CMP-005 implementer (owns write.go)."
-  fix_round_1: {number: 1, groups: [A], findings: [B3-1, B3-2, B3-3, B3-4, B3-5], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b3-rereview}
-  fix_round: {number: 2, groups: [A2], findings: [B3-1], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b3-rereview-2}
+    - "CMP-015 TestRenderDocument 'nested directives' expected non-canonical fences from the text path; AD-2 writes fences at canonical length, so expected output changed to '::::outer ... ::::'."
+  orchestrator_notes:
+    - "CMP-015 render_test 'nested directives' oracle corrected to canonical fences (AD-2)."
+    - "Pre-admitted B4-0: Write(Parse(src)) grows 2/90 unchanged large docs (duplicated lines); tropos skills/* unaffected."
+  fix_round: {number: 1, groups: [A, B, C], findings: [B4-0, B4-1, B4-2, B4-3, B4-4, B4-5], status: fixed, rereview: .peer/components/20261008T221438Z-201fe2/b4-rereview}

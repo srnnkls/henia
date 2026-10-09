@@ -74,3 +74,23 @@ batches:
     gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
     validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 143/143"
     status: complete
+  - batch: 4
+    tasks: [CMP-006, CMP-011, CMP-015]
+    run: 20261008T221438Z-201fe2
+    reports: .peer/components/20261008T221438Z-201fe2/b4-review-{general,architecture,compliance}
+    coverage: {native: [claude-opus x3], peer: [peer-gpt6.1-sol x3, peer-gpt6-astra x3]}
+    gates_initial: {correctness: fail, security: pass, performance: pass, architecture: fail, style: pass}
+    admitted:
+      - {id: B4-0, severity: high, group: B, found_by: [orchestrator, CMP-015 implementer sweep], location: internal/markup/write.go, trigger: "Write(Parse(src)) on tropos resources/superpowers/docs/superpowers/plans/2026-05-06-lift-drill-into-evals.md and .peer/working/20260826T200112Z-e3e852/review/prompt.md", wrong_outcome: "unchanged document grows (duplicated lines): 48218->48283, 52638->52901 bytes", verified: true}
+      - {id: B4-1, severity: high, group: A, found_by: [claude-opus], location: "internal/components/graph.go:306-327", trigger: "B: ':::note\\nDo X.\\n:::\\n---' before '## Usage'; A includes b#usage", wrong_outcome: "Usage anchor paired with the wrong heading (index pairing vs directive-unaware Sections); A receives '## Other'", verified: "reviewer scratch repro; fix RED test"}
+      - {id: B4-2, severity: high, group: A, found_by: [sol, astra], location: "internal/components/graph.go:95 sectionOf", trigger: "B: ':::when{target=codex}\\n## Usage\\ninside\\n:::\\n\\noutside\\n\\n## Next\\n'; include b#usage for codex", wrong_outcome: "graft omits 'outside' (section limited to the when wrapper's siblings); boundary disagrees with henia show", verified: "fix RED test"}
+      - {id: B4-3, severity: high, group: A, found_by: [sol, astra], location: "internal/components/graph.go:65", trigger: "A includes B; B's component prints {{.name}}", wrong_outcome: "B expands with A's Environment.Values; included section shows A's name (FR-6, AD-3)", verified: "by code reading: one g.env for all units"}
+      - {id: B4-4, severity: medium, group: A, found_by: [claude-opus], location: "internal/components/include.go:421-430", trigger: "::include{ref=\"git#commits\"} with git in a dependency package", wrong_outcome: "missing-include; henia show git#commits resolves via Library.Resolve", disposition: "design settles it (include addresses what henia show reads): ExpandDocuments takes a resolver supplied by CMP-008 from Library.Resolve; 'needs decision' tag covers mechanism only", verified: "by code reading"}
+      - {id: B4-5, severity: medium, group: C, found_by: [sol, astra], location: "internal/pattern/match.go:945, read.go:726", trigger: "declared number level=3.0; query (directive :level 3) or :level 3.0", wrong_outcome: "no match (Atoi on authored text); decimal query rejected at parse", verified: "by code reading"}
+    residual: []
+    rereview_round_1: {reviewer: claude-opus, report: .peer/components/20261008T221438Z-201fe2/b4-rereview, resolved: [B4-0, B4-1, B4-2, B4-3, B4-4, B4-5]}
+    residual:
+      - "ExpandDocuments ignores Environment.Values; callers set Unit.Values (carried to CMP-008)"
+    gates_final: {correctness: pass, security: pass, performance: pass, architecture: pass, style: pass}
+    validation: "go vet ./... && go build ./... clean; go test -count=1 ./... 20/20 ok; mise run test:integration 143/143; both B4-0 files round-trip byte-identical"
+    status: complete

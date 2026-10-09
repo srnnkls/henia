@@ -110,6 +110,7 @@ type builder struct {
 	failures   errorList
 	references []parser.Reference
 	rules      map[ast.Node]text.Segment
+	at         int
 }
 
 func newBuilder(source []byte, pc parser.Context, err error) *builder {
@@ -177,6 +178,7 @@ func (b *builder) block(node ast.Node) *Element {
 			return nil
 		}
 		e.Type, e.Start, e.End = "rule", segment.Start, segment.Stop
+		b.at = max(b.at, e.End)
 		return e
 	case *ast.List:
 		e.Type, e.Attrs["ordered"] = "list", strconv.FormatBool(v.IsOrdered())
@@ -195,11 +197,13 @@ func (b *builder) block(node ast.Node) *Element {
 		for _, a := range v.attrs {
 			e.Attrs[a.name] = a.value
 		}
+		b.at = max(b.at, v.open.stop)
 		if v.leaf() {
 			b.inlines(e, v)
 		} else {
 			b.blocks(e, v, true)
 		}
+		b.at = max(b.at, e.End)
 		return e
 	default:
 		return nil
@@ -215,6 +219,7 @@ func (b *builder) block(node ast.Node) *Element {
 	if html, ok := node.(*ast.HTMLBlock); ok && html.HasClosure() {
 		e.End = max(e.End, html.ClosureLine.Stop)
 	}
+	b.at = max(b.at, e.End)
 	return e
 }
 
@@ -225,6 +230,8 @@ func (b *builder) fence(code *ast.FencedCodeBlock) (int, int) {
 		open = code.Info.Segment.Start
 	case code.Lines().Len() > 0:
 		open = max(bytes.LastIndexByte(b.source[:code.Lines().At(0).Start], '\n'), 0)
+	default:
+		open = b.at + fenceAt(b.source[b.at:])
 	}
 	open = bytes.LastIndexByte(b.source[:open], '\n') + 1
 	end := open
@@ -237,6 +244,16 @@ func (b *builder) fence(code *ast.FencedCodeBlock) (int, int) {
 		return open, end + close
 	}
 	return open, len(b.source)
+}
+
+func fenceAt(text []byte) int {
+	at := len(text)
+	for _, marker := range []string{"```", "~~~"} {
+		if i := bytes.Index(text, []byte(marker)); i >= 0 {
+			at = min(at, i)
+		}
+	}
+	return at
 }
 
 func (b *builder) inlines(parent *Element, node ast.Node) {

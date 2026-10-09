@@ -1,0 +1,144 @@
+package components
+
+import (
+	"slices"
+	"strconv"
+
+	"github.com/srnnkls/henia/internal/markup"
+)
+
+type Unit struct {
+	Name, Package string
+	Document      *markup.Document
+	Components    map[string]Declaration
+	Values        map[string]any
+	Finish        func(*markup.Document) []Diagnostic
+}
+
+type Key struct{ Package, Name string }
+
+type state int
+
+const (
+	pending state = iota
+	expanding
+	expanded
+)
+
+type node struct {
+	unit    Unit
+	state   state
+	anchors map[string][]*markup.Item
+	indexed bool
+}
+
+type step struct {
+	from *node
+	call *markup.Item
+}
+
+type graph struct {
+	env   Environment
+	nodes map[Key]*node
+	trail []step
+	diags []Diagnostic
+}
+
+func ExpandDocuments(units []Unit, env Environment) []Diagnostic {
+	g := &graph{env: env, nodes: map[Key]*node{}}
+	order := make([]*node, 0, len(units))
+	for _, u := range units {
+		n := &node{unit: u}
+		g.nodes[Key{u.Package, u.Name}] = n
+		order = append(order, n)
+	}
+	for _, n := range order {
+		g.expand(n)
+	}
+	sortDiagnostics(g.diags)
+	return g.diags
+}
+
+func (g *graph) expand(n *node) {
+	if n.state != pending {
+		return
+	}
+	n.state = expanding
+	env := g.env
+	env.Values = n.unit.Values
+	x := newExpander(n.unit.Components, env)
+	x.graph, x.unit = g, n
+	g.diags = append(g.diags, x.run(n.unit.Document)...)
+	if n.unit.Finish != nil {
+		g.diags = append(g.diags, n.unit.Finish(n.unit.Document)...)
+	}
+	n.state = expanded
+}
+
+func (n *node) section(anchor string) ([]*markup.Item, error) {
+	doc := n.unit.Document
+	if anchor == "" {
+		return doc.Children, nil
+	}
+	if !n.indexed {
+		anchors, err := sectionAnchors(doc)
+		if err != nil {
+			return nil, err
+		}
+		n.anchors, n.indexed = anchors, true
+	}
+	return n.anchors[anchor], nil
+}
+
+func sectionAnchors(doc *markup.Document) (map[string][]*markup.Item, error) {
+	sections, err := markup.Sections(markup.Write(doc))
+	if err != nil {
+		return nil, err
+	}
+	anchors := make(map[string][]*markup.Item, len(sections))
+	var walk func(items []*markup.Item)
+	walk = func(items []*markup.Item) {
+		items = dissolve(items)
+		for i, it := range items {
+			if it.Kind != "heading" {
+				walk(it.Children)
+				continue
+			}
+			at := slices.IndexFunc(sections, func(s markup.Section) bool { return s.Title == it.Text })
+			if at < 0 {
+				continue
+			}
+			anchors[sections[at].Anchor] = sectionOf(items[i:])
+			sections = sections[at+1:]
+		}
+	}
+	walk(doc.Children)
+	return anchors, nil
+}
+
+func dissolve(items []*markup.Item) []*markup.Item {
+	out := make([]*markup.Item, 0, len(items))
+	for _, it := range items {
+		if it.Kind == "section" {
+			out = append(out, dissolve(it.Children)...)
+			continue
+		}
+		out = append(out, it)
+	}
+	return out
+}
+
+func sectionOf(items []*markup.Item) []*markup.Item {
+	level := headingLevel(items[0])
+	for i, it := range items[1:] {
+		if it.Kind == "heading" && headingLevel(it) <= level {
+			return items[:i+1]
+		}
+	}
+	return items
+}
+
+func headingLevel(it *markup.Item) int {
+	level, _ := strconv.Atoi(it.Attrs["level"])
+	return level
+}

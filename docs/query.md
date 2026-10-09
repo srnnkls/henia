@@ -92,11 +92,21 @@ on both.
 ## Values
 
 - `:level`, `:words`, `:chars` and `:lines` take a number or a range: `1..3`,
-  `80..` or `..20`.
+  `80..` or `..20`. A number may be decimal: `:level 3.0` is `:level 3`.
 - Any numeric value takes `(> n)`, `(>= n)`, `(< n)` or `(<= n)`; a date takes
   `(older days)`.
 - Other values compare exactly. Quote them with `"`, or leave single words bare.
 - A `/regexp/` matches any key, as in `:url /^https:/` or `:title /^Phase/`.
+- A directive attribute declared in its package's components compares by its
+  declared type. A `boolean` compares by truth value, and a bare key is
+  `true`: `:::routes{ordered}` and `{ordered=1}` match `:ordered true`, while
+  `:::routes` matches neither `true` nor `false`. A `number` compares by value:
+  `{limit=3.0}` matches `:limit 3`, and a range or comparison reads the
+  declared value: `{level=2.5}` matches `:level 2..3` and `:level 2.5`. A
+  `list` matches when any of its space-separated elements equals the value or
+  matches the `/regexp/`: `{tags="alpha beta"}` matches `:tags "beta"`. An
+  undeclared directive or attribute, or a value its declaration rejects,
+  compares as the authored string. A `?variable` binds the authored string.
 - `(not value)` negates, as in `:lang (not "go")` or `:id (not ?x)`.
 - A `?variable` binds the key's value. Every other use of it must be equal,
   which joins the patterns that share it.

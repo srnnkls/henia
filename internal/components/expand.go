@@ -24,6 +24,7 @@ type Environment struct {
 	Harnesses map[string]map[string]string
 	Values    map[string]any
 	Known     map[string]bool
+	Resolve   func(from Unit, ref string) (Key, string, error)
 }
 
 type expander struct {
@@ -34,10 +35,20 @@ type expander struct {
 	offsets map[string]int
 	diags   []Diagnostic
 	changed bool
+	graph   *graph
+	unit    *node
+	sealed  map[*markup.Item]bool
 }
 
 func ExpandDocument(doc *markup.Document, decls map[string]Declaration, env Environment) []Diagnostic {
-	x := &expander{decls: decls, env: env, done: map[*markup.Item]bool{}, kept: map[*markup.Item]Declaration{}, offsets: map[string]int{}}
+	return newExpander(decls, env).run(doc)
+}
+
+func newExpander(decls map[string]Declaration, env Environment) *expander {
+	return &expander{decls: decls, env: env, done: map[*markup.Item]bool{}, kept: map[*markup.Item]Declaration{}, offsets: map[string]int{}, sealed: map[*markup.Item]bool{}}
+}
+
+func (x *expander) run(doc *markup.Document) []Diagnostic {
 	for {
 		x.changed = false
 		doc.Children = x.items(doc.Children)
@@ -46,10 +57,14 @@ func ExpandDocument(doc *markup.Document, decls map[string]Declaration, env Envi
 		}
 	}
 	x.validateKept(doc.Children)
-	slices.SortStableFunc(x.diags, func(a, b Diagnostic) int {
+	sortDiagnostics(x.diags)
+	return x.diags
+}
+
+func sortDiagnostics(diags []Diagnostic) {
+	slices.SortStableFunc(diags, func(a, b Diagnostic) int {
 		return cmp.Or(cmp.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Column, b.Column))
 	})
-	return x.diags
 }
 
 func (x *expander) items(items []*markup.Item) []*markup.Item {
@@ -61,6 +76,9 @@ func (x *expander) items(items []*markup.Item) []*markup.Item {
 }
 
 func (x *expander) item(it *markup.Item) []*markup.Item {
+	if x.sealed[it] {
+		return []*markup.Item{it}
+	}
 	if it.Kind != "directive" || x.done[it] {
 		x.descend(it)
 		return []*markup.Item{it}
@@ -273,42 +291,6 @@ func (x *expander) variable(name string) bool {
 		}
 	}
 	return false
-}
-
-func (x *expander) include(it *markup.Item, decl Declaration) []*markup.Item {
-	if _, ok := x.validate(it, decl, it.Attrs); !ok {
-		return x.keep(it)
-	}
-	_, ref := it.Attrs["ref"]
-	name, named := it.Attrs["template"]
-	switch {
-	case ref == named:
-		x.report(it, InvalidInclude, "include takes exactly one of ref and template")
-		return x.keep(it)
-	case ref:
-		return x.keep(it)
-	}
-	target, ok := x.decls[name]
-	switch {
-	case !ok:
-		x.report(it, MissingInclude, "include names unknown component %s", name)
-		return x.keep(it)
-	case target.Path == "" || target.Body.Kind != "none":
-		x.report(it, InvalidInclude, "include template %s must be a declared component whose body kind is none", name)
-		return x.keep(it)
-	}
-	args := maps.Clone(it.Attrs)
-	delete(args, "template")
-	before := len(x.diags)
-	values := x.arguments(it, target, args)
-	if len(x.diags) > before {
-		return x.keep(it)
-	}
-	out, ok := x.render(it, target, values, nil)
-	if !ok {
-		return x.keep(it)
-	}
-	return out
 }
 
 func (x *expander) head(it *markup.Item, decl Declaration, values map[string]any) []*markup.Item {
@@ -532,10 +514,7 @@ func markAction(text *parse.TextNode) *parse.ActionNode {
 }
 
 func (x *expander) report(it *markup.Item, id, format string, args ...any) {
-	site := it.Origin
-	if len(it.Backtrace) > 0 {
-		site = it.Backtrace[0].Directive
-	}
+	site := callSite(it)
 	var notes []string
 	for _, c := range it.Backtrace {
 		notes = append(notes, fmt.Sprintf("expanded from component %s:%d", c.Component.File, c.Component.Line))
@@ -546,4 +525,11 @@ func (x *expander) report(it *markup.Item, id, format string, args ...any) {
 func (x *expander) note(component markup.Origin) {
 	d := &x.diags[len(x.diags)-1]
 	d.Notes = append(d.Notes, fmt.Sprintf("produced by component %s:%d", component.File, component.Line))
+}
+
+func callSite(it *markup.Item) markup.Origin {
+	if len(it.Backtrace) > 0 {
+		return it.Backtrace[0].Directive
+	}
+	return it.Origin
 }

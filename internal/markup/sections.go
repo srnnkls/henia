@@ -15,7 +15,7 @@ type Section struct {
 }
 
 func Sections(source []byte) ([]Section, error) {
-	root, _ := run(headingParser, source)
+	root, _ := run(documentParser, source)
 	var sections []Section
 	err := ast.Walk(root, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		heading, ok := node.(*ast.Heading)

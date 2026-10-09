@@ -23,6 +23,7 @@ const (
 	UnknownTarget    = "unknown-target"
 	UnknownVariable  = "unknown-variable"
 	ComponentCycle   = "component-cycle"
+	IncludeCycle     = "include-cycle"
 )
 
 type Diagnostic struct {

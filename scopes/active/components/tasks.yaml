@@ -34,7 +34,7 @@ tasks:
     files: [internal/components/expand.go, internal/components/expand_test.go, internal/markup/write.go, internal/markup/document.go, internal/markup/write_test.go]
   - id: CMP-006
     content: "include{ref}: section selection after the target's step 3 by henia show anchors, document graph in dependency order, include-cycle, missing-include, invalid-include (FR-6, AD-5)"
-    status: pending
+    status: done
     active_form: "Resolving includes across documents"
     depends_on: [CMP-005]
     files: [internal/components/include.go, internal/components/graph.go, internal/components/include_test.go]
@@ -46,12 +46,12 @@ tasks:
     files: [internal/slots/slots.go, internal/slots/slots_test.go, internal/transform/transform.go, internal/transform/transform_test.go]
   - id: CMP-015
     content: "Head split, kept-directive rendering per harness, links, references and serialization on the tree; build output unchanged (FR-7)"
-    status: pending
+    status: done
     active_form: "Moving rendering onto the tree"
     depends_on: [CMP-007]
     files: [internal/markup/markup.go, internal/markup/unwrap.go, internal/markup/unwrap_test.go, internal/markup/render.go, internal/markup/render_test.go, internal/markup/links.go, internal/transform/transform.go, internal/transform/links_test.go, internal/transform/references_test.go]
   - id: CMP-008
-    content: "Build, henia show and runtime on the component pipeline with per-package components; legacy composition stays compiling for lint; tests/components.md scrut suite (FR-8, AD-6); runtime render cache key covers transitively included documents and every involved package's component declarations; migrate every build and runtime fixture whose body uses template actions or undeclared directives (internal/cli/build_lint_test.go, tests/runtime.md) to declared components, keeping their assertions"
+    content: "Build, henia show and runtime on the component pipeline with per-package components (ExpandDocuments units carry their own Unit.Values, Environment.Resolve is built from Library.Resolve, and the Unit.Finish hook runs :slot/:contents/:related before include selection; callers switch to markup.RenderDocument/UnwrapDocument and Transformer.renderDocument); legacy composition stays compiling for lint; tests/components.md scrut suite (FR-8, AD-6); runtime render cache key covers transitively included documents and every involved package's component declarations; migrate every build and runtime fixture whose body uses template actions or undeclared directives (internal/cli/build_lint_test.go, tests/runtime.md) to declared components, keeping their assertions"
     status: pending
     active_form: "Switching the build to components"
     depends_on: [CMP-006, CMP-015]
@@ -70,7 +70,7 @@ tasks:
     files: [internal/lint/slots.go, internal/lint/rendered.go, internal/lint/rendered_test.go, internal/lint/std/slots.md, internal/lint/std/structure.md, internal/lint/std/references.md, internal/lint/compile.go, internal/cli/lint.go]
   - id: CMP-011
     content: "hq typed directive attributes from declarations on canonical sources: bare keys and booleans, numbers, lists; henia q --canonical '(directive :name \"routes\" :ordered true)' (FR-10)"
-    status: pending
+    status: done
     active_form: "Typing directive attributes in hq"
     depends_on: [CMP-004]
     files: [internal/library/corpus.go, internal/library/corpus_test.go, internal/pattern/read.go, internal/pattern/match.go, internal/pattern/directive_test.go, docs/query.md]
@@ -107,7 +107,7 @@ tasks:
 meta:
   created: 2026-10-08
   last_updated: "2026-10-09"
-  progress: 7/16
+  progress: 10/16
 phases:
   - id: syntax
     tasks: [CMP-001, CMP-002, CMP-012]

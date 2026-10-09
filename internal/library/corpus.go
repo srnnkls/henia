@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/components"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/reference"
 	"gopkg.in/yaml.v3"
@@ -29,6 +30,8 @@ type Corpus struct {
 	skills    map[string]*markup.Element
 	rendering *Rendering
 	anchors   map[string]map[string]bool
+	decls     map[*markup.Element]map[string]components.Declaration
+	typed     map[*markup.Element]map[string]any
 }
 
 type Rendering struct {
@@ -45,10 +48,17 @@ type Document struct {
 func (l *Library) Corpus(rendering *Rendering) *Corpus {
 	c := newCorpus()
 	c.lib, c.rendering = l, rendering
+	packages := map[string]map[string]components.Declaration{}
 	for _, e := range l.Entries {
 		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": e.Name, "name": e.Name, "package": e.Package, "ref": l.Reference(e), "dir": filepath.Dir(e.Path)}}
 		c.adopt(c.Root, skill)
 		c.skills[e.ID] = skill
+		decls, loaded := packages[e.Origin.Root]
+		if !loaded {
+			decls = c.declarations(e.Origin)
+			packages[e.Origin.Root] = decls
+		}
+		c.decls[skill] = decls
 	}
 	for _, e := range l.Entries {
 		skill := c.skills[e.ID]
@@ -115,7 +125,51 @@ func Documents(docs []Document) *Corpus {
 }
 
 func newCorpus() *Corpus {
-	return &Corpus{Root: &markup.Element{Type: "corpus", Attrs: map[string]string{}}, skills: map[string]*markup.Element{}, anchors: map[string]map[string]bool{}}
+	return &Corpus{Root: &markup.Element{Type: "corpus", Attrs: map[string]string{}}, skills: map[string]*markup.Element{}, anchors: map[string]map[string]bool{}, decls: map[*markup.Element]map[string]components.Declaration{}, typed: map[*markup.Element]map[string]any{}}
+}
+
+func (c *Corpus) declarations(pkg Package) map[string]components.Declaration {
+	user := ""
+	if pkg.Tier == Project {
+		user = ConfigDir()
+	}
+	decls, problems := components.Load(pkg.ProjectRoot(), user)
+	for _, p := range problems {
+		c.Problems = append(c.Problems, fmt.Sprintf("%s: %s", p.Path, p.Message))
+	}
+	return decls
+}
+
+func (c *Corpus) Typed(e *markup.Element, key string) (any, bool) {
+	value, ok := c.typed[e][key]
+	return value, ok
+}
+
+func (c *Corpus) typeDirectives(file *markup.Element, decls map[string]components.Declaration) {
+	file.Walk(func(e *markup.Element) bool {
+		if e.Type != "directive" {
+			return true
+		}
+		decl, ok := decls[e.Attrs["name"]]
+		if !ok {
+			return true
+		}
+		for key, raw := range e.Attrs {
+			attr, declared := decl.Attributes[key]
+			if !declared || key == "name" {
+				continue
+			}
+			value, err := attr.Coerce(raw)
+			if err != nil {
+				continue
+			}
+			if c.typed[e] == nil {
+				c.typed[e] = map[string]any{}
+			}
+			c.typed[e][key] = value
+		}
+		return true
+	})
 }
 
 func (c *Corpus) Skill(ref string) *markup.Element {
@@ -194,6 +248,7 @@ func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render
 		file.Attrs["name"], file.Attrs["artifact"] = name, kind+":"+name
 	}
 	c.resolveLinks(file, parent.Attrs["id"], rel, physical)
+	c.typeDirectives(file, c.decls[parent])
 	file.Walk(func(e *markup.Element) bool {
 		if strings.Contains(e.Text, "{{") {
 			e.Attrs["dynamic"] = "true"

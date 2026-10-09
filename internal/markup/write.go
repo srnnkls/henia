@@ -161,7 +161,7 @@ func (w *writer) item(it *Item) {
 func setext(it *Item) ([]byte, bool) {
 	p := it.parsed
 	span := p.src.text[p.start:p.end]
-	if it.Kind != "heading" || bytes.HasPrefix(span, []byte("#")) {
+	if it.Kind != "heading" || atx(span) {
 		return nil, false
 	}
 	line := bytes.LastIndexByte(span, '\n')

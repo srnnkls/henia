@@ -3,6 +3,7 @@ package library
 import (
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -180,5 +181,56 @@ func TestCountsMalformedFrontmatterClosedAtEOF(t *testing.T) {
 		if got := matches(t, corpus, query); got != want {
 			t.Errorf("%s: %d rows, want %d", query, got, want)
 		}
+	}
+}
+
+func typedDirectiveFixture(t *testing.T, body string) *Corpus {
+	t.Helper()
+	root := t.TempDir()
+	write(t, filepath.Join(root, ProjectDir, "components", "routes.md"), "---\nform: container\nattributes:\n  ordered: {type: boolean}\n  limit: {type: number}\n  tags: {type: list}\n---\nroutes\n")
+	write(t, filepath.Join(root, ProjectDir, SkillsDir, "a", "SKILL.md"), "---\nname: a\ndescription: A.\n---\n\n# A\n\n"+body)
+	return Open(root, nil).Corpus(nil)
+}
+
+func directiveLines(t *testing.T, corpus *Corpus, query string) []int {
+	t.Helper()
+	q, err := pattern.Read(query)
+	if err != nil {
+		t.Fatalf("read %q: %v", query, err)
+	}
+	rows, err := q.Run(corpus.Skill("a"), pattern.Environment{Resolve: corpus})
+	if err != nil {
+		t.Fatalf("run %q: %v", query, err)
+	}
+	var lines []int
+	for _, row := range rows {
+		for _, cell := range row.Cells {
+			for _, e := range cell.Elements {
+				if e.Type == "directive" {
+					lines = append(lines, e.Line)
+				}
+			}
+		}
+	}
+	return lines
+}
+
+func TestDirectiveBooleanAttributeTypedByDeclaration(t *testing.T) {
+	corpus := typedDirectiveFixture(t, ":::routes{ordered}\none\n:::\n\n:::routes\ntwo\n:::\n\n:::routes{ordered=1}\nthree\n:::\n\n:::routes{ordered=false}\nfour\n:::\n")
+	if got := directiveLines(t, corpus, `(directive :name "routes" :ordered true) @d`); !slices.Equal(got, []int{8, 16}) {
+		t.Errorf(":ordered true matched lines %v, want [8 16]", got)
+	}
+	if got := directiveLines(t, corpus, `(directive :name "routes" :ordered false) @d`); !slices.Equal(got, []int{20}) {
+		t.Errorf(":ordered false matched lines %v, want [20]", got)
+	}
+}
+
+func TestDirectiveNumberAndListAttributesTypedByDeclaration(t *testing.T) {
+	corpus := typedDirectiveFixture(t, ":::routes{limit=3.0 tags=\"alpha beta\"}\none\n:::\n\n:::routes{limit=4 tags=gamma}\ntwo\n:::\n\n:::other{limit=3.0 tags=\"alpha beta\"}\nthree\n:::\n")
+	if got := directiveLines(t, corpus, `(directive :limit 3) @d`); !slices.Equal(got, []int{8}) {
+		t.Errorf(":limit 3 matched lines %v, want [8]: the declared number matches by value, the undeclared other stays a string", got)
+	}
+	if got := directiveLines(t, corpus, `(directive :tags "beta") @d`); !slices.Equal(got, []int{8}) {
+		t.Errorf(":tags \"beta\" matched lines %v, want [8]: a declared list matches by element, the undeclared other stays a string", got)
 	}
 }

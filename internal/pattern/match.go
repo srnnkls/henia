@@ -27,6 +27,10 @@ type Resolver interface {
 	Skill(ref string) *markup.Element
 }
 
+type Typer interface {
+	Typed(e *markup.Element, key string) (any, bool)
+}
+
 type Cell struct {
 	Name      string
 	Elements  []*markup.Element
@@ -906,6 +910,8 @@ func (m *matcher) test(a Attr, e *markup.Element) bool {
 	if !ok {
 		return false
 	}
+	typed, isTyped := m.typed(e, a.Key)
+	number, isNumber := typed.(float64)
 	if a.Op != "" {
 		limit := a.Number
 		if a.Param != "" {
@@ -916,6 +922,9 @@ func (m *matcher) test(a Attr, e *markup.Element) bool {
 			return err == nil && m.env.Now.Sub(date) > time.Duration(limit*24)*time.Hour
 		}
 		n, err := strconv.ParseFloat(value, 64)
+		if isNumber {
+			n, err = number, nil
+		}
 		if err != nil {
 			return false
 		}
@@ -930,16 +939,47 @@ func (m *matcher) test(a Attr, e *markup.Element) bool {
 		return n <= limit
 	}
 	if a.Param != "" {
-		return value == m.env.Params[a.Param].String()
+		return equals(typed, isTyped, value, m.env.Params[a.Param].String())
 	}
 	if a.Re != nil {
+		if items, ok := typed.([]string); ok {
+			return slices.ContainsFunc(items, a.Re.MatchString)
+		}
 		return a.Re.MatchString(value)
 	}
 	if a.Range {
+		if isNumber {
+			return a.Lo <= number && number <= a.Hi
+		}
 		n, err := strconv.Atoi(value)
-		return err == nil && a.Lo <= n && n <= a.Hi
+		return err == nil && a.Lo <= float64(n) && float64(n) <= a.Hi
 	}
-	return value == a.Value
+	return equals(typed, isTyped, value, a.Value)
+}
+
+func (m *matcher) typed(e *markup.Element, key string) (any, bool) {
+	typer, ok := m.resolve.(Typer)
+	if !ok {
+		return nil, false
+	}
+	return typer.Typed(e, key)
+}
+
+func equals(typed any, isTyped bool, raw, want string) bool {
+	if !isTyped {
+		return raw == want
+	}
+	switch v := typed.(type) {
+	case bool:
+		b, err := strconv.ParseBool(want)
+		return err == nil && b == v
+	case float64:
+		n, err := strconv.ParseFloat(want, 64)
+		return err == nil && n == v
+	case []string:
+		return slices.Contains(v, want)
+	}
+	return raw == want
 }
 
 func (m *matcher) satisfies(c constraint, bound string) (bool, float64) {

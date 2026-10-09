@@ -144,7 +144,7 @@ func convert(src *source, e *Element, directives map[int]*directive, indent int)
 		start = afterIndent(src.text, start, indent)
 		switch {
 		case e.Type != "heading":
-		case start < len(src.text) && src.text[start] == '#':
+		case atx(src.text[start:]):
 			end = max(end, start+lineLength(src.text[start:]))
 		default:
 			end = underline(src.text, end)
@@ -284,6 +284,14 @@ func lineLength(text []byte) int {
 		return n
 	}
 	return len(text)
+}
+
+func atx(line []byte) bool {
+	i := 0
+	for i < 3 && i < len(line) && line[i] == ' ' {
+		i++
+	}
+	return i < len(line) && line[i] == '#'
 }
 
 func underline(text []byte, end int) int {

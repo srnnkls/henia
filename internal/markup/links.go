@@ -64,3 +64,22 @@ func Links(source []byte) []Link {
 	})
 	return links
 }
+
+func RewriteText(doc *Document, rewrite func(markdown string) string) {
+	rewriteItems(doc.Children, rewrite)
+}
+
+func rewriteItems(items []*Item, rewrite func(string) string) {
+	for i, it := range items {
+		switch {
+		case it.Kind == "code":
+		case it.Kind == "section", it.Kind == "list", it.Kind == "item", it.Kind == "quote", container(it):
+			rewriteItems(it.Children, rewrite)
+		default:
+			text := markdown(it)
+			if out := rewrite(text); out != text {
+				replaceText(items, i, out)
+			}
+		}
+	}
+}
