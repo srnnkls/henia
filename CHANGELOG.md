@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.0-alpha.20](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.19...v0.1.0-alpha.20) (2026-10-13)
+
+
+### Features
+
+* **build:** build the harnesses dependencies configure, with the project's skills ([124fb6c](https://github.com/srnnkls/henia/commit/124fb6ca139f85dbbeb55f3dd967067da494ec89))
+* **build:** build the harnesses dependencies configure, with the project's skills ([4108955](https://github.com/srnnkls/henia/commit/4108955abc9ff919fa94f227cde187f12b0250b1))
+* **config:** load a package's harnesses with project tables merged over them ([909dc96](https://github.com/srnnkls/henia/commit/909dc9618cc850fb977fc480371bb2e5e67bdcb2))
+
+
+### Bug Fixes
+
+* **lint:** count dependency slot declarations for unknown-slot and invalid-slot ([d49b63e](https://github.com/srnnkls/henia/commit/d49b63efde680907362d5bb02fde0b299f12e1be))
+* **slots:** provide a configured reference once when config layers repeat it ([29d40eb](https://github.com/srnnkls/henia/commit/29d40ebfe251ce2f51b5d4803513b9d745e6ff5d))
+
 ## [0.1.0-alpha.19](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.18...v0.1.0-alpha.19) (2026-10-13)
 
 
