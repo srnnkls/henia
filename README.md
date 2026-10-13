@@ -2,6 +2,9 @@
 
 *ἡνία • rein, bridle*
 
+> In Ancient Greek, ἡνία (*hēnía*) means "reins" or "bridle", used for
+> driving horses or a chariot. Henia is the rein on an agent's harness.
+>
 > From Proto-Indo-European *h₂em- ("to grasp"); akin to Latin *ānsa* ("handle")
 >
 > Pronunciation: /hɛː.ní.a/ → /iˈni.a/
