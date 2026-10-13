@@ -79,3 +79,23 @@ A canonical file stays byte-identical.
 $ henia fmt canonical.md && cmp canonical.md canonical.orig && echo same
 same
 ```
+
+## Code span link labels
+
+A link label that starts with, ends with, or consists of a code span, plain or
+inside emphasis, renders and formats as written.
+
+```scrut
+$ L="$T/data/henia/packages/global/pkg"
+> henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" command henia "$@"; }
+> mk "$L/skills/links/SKILL.md" '---\nname: links\ndescription: Code span labels.\n---\n\n# Links\n\nSee [`peer path`](../peer/SKILL.md#x), [a `b`](y.md), [`c` d](z.md), [``e`f``](v.md) and [*`g` h*](w.md).\n'
+> printf '[harness.claude]\nartifacts = ["skills"]\n' > "$L/henia.toml"
+> cp "$L/skills/links/SKILL.md" links.orig
+> henia build "$L" --output "$T/build" > /dev/null
+> grep -h '^See' "$T/build/claude/skills/links/SKILL.md"
+> henia show links | grep '^See'
+> henia fmt --check "$L/skills/links/SKILL.md" && henia fmt "$L/skills/links/SKILL.md" && cmp "$L/skills/links/SKILL.md" links.orig && echo same
+See [`peer path`](../peer/SKILL.md#x), [a `b`](y.md), [`c` d](z.md), [``e`f``](v.md) and [*`g` h*](w.md).
+See `peer path` (`henia show 'peer#x'`), a `b` (`henia show links.y`), `c` d (`henia show links.z`), ``e`f`` (`henia show links.v`) and *`g` h* (`henia show links.w`).
+same
+```

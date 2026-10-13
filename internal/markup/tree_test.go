@@ -259,3 +259,40 @@ func TestTreeUnclosedEmptyDirectiveInItem(t *testing.T) {
 		t.Errorf("directive = %s %q [%d,%d), want directive \":::note\" [2,9)", note.Type, note.Text, note.Start, note.End)
 	}
 }
+
+func TestTreeLinkSpansCodeSpanLabels(t *testing.T) {
+	for _, c := range []struct{ source, code string }{
+		{"[`peer path`](../peer/SKILL.md#x)\n", "`peer path`"},
+		{"[see `b`](y.md)\n", "`b`"},
+		{"[`a` then](y.md)\n", "`a`"},
+		{"[``a`b``](y.md)\n", "``a`b``"},
+		{"[*`e` f*](w.md)\n", "`e`"},
+		{"[**`e`**](w.md)\n", "`e`"},
+	} {
+		t.Run(c.source, func(t *testing.T) {
+			root, err := markup.Tree([]byte(c.source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var link, code *markup.Element
+			root.Walk(func(e *markup.Element) bool {
+				switch e.Type {
+				case "link":
+					link = e
+				case "code":
+					code = e
+				}
+				return true
+			})
+			if link == nil || code == nil {
+				t.Fatal("want a link and a code span")
+			}
+			if got := c.source[code.Start:code.End]; got != c.code {
+				t.Errorf("code extent = %q, want %q", got, c.code)
+			}
+			if code.Start < link.Start || code.End > link.End {
+				t.Errorf("code span %q escapes link %q", c.source[code.Start:code.End], c.source[link.Start:link.End])
+			}
+		})
+	}
+}

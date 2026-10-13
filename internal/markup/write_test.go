@@ -18,6 +18,7 @@ func TestWriteUnchangedIsVerbatim(t *testing.T) {
 		"empty fences in sequence.md":       "Intro\n\n```\n```\n\n~~~\n~~~\n\n- ```\n  ```\n\n```\n",
 		"indented atx heading.md":           " # A clear that cannot remove the override must not report the route as gone.\n+    if peer:\n",
 		"indented headings of each kind.md": "   ## Deep\ntext\n\n Setext\n ===\n",
+		"links labelled with code spans.md": "See [`peer path`](../peer/SKILL.md#x), [a `b`](y.md), [`c` d](z.md), [``e`f``](v.md) and [*`g` h*](w.md).\n",
 	}
 	root := filepath.Join("..", "..", "tests", "fixtures")
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {

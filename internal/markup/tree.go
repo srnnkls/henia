@@ -220,7 +220,7 @@ func (b *builder) block(node ast.Node) *Element {
 	default:
 		return nil
 	}
-	e.Start, e.End = extent(node)
+	e.Start, e.End = b.extent(node)
 	if fenced, ok := node.(*ast.FencedCodeBlock); ok {
 		e.Text = string(node.Lines().Value(b.source))
 		e.Start, e.End = b.fence(fenced)
@@ -283,7 +283,7 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 			e = &Element{Type: "link", Attrs: map[string]string{"url": string(v.URL(b.source))}}
 		case *ast.CodeSpan:
 			e = &Element{Type: "code", Attrs: map[string]string{"inline": "true"}}
-			inner, end := extent(n)
+			inner, end := b.extent(n)
 			e.Start, e.End = b.ticks(inner, end)
 			if inner >= 0 {
 				e.Text = b.body[inner:end]
@@ -303,7 +303,7 @@ func (b *builder) inlines(parent *Element, node ast.Node) {
 		default:
 			return ast.WalkContinue, nil
 		}
-		e.Start, e.End = extent(n)
+		e.Start, e.End = b.extent(n)
 		parent.add(e)
 		b.inlines(e, n)
 		return ast.WalkSkipChildren, nil
@@ -342,9 +342,12 @@ func (b *builder) label(s span) ast.Node {
 	return doc
 }
 
-func extent(node ast.Node) (int, int) {
+func (b *builder) extent(node ast.Node) (int, int) {
 	start, end := -1, -1
 	cover := func(s, e int) {
+		if s < 0 {
+			return
+		}
 		if start < 0 || s < start {
 			start = s
 		}
@@ -362,6 +365,11 @@ func extent(node ast.Node) (int, int) {
 		switch v := n.(type) {
 		case *ast.Text:
 			cover(v.Segment.Start, v.Segment.Stop)
+		case *ast.CodeSpan:
+			if n != node {
+				cover(b.ticks(b.extent(v)))
+				return ast.WalkSkipChildren, nil
+			}
 		case *inlineNode:
 			cover(v.open.start, v.close.stop)
 		case *blockNode:
