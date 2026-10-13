@@ -415,3 +415,75 @@ func TestLintDefaultsToPackageContents(t *testing.T) {
 		t.Fatalf("linted %s", got)
 	}
 }
+
+func TestBuildReusesDependencyHarnesses(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	store := library.PackagesDir(library.ProjectKey(project))
+	dep := filepath.Join(store, "tropos")
+	fixture(t, filepath.Join(dep, "henia.toml"), "[harness.claude]\nartifacts = ['skills', 'agents']\nstrict = true\n[harness.claude.skills]\ndefault = 'dynamic'\nhybrid = ['entry']\nstatic = ['pinned']\n[harness.claude.variables]\nteam = 'tropos'\n[harness.claude.agents]\nprofile = 'terse-agent'\nlayout = 'flat'\n[harness.claude.files]\n'CLAUDE.md' = { source = 'instructions/AGENTS.md' }\n")
+	fixture(t, filepath.Join(dep, ".henia", "harnesses", "terse-agent", "transform.toml"), "fields = ['name', 'description']\n")
+	fixture(t, filepath.Join(dep, "instructions", "AGENTS.md"), "# Instructions\n")
+	fixture(t, filepath.Join(dep, "skills", "entry", "SKILL.md"), "---\nname: entry\ndescription: Entry skill.\n---\n\n# Entry\n\nMore.\n")
+	fixture(t, filepath.Join(dep, "skills", "pinned", "SKILL.md"), "---\nname: pinned\ndescription: Pinned skill.\n---\n\n# Pinned\n\nAsk {{.team}}.\n")
+	fixture(t, filepath.Join(dep, "skills", "library", "SKILL.md"), "---\nname: library\ndescription: Library skill.\n---\n\n# Library\n")
+	fixture(t, filepath.Join(dep, "agents", "helper.md"), "---\nname: helper\ndescription: Helper agent.\n---\n\nHelp.\n")
+	fixture(t, filepath.Join(project, "henia.toml"), "[harness.claude.variables]\nteam = 'cmw'\n")
+	fixture(t, filepath.Join(project, ".henia", "skills", "own", "SKILL.md"), "---\nname: own\ndescription: Own skill.\nunsupported-key: kept out\n---\n\n# Own\n")
+	output := filepath.Join(t.TempDir(), "out")
+	if err := executeBuild(t, "--output", output); err != nil {
+		t.Fatal(err)
+	}
+	var files []string
+	if err := filepath.WalkDir(output, func(path string, entry os.DirEntry, err error) error {
+		if err == nil && !entry.IsDir() {
+			rel, _ := filepath.Rel(output, path)
+			files = append(files, filepath.ToSlash(rel))
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"claude/CLAUDE.md", "claude/agents/helper.md", "claude/skills/entry/SKILL.md", "claude/skills/henia/SKILL.md", "claude/skills/own/SKILL.md", "claude/skills/pinned/SKILL.md"}
+	if strings.Join(files, " ") != strings.Join(want, " ") {
+		t.Fatalf("files = %v, want %v", files, want)
+	}
+	entry, _ := os.ReadFile(filepath.Join(output, "claude/skills/entry/SKILL.md"))
+	if !strings.Contains(string(entry), "henia show entry --head") {
+		t.Errorf("entry is not a hybrid head:\n%s", entry)
+	}
+	if pinned, _ := os.ReadFile(filepath.Join(output, "claude/skills/pinned/SKILL.md")); !strings.Contains(string(pinned), "Ask cmw.") {
+		t.Errorf("pinned misses the project's variables:\n%s", pinned)
+	}
+}
+
+func TestBuildAddsProjectHarnessesToDependencyHarnesses(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dep := filepath.Join(library.PackagesDir(library.ProjectKey(project)), "tropos")
+	fixture(t, filepath.Join(dep, "henia.toml"), "[harness.claude.skills]\ndefault = 'dynamic'\n")
+	fixture(t, filepath.Join(dep, "skills", "library", "SKILL.md"), "---\nname: library\ndescription: Library skill.\n---\n\n# Library\n")
+	fixture(t, filepath.Join(project, "henia.toml"), "[harness.codex]\n[harness.claude.skills]\ndynamic = ['quiet']\n")
+	fixture(t, filepath.Join(project, ".henia", "skills", "own", "SKILL.md"), "---\nname: own\ndescription: Own skill.\n---\n\n# Own\n")
+	fixture(t, filepath.Join(project, ".henia", "skills", "quiet", "SKILL.md"), "---\nname: quiet\ndescription: Quiet skill.\n---\n\n# Quiet\n")
+	output := filepath.Join(t.TempDir(), "out")
+	if err := executeBuild(t, "--output", output); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]bool{
+		"claude/skills/own/SKILL.md":     true,
+		"claude/skills/quiet/SKILL.md":   false,
+		"claude/skills/library/SKILL.md": false,
+		"codex/skills/library/SKILL.md":  true,
+		"codex/skills/quiet/SKILL.md":    true,
+		"gemini":                         false,
+	} {
+		if _, err := os.Stat(filepath.Join(output, path)); (err == nil) != want {
+			t.Errorf("%s exists = %v, want %v", path, err == nil, want)
+		}
+	}
+}

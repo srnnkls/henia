@@ -108,10 +108,11 @@ An address names its kind explicitly or by the sigil a reference uses:
 A dependency hides a global package of the same name, so a project that pins
 its own Tropos reads only that one.
 
-`henia build` compiles the project's skills together with its dependencies'. A
-dependency's skills render with its own harness `variables`, `tools` and
-`references` as defaults. The project's harness of the same name overrides them
-key by key and decides everything else. `henia lint` lints the project's own
+`henia build` compiles the project's skills, from `.henia/skills/`, together
+with its dependencies'. A harness a dependency configures builds as
+`henia install` writes it, with the project's skills added and the project's
+harness table of the same name merged over the dependency's key by key; see
+[Building](build.md#dependencies). `henia lint` lints the project's own
 files and resolves references against its dependencies, whose `.henia/lint/`
 modules join the rule set.
 

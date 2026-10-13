@@ -121,6 +121,9 @@ through unchanged.
 Without a `[harness]` table, a build writes all nine bundled profiles.
 Declaring harnesses selects only those, and `--harness claude,codex` narrows
 the selection further. A harness named after a bundled profile inherits it.
+When a skill package dependency configures harnesses, the build writes only
+the harnesses the project or a dependency configures; see
+[dependencies](#dependencies).
 
 | Profile | Writes |
 | --- | --- |
@@ -158,8 +161,9 @@ The `claude-agent` profile lives at `.henia/harnesses/claude-agent/transform.tom
 ## Extra files
 
 `[harness.<name>.files]` copies support documents into a harness tree, as
-with `AGENTS.md` above. The source resolves inside the input directory, the
-destination inside the harness root. Markdown sources render their references
+with `AGENTS.md` above. The source resolves inside the input directory, or
+inside the skill package whose harness lists the file, and the destination
+inside the harness root. Markdown sources render their references
 in the harness's syntax and resolve their directives first; `replace` then
 applies literal replacements, all at once. Other sources copy verbatim apart
 from `replace`.
@@ -211,10 +215,28 @@ one, fail the build. Writes never follow a symlink out of the harness root.
 Resources copy verbatim and keep their executable bit; a symlinked resource is
 an error.
 
+## Dependencies
+
 A project with skill package dependencies builds them with its own skills.
-Each dependency renders with its own harness `variables`, `tools` and
-`references`; the project's harness of the same name overrides them key by
-key.
+When no dependency configures a harness, the project's harnesses render every
+package, and each dependency's skills take its own harness `variables`,
+`tools` and `references` as defaults, which the project's harness of the same
+name overrides key by key.
+
+A harness that a dependency configures renders as `henia install` renders it:
+with that dependency's harness configuration, skill modes, agents and `files`,
+its profiles resolved from its `.henia/harnesses/` and its file sources from
+its own tree. The other packages, the project's included, render as its
+dependencies. The project's `[harness.<name>]` table merges over the
+dependency's key by key, so a project with Tropos as a dependency and only
+`[harness.claude.variables]` builds Tropos's Claude harness with those
+variables. When several dependencies configure one harness, their outputs
+merge, and a file two of them write differently fails the build.
+
+The project's own skills, commands and agents take their modes from the
+project's harness table, and are static when it sets none. They render
+strictly only when the project's table sets `strict`, whatever the
+dependency's harness does.
 
 ## Configuration
 
@@ -222,10 +244,12 @@ Henia merges the bundled defaults, `~/.config/henia/henia.toml`, then the
 project's `henia.toml`. Tables merge recursively, scalars override (`false`
 included), and arrays concatenate. Unknown keys are errors.
 
-`henia build <source>` reads `<source>/henia.toml` when it exists, else
-`./henia.toml`, and `--config` always wins. Relative paths in a project config
-resolve against its directory. `--output`, `--clean` and `--harness` override
-the config.
+`henia build` without a source builds `.henia/` when it holds `skills`,
+`commands` or `agents` and the current directory does not, else the current
+directory. `henia build <source>` reads `<source>/henia.toml` when it exists,
+else `./henia.toml`; a source named `.henia` reads its project's. `--config`
+always wins. Relative paths in a project config resolve against its directory.
+`--output`, `--clean` and `--harness` override the config.
 
 To build from a [Phora](https://github.com/srnnkls/phora) hook and deploy the
 result, see [Phora integration](phora.md).
