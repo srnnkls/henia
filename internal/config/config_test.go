@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -58,5 +59,18 @@ func TestFindRejectsTwoProjectConfigs(t *testing.T) {
 	}
 	if _, err := Find(dir); err == nil || !strings.Contains(err.Error(), "keep one") {
 		t.Fatalf("Find with both configs = %v; want an error", err)
+	}
+}
+
+func TestSlotOptions(t *testing.T) {
+	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), []byte("[slots.\"code.style\"]\ndisable = [\"loqui:loqui\"]\n"), []byte("[slots.\"implement.approach\"]\nprovide = [\"ponytail:ponytail\", \"tropos:loqui#tdd\"]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.DisabledProviders(); !reflect.DeepEqual(got, map[string][]string{"code.style": {"loqui:loqui"}}) {
+		t.Errorf("disabled = %v", got)
+	}
+	if got := cfg.ProvidedSkills(); !reflect.DeepEqual(got, map[string][]string{"implement.approach": {"ponytail:ponytail", "tropos:loqui#tdd"}}) {
+		t.Errorf("provided = %v", got)
 	}
 }

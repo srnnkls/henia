@@ -41,6 +41,7 @@ func (c *Config) HeniaSkill() bool { return c.InstallHeniaSkill == nil || *c.Ins
 
 type SlotOptions struct {
 	Disable []string `toml:"disable,omitempty"`
+	Provide []string `toml:"provide,omitempty"`
 }
 
 func (c *Config) DisabledProviders() map[string][]string {
@@ -51,6 +52,16 @@ func (c *Config) DisabledProviders() map[string][]string {
 		}
 	}
 	return disabled
+}
+
+func (c *Config) ProvidedSkills() map[string][]string {
+	provided := map[string][]string{}
+	for slot, options := range c.Slots {
+		if len(options.Provide) > 0 {
+			provided[slot] = options.Provide
+		}
+	}
+	return provided
 }
 
 type ResourceOptions struct {

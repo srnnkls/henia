@@ -16,6 +16,7 @@ import (
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/pipeline"
+	"github.com/srnnkls/henia/internal/slots"
 )
 
 type Diagnostic struct {
@@ -58,6 +59,7 @@ type Options struct {
 	User         string                    `toml:"-"`
 	Packages     []pipeline.Dependency     `toml:"-"`
 	Configured   map[string]henia.Harness  `toml:"-"`
+	Provided     []slots.Skill             `toml:"-"`
 	Now          time.Time                 `toml:"-"`
 }
 

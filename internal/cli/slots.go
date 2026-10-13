@@ -98,7 +98,24 @@ func resolveSlots(project string, lib *library.Library) (*slots.Resolution, erro
 	if err != nil {
 		return nil, err
 	}
-	return slots.Evaluate(slots.Discover(lib), cfg.DisabledProviders()), nil
+	skills := slots.Discover(lib)
+	provided := slots.Provide(skills, cfg.ProvidedSkills(), path)
+	for _, pkg := range lib.Packages {
+		if pkg.Tier == library.Project || pkg.Config == "" {
+			continue
+		}
+		pkgCfg, err := config.LoadOptional(pkg.Config)
+		if err != nil {
+			provided = append(provided, slots.Skill{Path: pkg.Config, Metadata: slots.Metadata{Problems: []slots.Problem{{Role: "provide", Message: err.Error()}}}})
+			continue
+		}
+		for _, s := range slots.Provide(skills, pkgCfg.ProvidedSkills(), pkg.Config) {
+			if !slices.ContainsFunc(provided, func(p slots.Skill) bool { return p.Path == s.Path && slices.Equal(p.Offered, s.Offered) }) {
+				provided = append(provided, s)
+			}
+		}
+	}
+	return slots.Evaluate(append(skills, provided...), cfg.DisabledProviders()), nil
 }
 
 func projectRoot(cmd *cobra.Command) string {

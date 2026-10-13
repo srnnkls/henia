@@ -3,6 +3,7 @@ package lint
 import (
 	"bytes"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strconv"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/srnnkls/henia/internal/slots"
 )
 
-func addSlots(root *markup.Element, documents []document) {
+func addSlots(root *markup.Element, documents []document, provided []slots.Skill) {
 	files := map[string]*markup.Element{}
 	root.Walk(func(e *markup.Element) bool {
 		if e.Type == "file" {
@@ -63,6 +64,21 @@ func addSlots(root *markup.Element, documents []document) {
 			}
 			add(attrs, at)
 		}
+		for _, s := range provided {
+			if !same(s.Path, d.path) {
+				continue
+			}
+			for _, offered := range s.Offered {
+				attrs := map[string]string{"role": "provide", "slot": offered.Slot, "priority": offered.Priority.String()}
+				if offered.Section != "" {
+					if anchors == nil {
+						anchors = sectionAnchors(d)
+					}
+					attrs["section"], attrs["found"] = offered.Section, strconv.FormatBool(anchors[offered.Section])
+				}
+				add(attrs, 0)
+			}
+		}
 		if d.view == nil {
 			for _, application := range slots.Applications(body) {
 				for _, slot := range application.Slots {
@@ -102,4 +118,10 @@ func sectionAnchors(d document) map[string]bool {
 		anchors[section.Anchor] = true
 	}
 	return anchors
+}
+
+func same(a, b string) bool {
+	a, errA := filepath.Abs(a)
+	b, errB := filepath.Abs(b)
+	return errA == nil && errB == nil && a == b
 }

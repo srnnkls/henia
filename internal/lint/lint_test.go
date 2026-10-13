@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/srnnkls/henia/internal/lint"
+	"github.com/srnnkls/henia/internal/slots"
 )
 
 func write(t *testing.T, root, path, content string) string {
@@ -287,5 +288,22 @@ func TestRuleWithoutStageFailsLintTest(t *testing.T) {
 	}
 	if !slices.ContainsFunc(reported, func(s string) bool { return strings.Contains(s, "shouting") && strings.Contains(s, "stage") }) {
 		t.Fatalf("lint test reported %q, want a failure naming rule shouting and its missing stage", reported)
+	}
+}
+
+func TestConfiguredProvidersAreLinted(t *testing.T) {
+	root := t.TempDir()
+	one := write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\nhenia:\n  slots:\n    code.style:\n---\n\n# One\n\n:slot[code.style]\n\n## Go\n")
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Provided: []slots.Skill{{Path: one, Metadata: slots.Metadata{Offered: []slots.Offer{{Slot: "code.style.go", Section: "go"}, {Slot: "code.style.rust", Section: "rust"}, {Slot: "git.commits"}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, d := range diagnostics {
+		got = append(got, d.Rule+" "+d.Message)
+	}
+	want := []string{`missing-section slot code.style.rust offers section #rust, which the skill does not render`, `unknown-slot "git.commits" is not declared by any scanned document`}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("diagnostics = %q, want %q", got, want)
 	}
 }

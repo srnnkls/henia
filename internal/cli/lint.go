@@ -17,6 +17,7 @@ import (
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
 	"github.com/srnnkls/henia/internal/profile"
+	"github.com/srnnkls/henia/internal/slots"
 )
 
 func newLintCommand() *cobra.Command {
@@ -147,6 +148,7 @@ func lintOptions(cmd *cobra.Command) (lint.Options, *config.Config, error) {
 			options.Modules = append(options.Modules, lint.ModuleDir{Dir: filepath.Join(pkg.Root, library.ProjectDir, "lint"), Prefix: pkg.Name})
 		}
 	}
+	options.Provided = slots.Provide(slots.Discover(lib), cfg.ProvidedSkills(), configPath)
 	for _, entry := range lib.Entries {
 		if entry.Tier == library.Dependency {
 			options.Dependencies = append(options.Dependencies, entry.Path)

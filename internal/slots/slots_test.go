@@ -154,6 +154,105 @@ func TestResolveUniquePerKey(t *testing.T) {
 	}
 }
 
+func lines(rows []Row) string {
+	var got []string
+	for _, r := range rows {
+		got = append(got, r.Line())
+	}
+	return strings.Join(got, "\n")
+}
+
+func TestUniqueMostSpecificWins(t *testing.T) {
+	for _, typ := range []Type{{Unique: true, Keyed: true}, {Keyed: true}} {
+		owner := Skill{Path: "owner", Ref: "tropos:test", Tier: Global, Metadata: Metadata{Declared: []Declaration{{"test.approach", typ}}}}
+		r := Evaluate([]Skill{
+			owner,
+			provider("tropos:root", Global, Offer{Slot: "test.approach", Priority: Fallback}),
+			provider("tropos:frontend", Global, Offer{Slot: "test.approach.frontend", Priority: Fallback}),
+		}, nil)
+		root, frontend := "test.approach\tglobal\thenia show tropos:root", "test.approach.frontend\tglobal\thenia show tropos:frontend"
+		want := map[string]string{
+			"test.approach.frontend": frontend,
+			"test.approach.backend":  root,
+			"test.approach":          root + "\n" + frontend,
+		}
+		if !typ.Unique {
+			want["test.approach.frontend"] = root + "\n" + frontend
+		}
+		for request, rows := range want {
+			if got := lines(r.Rows([]string{request}, false)); got != rows {
+				t.Errorf("%s: %s:\n%s\nwant:\n%s", typ, request, got, rows)
+			}
+		}
+		if got := lines(r.Rows(nil, true)); got != "" {
+			t.Errorf("%s: problems = %s", typ, got)
+		}
+	}
+}
+
+func TestUniqueSupersededExplained(t *testing.T) {
+	owner := Skill{Path: "owner", Ref: "tropos:test", Tier: Global, Metadata: Metadata{Declared: []Declaration{{"test.approach", Type{Keyed: true, Unique: true}}}}}
+	r := Evaluate([]Skill{
+		owner,
+		provider("tropos:root", Global, Offer{Slot: "test.approach", Priority: Fallback}),
+		provider("tropos:frontend", Global, Offer{Slot: "test.approach.frontend", Priority: Fallback}),
+	}, nil)
+	var b strings.Builder
+	if err := r.Explain(&b, []string{"test.approach.frontend"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), "shadowed tropos:root [global, fallback from tier] tropos:root/SKILL.md\n      by tropos:frontend [global, fallback from tier] for test.approach.frontend, more specific,") {
+		t.Errorf("explain:\n%s", b.String())
+	}
+	selected := r.Select([]string{"test.approach.frontend"})
+	var statuses []string
+	for _, p := range selected.Providers {
+		status := p.Ref + " " + p.Status
+		if p.ShadowedBy != nil {
+			status += " by " + p.ShadowedBy.Ref
+		}
+		statuses = append(statuses, status)
+	}
+	if got := strings.Join(statuses, ", "); got != "tropos:root shadowed by tropos:frontend, tropos:frontend selected" {
+		t.Errorf("select = %s", got)
+	}
+	if r.Providers[1].Status != Selected {
+		t.Errorf("Select changed the resolution: %s", r.Providers[1].Status)
+	}
+	if got := r.Select([]string{"test.approach.frontend", "test.approach"}).Providers[0].Status; got != Selected {
+		t.Errorf("root requested too: %s", got)
+	}
+}
+
+func TestProvide(t *testing.T) {
+	owner := Skill{Path: "owner", Ref: "tropos:implement", Tier: Global, Metadata: Metadata{Declared: []Declaration{{"implement.approach", Untyped}}}}
+	skills := []Skill{
+		owner,
+		provider("ponytail:ponytail", Dependency),
+		provider("tropos:loqui", Global),
+	}
+	provided := Provide(skills, map[string][]string{
+		"implement.approach": {"ponytail:ponytail", "tropos:loqui#tdd", "ghost:skill"},
+		"bad..slot":          {"tropos:loqui"},
+	}, "henia.toml")
+	r := Evaluate(append(skills, provided...), nil)
+	want := "implement.approach\tdependency\thenia show ponytail:ponytail\n" +
+		"bad..slot\tinvalid\thenia.toml\n" +
+		"implement.approach\tinvalid\thenia.toml\n" +
+		"bad..slot\tundeclared\t-"
+	if got := lines(r.Rows([]string{"implement.approach", "bad..slot"}, false)); got != want {
+		t.Errorf("rows:\n%s\nwant:\n%s", got, want)
+	}
+	for _, p := range r.Providers {
+		if p.Ref == "tropos:loqui" && (p.Section != "tdd" || p.Priority != Fallback || p.Status != Shadowed) {
+			t.Errorf("loqui = %+v", p)
+		}
+	}
+	if got := lines(Evaluate(append(skills, provided...), map[string][]string{"implement": {"ponytail:ponytail"}}).Rows([]string{"implement.approach"}, false)); !strings.HasPrefix(got, "implement.approach\tglobal\thenia show 'tropos:loqui#tdd'") {
+		t.Errorf("disabled ponytail:\n%s", got)
+	}
+}
+
 func TestValueOffers(t *testing.T) {
 	owner := Skill{Path: "owner", Ref: "tropos:code", Tier: Global, Metadata: Metadata{Declared: []Declaration{{"code.check", Type{Keyed: true, Value: CommandValue}}, {"code.style", Untyped}}}}
 	skills := []Skill{

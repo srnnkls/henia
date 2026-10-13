@@ -69,9 +69,9 @@ combine:
 | Type | Keeps | Nix |
 |---|---|---|
 | `list` | every provider | `types.listOf` |
-| `unique` | one; several produce a `conflict` row | `types.uniq` |
+| `unique` | one, the most specific; several produce a `conflict` row | `types.uniq` |
 | `keyed(list)` | every provider of each dotted sub-slot, such as `code.style.python` | `types.attrsOf (types.listOf …)` |
-| `keyed(unique)` | one provider per sub-slot | `types.attrsOf (types.uniq …)` |
+| `keyed(unique)` | one provider per sub-slot, the most specific | `types.attrsOf (types.uniq …)` |
 | `list(command)`, … | values in place of skills | `types.listOf types.str`, … |
 
 An untyped slot is `keyed(list)`. A type can also name what providers contribute:
@@ -79,6 +79,15 @@ An untyped slot is `keyed(list)`. A type can also name what providers contribute
 contribute skills, which the consumer reads with `henia show`. A `command` runs
 as written, a `text` is used verbatim, and a `path` resolves against the
 providing skill's directory and must exist.
+
+A `unique` type keeps the most specific provider. When a request lies within a
+sub-slot that has a provider, that provider answers it and the providers of
+enclosing slots drop out. With `test.approach: keyed(unique)` provided at
+`test.approach` and at `test.approach.frontend`, a request for
+`test.approach.frontend` resolves to the frontend provider alone, one for
+`test.approach.backend` to the `test.approach` provider, and one for
+`test.approach` itself lists both. A `list` type keeps the enclosing providers
+beside the specific ones.
 
 A sub-slot of a slot that is not keyed is unknown. Two declarations of one slot
 with different types conflict.
@@ -179,6 +188,24 @@ $ henia slots code.style.python
 code.style.python	none	-
 ```
 
+`provide` makes a library skill provide a slot, such as a third-party skill
+without `henia.provides`. Each entry is a `<package>:<skill>` or
+`<package>:<skill>#<section>` reference, and the provider takes the priority
+its skill's tier implies:
+
+```toml
+[slots."implement.approach"]
+provide = ["ponytail:ponytail"]
+```
+
+```console
+$ henia slots implement.approach
+implement.approach	dependency	henia show ponytail:ponytail
+```
+
+A reference that names no skill in the library is an `invalid` row whose path
+is the configuration file.
+
 ## Resolving
 
 ```
@@ -189,7 +216,8 @@ henia slots --json [<slot>...]
 ```
 
 Henia prints one row, `<slot>\t<tier>\thenia show <package>:<skill>`, for each
-provider of a requested slot, of its sub-slots or of an enclosing slot. Project
+provider of a requested slot, of its sub-slots or of an enclosing slot that a
+more specific `unique` provider does not supersede. Project
 providers come first, and value-typed slots add a fourth `\t<value>` column.
 Problem rows follow:
 
@@ -197,6 +225,7 @@ Problem rows follow:
 |---|---|---|
 | `none` | a requested slot that is declared but has no providers | `-` |
 | `invalid` | a malformed declaration or offer | the declaring or providing skill |
+| `invalid` | a configured `provide` naming no skill | the configuration file |
 | `unknown` | a provided slot no declaration covers | the providing skill |
 | `undeclared` | a requested slot without an owner | `-` |
 | `undeclared` | an applied slot without an owner | the applying skill |
@@ -224,11 +253,14 @@ code.style.go
 Each provider line shows the provider's status, then its tier and priority, and
 whether that priority comes from the tier or from the offer. The status is one of
 `selected`, `shadowed`, `disabled`, `unknown` or `invalid`. A shadowed provider
-names the provider that shadows it and the slot that provider fills. Each slot
+names the provider that shadows it and the slot that provider fills. A
+`unique` provider superseded for the request by a more specific one is shadowed
+by it, marked `more specific`. Each slot
 names the declaration that types it and the skills that apply it. With no slots
 given, `--explain` covers every slot.
 
-`--json` emits the same data. That covers `declarations`, `providers` (with
+`--json` emits the same data, with a superseded provider `shadowed` and its
+`shadowed_by` the more specific provider. That covers `declarations`, `providers` (with
 `ref`, `status`, `priority`, `explicit` and `shadowed_by`), `consumers` and
 `problems`.
 
@@ -259,7 +291,8 @@ Slots differ from Nix in three ways:
 `invalid-slot` reports malformed declarations, offers and directives, and
 conflicting declarations. `unknown-slot` reports a provided or applied slot that
 nothing declares, neither a scanned skill nor one of the project's skill
-packages.
+packages. A slot that `henia.toml` provides counts as an offer of
+the skill it names.
 
 ## Acceptance tests
 

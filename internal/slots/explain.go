@@ -56,18 +56,24 @@ func (r *Resolution) Explain(w io.Writer, requested []string) error {
 					continue
 				}
 				listed++
-				fmt.Fprintf(&b, "    %-8s %s [%s] %s\n", p.Status, p.Skill, p.origin(), p.Path)
+				status, specific := p.Status, r.specific(p, request)
+				if specific != nil {
+					status = Shadowed
+				}
+				fmt.Fprintf(&b, "    %-8s %s [%s] %s\n", status, p.Skill, p.origin(), p.Path)
 				if p.Value != "" {
 					fmt.Fprintf(&b, "      = %s\n", p.Value)
 				}
-				switch p.Status {
-				case Shadowed:
+				switch {
+				case specific != nil:
+					fmt.Fprintf(&b, "      by %s [%s] for %s, more specific, %s\n", specific.Skill, specific.origin(), specific.Slot, specific.Path)
+				case status == Shadowed:
 					fmt.Fprintf(&b, "      by %s [%s] for %s, %s\n", p.ShadowedBy.Skill, p.ShadowedBy.origin(), p.ShadowedBy.Slot, p.ShadowedBy.Path)
-				case Unknown:
+				case status == Unknown:
 					fmt.Fprintf(&b, "      %s\n", r.unknownReason(slot))
-				case Invalid:
+				case status == Invalid:
 					fmt.Fprintf(&b, "      %s\n", p.Reason)
-				case Selected:
+				case status == Selected:
 					selected++
 				}
 			}

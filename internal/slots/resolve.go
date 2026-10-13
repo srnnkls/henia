@@ -51,6 +51,40 @@ func Discover(lib *library.Library) []Skill {
 	return skills
 }
 
+// Provide attaches the offers a configuration at source makes, slot to
+// <package>:<skill> or <package>:<skill>#<section> references, to the skills
+// they name. A reference that names no skill is a problem of source.
+func Provide(skills []Skill, provides map[string][]string, source string) []Skill {
+	var provided []Skill
+	configured := Skill{Path: source}
+	for _, slot := range slices.Sorted(maps.Keys(provides)) {
+		for _, entry := range provides[slot] {
+			ref, section, _ := strings.Cut(entry, "#")
+			i := slices.IndexFunc(skills, func(s Skill) bool { return s.Ref == ref })
+			if i < 0 {
+				configured.Problems = append(configured.Problems, Problem{Slot: slot, Role: "provide", Message: fmt.Sprintf("slot %s: no skill %s to provide it", slot, ref)})
+				continue
+			}
+			var fields map[string]any
+			if section != "" {
+				fields = map[string]any{"section": section}
+			}
+			o, err := offer(slot, fields, skills[i].Tier.priority())
+			if err != nil {
+				configured.Problems = append(configured.Problems, Problem{Slot: slot, Role: "provide", Message: err.Error()})
+				continue
+			}
+			s := skills[i]
+			s.Metadata = Metadata{Offered: []Offer{o}}
+			provided = append(provided, s)
+		}
+	}
+	if len(configured.Problems) > 0 {
+		provided = append(provided, configured)
+	}
+	return provided
+}
+
 type Row struct {
 	Slot     string    `json:"slot"`
 	Kind     string    `json:"kind"`
@@ -216,7 +250,7 @@ func (r *Resolution) Rows(requested []string, check bool) []Row {
 	if !check {
 		for _, tier := range tiers {
 			for _, p := range r.Providers {
-				if p.Tier == tier && p.Status == Selected && relevant(p.Slot, requested) {
+				if p.Tier == tier && p.Status == Selected && r.answers(p, requested) {
 					rows = append(rows, Row{Slot: p.Slot, Kind: string(p.Tier), Path: p.location(), Value: p.Value, provider: p})
 				}
 			}
@@ -246,8 +280,13 @@ func (r *Resolution) Select(requested []string) *Resolution {
 		}
 	}
 	for _, p := range r.Providers {
-		if len(requested) == 0 || relevant(p.Slot, requested) {
+		switch {
+		case len(requested) == 0 || r.answers(p, requested):
 			selected.Providers = append(selected.Providers, p)
+		case relevant(p.Slot, requested):
+			superseded := *p
+			superseded.Status, superseded.ShadowedBy = Shadowed, r.specific(p, requested[slices.IndexFunc(requested, func(request string) bool { return related(p.Slot, request) })])
+			selected.Providers = append(selected.Providers, &superseded)
 		}
 	}
 	for _, c := range r.Consumers {
@@ -256,6 +295,25 @@ func (r *Resolution) Select(requested []string) *Resolution {
 		}
 	}
 	return selected
+}
+
+// specific returns the provider of the most specific key of p's unique slot
+// that answers request, which supersedes p for it.
+func (r *Resolution) specific(p *Provider, request string) *Provider {
+	if owner, _ := r.Owner(p.Slot); p.Status != Selected || !owner.Type.Unique {
+		return nil
+	}
+	var found *Provider
+	for _, q := range r.Providers {
+		if q.Status == Selected && q.Slot != p.Slot && Within(q.Slot, p.Slot) && Within(request, q.Slot) && (found == nil || len(q.Slot) > len(found.Slot)) {
+			found = q
+		}
+	}
+	return found
+}
+
+func (r *Resolution) answers(p *Provider, requested []string) bool {
+	return slices.ContainsFunc(requested, func(request string) bool { return related(p.Slot, request) && r.specific(p, request) == nil })
 }
 
 func off(disabled map[string][]string, slot, ref string) bool {

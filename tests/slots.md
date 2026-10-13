@@ -233,3 +233,103 @@ lint.rules undeclared my repo/.henia/skills/consumer/SKILL.md
 Error: slots found 1 problem(s)
 exit 1
 ```
+
+## Specificity
+
+A provider of a `unique` slot's key supersedes a provider of the slot for
+requests within that key. Other keys keep the enclosing provider.
+
+```scrut
+$ skill "$G/tropos/skills/testing" 'henia:\n  slots:\n    test.approach: keyed(unique)\n' '\n:slot[test.approach.frontend test.approach.backend]\n'
+> skill "$G/acme/skills/tdd" 'henia:\n  provides:\n    test.approach:\n'
+> skill "$G/acme/skills/frontend" 'henia:\n  provides:\n    test.approach.frontend:\n'
+> slots "$P" test.approach.frontend
+test.approach.frontend global henia show acme:frontend
+exit 0
+```
+
+```scrut
+$ slots "$P" test.approach.backend
+test.approach global henia show acme:tdd
+exit 0
+```
+
+```scrut
+$ slots "$P" test.approach
+test.approach.frontend global henia show acme:frontend
+test.approach global henia show acme:tdd
+exit 0
+```
+
+`--explain` and `--json` show the superseded provider as shadowed by the more
+specific one.
+
+```scrut
+$ slots "$P" --explain test.approach.frontend
+test.approach.frontend
+  test.approach (keyed(unique), declared by data/henia/packages/global/tropos/skills/testing/SKILL.md)
+    shadowed tdd [global, fallback from tier] data/henia/packages/global/acme/skills/tdd/SKILL.md
+      by frontend [global, fallback from tier] for test.approach.frontend, more specific, data/henia/packages/global/acme/skills/frontend/SKILL.md
+  test.approach.frontend (keyed(unique) of test.approach, declared by data/henia/packages/global/tropos/skills/testing/SKILL.md)
+    applied by testing
+    selected frontend [global, fallback from tier] data/henia/packages/global/acme/skills/frontend/SKILL.md
+exit 0
+```
+
+```scrut
+$ (cd "$P" && henia slots --json test.approach.frontend) | jq -c '.providers[] | [.ref, .status, .shadowed_by.ref]'
+["acme:frontend","selected",null]
+["acme:tdd","shadowed","acme:frontend"]
+```
+
+```scrut
+$ (cd "$P" && henia show tropos:testing) | sed "s|$T/||g"
+# testing
+
+- `test.approach.frontend`: `henia show acme:frontend`
+- `test.approach`: `henia show acme:tdd`
+```
+
+## Configured providers
+
+`[slots."<slot>"] provide` in `henia.toml` makes a library skill provide a
+slot its frontmatter does not name. A reference to no skill is invalid.
+
+```scrut
+$ skill "$G/acme/skills/pony" '' ''
+> mk "$P/henia.toml" '[slots."test.approach.backend"]\nprovide = ["acme:pony", "acme:ghost"]\n'
+> slots "$P" test.approach.backend
+test.approach.backend global henia show acme:pony
+test.approach.backend invalid my repo/henia.toml
+exit 0
+```
+
+```scrut
+$ (cd "$P" && henia show tropos:testing) | sed "s|$T/||g"
+# testing
+
+- `test.approach.frontend`: `henia show acme:frontend`
+- `test.approach.backend`: `henia show acme:pony`
+- `test.approach.backend`: invalid in `my repo/henia.toml`
+```
+
+A package's own `henia.toml` provides for every project that uses the package.
+
+```scrut
+$ skill "$G/acme/skills/lazy" '' ''
+> mk "$G/acme/henia.toml" '[slots."test.approach.mobile"]\nprovide = ["acme:lazy", "acme:absent"]\n'
+> slots "$P" test.approach.mobile
+test.approach.mobile global henia show acme:lazy
+test.approach.mobile invalid data/henia/packages/global/acme/henia.toml
+exit 0
+```
+
+A provide the project repeats from a package counts once.
+
+```scrut
+$ mk "$P/henia.toml" '[slots."test.approach.mobile"]\nprovide = ["acme:lazy"]\n'
+> slots "$P" test.approach.mobile
+test.approach.mobile global henia show acme:lazy
+test.approach.mobile invalid data/henia/packages/global/acme/henia.toml
+exit 0
+```
