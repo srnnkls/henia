@@ -24,27 +24,33 @@ import (
 
 func newInstallCommand() *cobra.Command {
 	var selected []string
-	var force bool
+	var force, global bool
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Write the global skill packages into harness directories",
-		Long: `Write the global skill packages into harness directories: static skills, hybrid
-heads, the catalog skill and harness files, rendered by each package that
-configures the harness. [install.<harness>] path in the user henia.toml names
-each directory. A file that henia did not install is never overwritten without
---force, and files a previous install wrote but this one does not are removed
-unless they were edited since. henia sync --global installs afterwards.`,
+		Short: "Write the project build, or the global packages, into harness directories",
+		Long: `Write the project build into harness directories: what henia build produces
+for the project, its static skills, hybrid heads, agents, catalog skill and
+harness files. Each harness goes into its directory under the project root,
+.claude for claude, unless [install.<harness>] path in the project henia.toml
+names another. --global writes the global packages instead, into the homes the
+user henia.toml names. A file that henia did not install is never overwritten
+without --force, and files a previous install wrote but this one does not are
+removed unless they were edited since. henia sync installs afterwards.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return install(cmd, selected, force, true)
+			if global {
+				return installGlobal(cmd, selected, force, true)
+			}
+			return installProject(cmd, projectRoot(cmd), selected, force, true)
 		},
 	}
-	cmd.Flags().StringSliceVar(&selected, "harness", nil, "Harnesses to install (comma-separated; default all in [install])")
+	cmd.Flags().StringSliceVar(&selected, "harness", nil, "Harnesses to install (comma-separated; default all)")
 	cmd.Flags().BoolVar(&force, "force", false, "Replace files henia did not install")
+	cmd.Flags().BoolVar(&global, "global", false, "Install the global packages into the user's harness homes")
 	return cmd
 }
 
-func install(cmd *cobra.Command, selected []string, force, explicit bool) error {
+func installGlobal(cmd *cobra.Command, selected []string, force, explicit bool) error {
 	cfg, err := config.LoadOptional(filepath.Join(library.ConfigDir(), library.ConfigFile))
 	if err != nil {
 		return err
@@ -69,14 +75,8 @@ func install(cmd *cobra.Command, selected []string, force, explicit bool) error 
 	if err != nil {
 		return err
 	}
-	for name, override := range cfg.Install {
-		if override.Enabled != nil && !*override.Enabled {
-			if removed, err := uninstall(name); err != nil {
-				return fmt.Errorf("uninstall %s: %w", name, err)
-			} else if removed > 0 {
-				fmt.Fprintf(cmd.OutOrStdout(), "Removed %d file(s) henia installed for %s\n", removed, name)
-			}
-		}
+	if err := uninstallDisabled(cmd, cfg.Install, library.InstallManifest); err != nil {
+		return err
 	}
 	if len(targets) == 0 && explicit {
 		fmt.Fprintln(cmd.OutOrStdout(), "Nothing to install: no installed package configures a harness found on this machine")
@@ -90,6 +90,139 @@ func install(cmd *cobra.Command, selected []string, force, explicit bool) error 
 				return fmt.Errorf("install %s: %w", t.harness, err)
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(), "henia: %s not installed: %v\n", t.harness, err)
+		}
+	}
+	return nil
+}
+
+// installProject writes the project build into the harness directories under
+// root. Without explicit, a project without a henia.toml installs nothing, and
+// one without [install] tables reports failures without returning them.
+func installProject(cmd *cobra.Command, root string, selected []string, force, explicit bool) error {
+	path, err := config.Find(root)
+	if errors.Is(err, os.ErrNotExist) {
+		if !explicit {
+			return nil
+		}
+		return fmt.Errorf("no henia.toml in %s or %s; pass --global to install the global packages", root, filepath.Join(root, library.ProjectDir))
+	}
+	if err != nil {
+		return err
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	tables, err := config.InstallTables(path)
+	if err != nil {
+		return err
+	}
+	state := filepath.Join(root, library.ProjectDir, "state", "install")
+	manifest := func(harness string) string { return filepath.Join(state, harness+".json") }
+	if err := uninstallDisabled(cmd, tables, manifest); err != nil {
+		return err
+	}
+	strict := explicit || len(tables) > 0
+	staging, err := os.MkdirTemp("", "henia-install-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(staging)
+	if _, err := buildProject(cmd, root, projectSource(root), cfg, selected, staging, false); err != nil {
+		if strict {
+			return err
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "henia: %s not installed: %v\n", root, err)
+		return nil
+	}
+	produced := map[string]bool{}
+	if entries, err := os.ReadDir(staging); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				produced[entry.Name()] = true
+			}
+		}
+	}
+	targets, err := projectTargets(root, tables, produced, selected)
+	if err != nil {
+		return err
+	}
+	if len(targets) == 0 && explicit {
+		fmt.Fprintln(cmd.OutOrStdout(), "Nothing to install: the project build produces no harness with a project directory")
+	}
+	for _, t := range targets {
+		tree := &harnessTree{files: map[string]string{}, from: map[string]string{}}
+		err := tree.collect(library.Project, filepath.Join(staging, t.harness))
+		if err == nil {
+			err = installFiles(cmd, t.harness, t.path, tree.files, manifest(t.harness), force, nil)
+		}
+		if err == nil {
+			err = library.EnsureGitignore(filepath.Join(root, library.ProjectDir))
+		}
+		if err != nil {
+			if strict || t.explicit {
+				return fmt.Errorf("install %s: %w", t.harness, err)
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "henia: %s not installed: %v\n", t.harness, err)
+		}
+	}
+	return nil
+}
+
+// projectDirs names the directory under a project root that each harness reads.
+var projectDirs = map[string]string{
+	"claude":      ".claude",
+	"codex":       ".codex",
+	"pi":          ".pi",
+	"omp":         ".omp",
+	"opencode":    ".opencode",
+	"gemini":      ".gemini",
+	"cursor":      ".cursor",
+	"github":      ".github",
+	"agentskills": ".agents",
+}
+
+func projectTargets(root string, overrides map[string]config.InstallTarget, produced map[string]bool, selected []string) ([]installTarget, error) {
+	names := maps.Clone(produced)
+	for name := range overrides {
+		names[name] = true
+	}
+	var targets []installTarget
+	for _, name := range slices.Sorted(maps.Keys(names)) {
+		override, listed := overrides[name]
+		switch {
+		case override.Enabled != nil && !*override.Enabled, len(selected) > 0 && !slices.Contains(selected, name):
+			continue
+		case !produced[name]:
+			return nil, fmt.Errorf("install.%s: the project build produces no %s harness", name, name)
+		}
+		path := expandHome(override.Path)
+		if path == "" {
+			dir, known := projectDirs[name]
+			if !known && listed {
+				return nil, fmt.Errorf("install.%s: henia knows no project directory for this harness; set its path", name)
+			}
+			if !known {
+				continue
+			}
+			path = dir
+		}
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(root, path)
+		}
+		targets = append(targets, installTarget{name, path, listed})
+	}
+	return targets, nil
+}
+
+func uninstallDisabled(cmd *cobra.Command, overrides map[string]config.InstallTarget, manifest func(harness string) string) error {
+	for _, name := range slices.Sorted(maps.Keys(overrides)) {
+		if override := overrides[name]; override.Enabled != nil && !*override.Enabled {
+			if removed, err := uninstall(manifest(name)); err != nil {
+				return fmt.Errorf("uninstall %s: %w", name, err)
+			} else if removed > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "Removed %d file(s) henia installed for %s\n", removed, name)
+			}
 		}
 	}
 	return nil
@@ -150,8 +283,7 @@ func installTargets(overrides map[string]config.InstallTarget, configured map[st
 	return targets, nil
 }
 
-func uninstall(harness string) (int, error) {
-	manifest := library.InstallManifest(harness)
+func uninstall(manifest string) (int, error) {
 	data, err := os.ReadFile(manifest)
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil
@@ -238,7 +370,11 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			}
 		}
 	}
-	written, removed, err := apply(target, files, library.InstallManifest(harness), force, revisions)
+	return installFiles(cmd, harness, target, files, library.InstallManifest(harness), force, revisions)
+}
+
+func installFiles(cmd *cobra.Command, harness, target string, files map[string]string, manifest string, force bool, revisions map[string]string) error {
+	written, removed, err := apply(target, files, manifest, force, revisions)
 	if err != nil {
 		return err
 	}
@@ -369,6 +505,11 @@ func apply(target string, files map[string]string, manifest string, force bool, 
 	}
 	var conflicts []string
 	for _, rel := range slices.Sorted(maps.Keys(files)) {
+		for dir := filepath.Dir(rel); dir != "."; dir = filepath.Dir(dir) {
+			if info, err := os.Lstat(filepath.Join(target, dir)); err == nil && info.Mode()&os.ModeSymlink != 0 {
+				return 0, 0, fmt.Errorf("%s in %s is a symlink; henia does not write through it", dir, target)
+			}
+		}
 		dest := filepath.Join(target, rel)
 		info, err := os.Lstat(dest)
 		if errors.Is(err, os.ErrNotExist) {

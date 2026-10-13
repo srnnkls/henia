@@ -173,7 +173,8 @@ is built. A `:slot[…]` renders as in `henia show`: the list of providers, or
 with `{.inline}` their content. `:contents[<skill>]` and `:related[<skill>]`
 render the named skill's sections and its related skills. Providers resolve
 over the library of whoever builds, as `henia slots` does, with the `[slots]`
-of the project's `henia.toml`, or of the user `henia.toml` for `henia install`.
+of the project's `henia.toml`, or of the user `henia.toml` for
+`henia install --global`.
 A slot without a provider renders nothing:
 
 ```md
@@ -193,6 +194,9 @@ output = "dist/skills"
 
 A relative `output` in a config file resolves against that file;
 `--output` resolves against the current directory and wins.
+
+`henia install` writes the same trees into the project's harness directories;
+see [Installing](runtime.md#installing).
 
 With `clean = true`, or `--clean`, the output directory belongs to Henia. A
 build writes everything into a temporary sibling and swaps it in only when
@@ -223,10 +227,10 @@ package, and each dependency's skills take its own harness `variables`,
 `tools` and `references` as defaults, which the project's harness of the same
 name overrides key by key.
 
-A harness that a dependency configures renders as `henia install` renders it:
-with that dependency's harness configuration, skill modes, agents and `files`,
-its profiles resolved from its `.henia/harnesses/` and its file sources from
-its own tree. The other packages, the project's included, render as its
+A harness that a dependency configures renders as `henia install --global`
+renders it: with that dependency's harness configuration, skill modes, agents
+and `files`, its profiles resolved from its `.henia/harnesses/` and its file
+sources from its own tree. The other packages, the project's included, render as its
 dependencies. The project's `[harness.<name>]` table merges over the
 dependency's key by key, so a project with Tropos as a dependency and only
 `[harness.claude.variables]` builds Tropos's Claude harness with those

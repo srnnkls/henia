@@ -126,6 +126,25 @@ func HarnessTables(path string) (map[string]any, error) {
 	return tables, nil
 }
 
+// InstallTables returns the install tables that the file at path and its
+// henia.local.toml declare, without the user layer.
+func InstallTables(path string) (map[string]InstallTarget, error) {
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if data, err = withLocal(path, data); err != nil {
+		return nil, err
+	}
+	var raw struct {
+		Install map[string]InstallTarget `toml:"install"`
+	}
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return raw.Install, nil
+}
+
 // LoadPackage loads a skill package's henia.toml with the given harness tables
 // merged over the harnesses the package configures itself.
 func LoadPackage(path string, harnesses map[string]any) (*Config, error) {

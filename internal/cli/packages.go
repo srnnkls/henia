@@ -58,11 +58,14 @@ func ensurePackages(cmd *cobra.Command, project string) error {
 	return nil
 }
 
-func syncThenInstall(cmd *cobra.Command, scope deps.Scope, update, global bool) error {
-	if err := syncPackages(cmd, scope, update); err != nil || !global {
+func syncThenInstall(cmd *cobra.Command, scope deps.Scope, update, global, noInstall bool) error {
+	if err := syncPackages(cmd, scope, update); err != nil || noInstall {
 		return err
 	}
-	return install(cmd, nil, false, false)
+	if global {
+		return installGlobal(cmd, nil, false, false)
+	}
+	return installProject(cmd, projectRoot(cmd), nil, false, false)
 }
 
 func syncPackages(cmd *cobra.Command, scope deps.Scope, update bool) error {
@@ -107,7 +110,7 @@ fetches it for every project.`,
 			if offline {
 				return nil
 			}
-			return syncThenInstall(cmd, scope, false, global)
+			return syncThenInstall(cmd, scope, false, global, false)
 		},
 	}
 	cmd.Flags().StringVar(&d.Git, "git", "", "Git URL of the package")
@@ -123,7 +126,7 @@ fetches it for every project.`,
 }
 
 func newRemoveCommand() *cobra.Command {
-	var global bool
+	var global, noInstall bool
 	cmd := &cobra.Command{
 		Use:   "rm <name>",
 		Short: "Remove a skill package dependency and its files",
@@ -136,15 +139,16 @@ func newRemoveCommand() *cobra.Command {
 			if err := deps.Remove(scope.Manifest, args[0]); err != nil {
 				return err
 			}
-			return syncThenInstall(cmd, scope, false, global)
+			return syncThenInstall(cmd, scope, false, global, noInstall)
 		},
 	}
 	cmd.Flags().BoolVar(&global, "global", false, "Use the user henia.toml and the shared package store")
+	cmd.Flags().BoolVar(&noInstall, "no-install", false, "Do not install afterwards")
 	return cmd
 }
 
 func newSyncCommand() *cobra.Command {
-	var global bool
+	var global, noInstall bool
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Fetch the declared skill packages at their locked commits",
@@ -154,15 +158,16 @@ func newSyncCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return syncThenInstall(cmd, scope, false, global)
+			return syncThenInstall(cmd, scope, false, global, noInstall)
 		},
 	}
 	cmd.Flags().BoolVar(&global, "global", false, "Use the user henia.toml and the shared package store")
+	cmd.Flags().BoolVar(&noInstall, "no-install", false, "Do not install afterwards")
 	return cmd
 }
 
 func newUpdateCommand() *cobra.Command {
-	var global bool
+	var global, noInstall bool
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Move the declared skill packages to their latest commits",
@@ -172,9 +177,10 @@ func newUpdateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return syncThenInstall(cmd, scope, true, global)
+			return syncThenInstall(cmd, scope, true, global, noInstall)
 		},
 	}
 	cmd.Flags().BoolVar(&global, "global", false, "Use the user henia.toml and the shared package store")
+	cmd.Flags().BoolVar(&noInstall, "no-install", false, "Do not install afterwards")
 	return cmd
 }

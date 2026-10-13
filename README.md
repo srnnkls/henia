@@ -189,7 +189,7 @@ henia lint examples --config examples/henia.toml --strict
 | [`rm`](docs/runtime.md#dependencies) | remove a dependency and its files |
 | [`sync`](docs/runtime.md#dependencies) | fetch the declared packages at their locked commits |
 | [`update`](docs/runtime.md#dependencies) | move the declared packages to their latest commits |
-| [`install`](docs/runtime.md#installing) | write the global packages into harness directories |
+| [`install`](docs/runtime.md#installing) | write the project build, or the global packages, into harness directories |
 | [`ls`](docs/runtime.md) | list the skills in the library |
 | [`show`](docs/runtime.md) | print a skill, section or resource, rendered for the caller |
 | [`query`](docs/query.md) | match patterns against every skill and its resources |
