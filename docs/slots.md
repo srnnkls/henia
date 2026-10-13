@@ -206,7 +206,8 @@ implement.approach	dependency	henia show ponytail:ponytail
 ```
 
 A reference that names no skill in the library is an `invalid` row whose path
-is the configuration file.
+is the configuration file. The user and project `henia.toml` concatenate their
+`provide` lists; a reference both name provides once.
 
 ## Resolving
 
