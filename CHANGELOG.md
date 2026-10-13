@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.1.0-alpha.19](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.18...v0.1.0-alpha.19) (2026-10-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **reference:** skill, agent and command are reserved and cannot name a package.
+* **components:** ::include{template="name"} is ::include{component="name"}.
+* remove Go template composition
+* **build:** build, show and runtime render through components
+* **templates:** the hybrid head directive is :::head instead of :::static; large-static and max-static-lines are large-head and max-head-lines.
+* **slots:** :slot[...] renders as henia slots --markdown instead of the tab-separated table, and contents lines render as Markdown items with quoted henia show commands instead of bare <skill>#<anchor> addresses.
+
+### Features
+
+* **build:** build, show and runtime render through components ([e6577ee](https://github.com/srnnkls/henia/commit/e6577ee8b798351540ccfdfbbb3e5dce243745f8))
+* **build:** resolve directives in Markdown harness files at build time ([a4d8519](https://github.com/srnnkls/henia/commit/a4d851975d8ae052c1316c3e83a31759d6c0f7b1))
+* **build:** skill bodies template values again ([1eb96b1](https://github.com/srnnkls/henia/commit/1eb96b1ee213911cdaf10a34bd38bbba49d1a376))
+* **components:** expand components to a fixpoint; slots on the tree; henia fmt ([c2fadfb](https://github.com/srnnkls/henia/commit/c2fadfbbf9e4ba03e0e132071140d2bb5364eb7d))
+* **components:** include names a component with component= ([dd2b1dd](https://github.com/srnnkls/henia/commit/dd2b1dd34edf45b325b72f235aa4e9c9cf5a8f13))
+* **components:** include resources by path or module ([54f7f60](https://github.com/srnnkls/henia/commit/54f7f609578f7e2e61698a39ef4778bc2604978a))
+* **components:** include sections across documents; typed hq attributes; render on the tree ([60bec56](https://github.com/srnnkls/henia/commit/60bec562a8abd88b11bccd4eaf3a2c645cad9eeb))
+* **lint:** recognize references with an hq define ([e363f0e](https://github.com/srnnkls/henia/commit/e363f0e0c77158e47caa47afe03ee3a48ee14b10))
+* **lint:** rendered stage per configured harness ([2237ff8](https://github.com/srnnkls/henia/commit/2237ff8ee7d62ee18ece8ac667b4cfe03b0f699d))
+* **lint:** source and expanded stages over the shared component pipeline ([302fb09](https://github.com/srnnkls/henia/commit/302fb0928987eb7404da36881ab8714da8cc9e8e))
+* **markup,components:** mutable document tree, span-preserving writer and source checks ([b18acae](https://github.com/srnnkls/henia/commit/b18acaec7fbde63c89c1e933576a9ae3dc360144))
+* **markup,components:** parse full directive syntax and load component declarations ([da04e43](https://github.com/srnnkls/henia/commit/da04e434313c6f07c905bfe86da02a437c5c1d16))
+* **preload:** run a skill's own files from its preloads ([5b02a62](https://github.com/srnnkls/henia/commit/5b02a62353dcebf044935861da8c744e4d9096e0))
+* **query:** regexp named groups bind variables ([992344c](https://github.com/srnnkls/henia/commit/992344c4ae127a6282d649658920a48b277ebf7f))
+* **query:** slots as references; :id takes package:skill ([69cc344](https://github.com/srnnkls/henia/commit/69cc34476c04d37c3909fc7644067b498828f294))
+* **reference:** one address grammar with kinds; sigils desugar to it ([b2c0b63](https://github.com/srnnkls/henia/commit/b2c0b634a6ac87b6b9291b5fe2c55b5b23e150b4))
+* remove Go template composition ([d1c8b59](https://github.com/srnnkls/henia/commit/d1c8b595a670c1046de98c6ad0e335a09f936fa9))
+* **slots:** configured providers, key specificity and package provides ([cbc4470](https://github.com/srnnkls/henia/commit/cbc4470344dc1f953415a59c96ae5f7109474f13))
+* **slots:** render slots, contents and related skills as Markdown pointers ([#46](https://github.com/srnnkls/henia/issues/46)) ([8aeae3f](https://github.com/srnnkls/henia/commit/8aeae3f72dea53df00dafca98f8f4b4d3f2f6d84))
+* **templates:** compose skills from shared templates and partials ([#48](https://github.com/srnnkls/henia/issues/48)) ([b24ebfe](https://github.com/srnnkls/henia/commit/b24ebfe73fa86a18494ca732b1db28f8aeeec157))
+
+
+### Bug Fixes
+
+* **lint:** read rendered skill references through the harness syntax ([23330c2](https://github.com/srnnkls/henia/commit/23330c22dcf422c1175976ed705d55e941a43544))
+* **markup:** widen code spans to their backticks in inline extents ([8044911](https://github.com/srnnkls/henia/commit/8044911004dffd270df61294b85905a3a2bfa3bc))
+* **query:** key skills by package and section directive bodies ([#47](https://github.com/srnnkls/henia/issues/47)) ([2d1a091](https://github.com/srnnkls/henia/commit/2d1a091fae46c939679dbc5b54eec95933dc92a8))
+
 ## [0.1.0-alpha.18](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.17...v0.1.0-alpha.18) (2026-10-06)
 
 
