@@ -130,3 +130,40 @@ func TestRenderedReferencesComeFromRenderedBodies(t *testing.T) {
 		t.Fatalf("diagnostics = %q, want %q", got, want)
 	}
 }
+
+func TestRenderedSkillReferencesFollowHarnessSyntax(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "skills/other/SKILL.md", skillFile("other", "", "# Other\n"))
+	write(t, root, "skills/user/SKILL.md", skillFile("user", "", "# User\n\nUse `$other`, then `$nope`, then `/help`.\n"))
+	harness := func(skill string) henia.Harness { return henia.Harness{References: map[string]string{"skill": skill}} }
+	options := lint.Options{
+		Project: root,
+		Builtin: []string{"command:help"},
+		Configured: map[string]henia.Harness{
+			"claude": harness("/{{.Name}}"),
+			"pi":     harness("/skill:{{.Name}}"),
+			"omp":    harness("/skill:{{.Name}}"),
+			"codex":  harness("${{.Name}}"),
+		},
+	}
+	harnesses := map[string]bool{}
+	for _, d := range withRule(lintProject(t, options, filepath.Join(root, "skills")), "missing-reference") {
+		if d.Message != `skill reference "nope" is absent from scanned artifacts` || d.Line != 8 || harnesses[d.Harness] {
+			t.Errorf("missing-reference = %+v, want one skill nope report per rendered position", d)
+		}
+		harnesses[d.Harness] = true
+	}
+	if len(harnesses) == 0 {
+		t.Fatal("missing-reference silent, want skill nope reported")
+	}
+}
+
+func TestRenderedSkillSyntaxYieldsToResolvingCommand(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "commands/deploy.md", "---\ndescription: Deploy.\n---\nDeploy.\n")
+	write(t, root, "skills/user/SKILL.md", skillFile("user", "", "# User\n\nRun `/deploy`.\n"))
+	options := lint.Options{Project: root, Configured: map[string]henia.Harness{"claude": {References: map[string]string{"skill": "/{{.Name}}"}}}}
+	if found := withRule(lintProject(t, options, root), "missing-reference"); len(found) != 0 {
+		t.Fatalf("missing-reference = %+v, want none: /deploy resolves as a command", found)
+	}
+}

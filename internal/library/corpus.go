@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -386,7 +387,18 @@ func (c *Corpus) references(file *markup.Element, body string, syntax *regexp.Re
 	} else {
 		refs, err = reference.Recognize(file)
 	}
+	var skills [][]int
+	if syntax != nil {
+		skills = syntax.FindAllStringSubmatchIndex(body, -1)
+	}
+	alternates := map[int]string{}
 	for _, ref := range refs {
+		if i := slices.IndexFunc(skills, func(m []int) bool { return m[0] == ref.Start && m[1] == ref.End }); i >= 0 {
+			if ref.Type != reference.TypeSkill {
+				alternates[i] = string(ref.Type) + ":" + ref.Name
+			}
+			continue
+		}
 		switch ref.Type {
 		case reference.TypeSkill:
 			attrs := c.skillLink(ref)
@@ -423,12 +435,14 @@ func (c *Corpus) references(file *markup.Element, body string, syntax *regexp.Re
 			}
 		}
 	}
-	if syntax != nil {
-		for _, m := range syntax.FindAllStringSubmatchIndex(body, -1) {
-			attrs := c.skillLink(reference.Reference{Name: body[m[2]:m[3]], Raw: body[m[0]+1 : m[1]-1]})
-			attrs["ref"] = "skill"
-			add(m[0], m[1], attrs)
+	for i, m := range skills {
+		name := body[m[2]:m[3]]
+		attrs := c.skillLink(reference.Reference{Name: name, Raw: body[m[0]+1 : m[1]-1]})
+		attrs["ref"], attrs["name"], attrs["artifact"] = "skill", name, "skill:"+name
+		if alternate, ok := alternates[i]; ok {
+			attrs["alternate"] = alternate
 		}
+		add(m[0], m[1], attrs)
 	}
 	return links, err
 }
