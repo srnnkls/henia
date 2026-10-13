@@ -271,3 +271,36 @@ func TestApplyRefusesSymlinkedDirectories(t *testing.T) {
 		t.Fatalf("wrote into the symlink target: %v", entries)
 	}
 }
+
+func TestGlobalInstallKeepsHarnessStrictnessToItsOwner(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	home := filepath.Join(t.TempDir(), "claude")
+	global := library.PackagesDir("global")
+	fixture(t, filepath.Join(global, "tropos", "henia.toml"), "[harness.claude]\nstrict = true\n")
+	fixture(t, filepath.Join(global, "tropos", "skills", "pinned", "SKILL.md"), "---\nname: pinned\ndescription: Pinned skill.\n---\n\n# Pinned\n")
+	fixture(t, filepath.Join(global, "imp", "skills", "ext", "SKILL.md"), "---\nname: ext\ndescription: External skill.\nversion: 1.0.0\n---\n\n# Ext\n")
+	user := filepath.Join(config, "henia", "henia.toml")
+	install := func() error {
+		t.Helper()
+		cmd, out := installCommand(t, "install", "--global", "--harness", "claude")
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("%s", out)
+		}
+		return err
+	}
+	fixture(t, user, "install_henia_skill = false\n[install.claude]\npath = '"+home+"'\n")
+	if err := install(); err != nil {
+		t.Fatalf("another package's unsupported frontmatter failed the owner's strict harness: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "skills", "ext", "SKILL.md")); err != nil {
+		t.Errorf("ext not installed: %v", err)
+	}
+	fixture(t, user, "install_henia_skill = false\n[install.claude]\npath = '"+home+"'\n[harness.claude]\nstrict = true\n")
+	if err := install(); err == nil || !strings.Contains(err.Error(), "version") {
+		t.Fatalf("unsupported frontmatter passed the user's strict table: %v", err)
+	}
+}

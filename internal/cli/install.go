@@ -340,7 +340,7 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			owners[pkg.Name] = pkgCfg
 		}
 	}
-	tree, err := renderHarness(cmd, harness, globals, owners, staging, staticFiles(staging, library.Open("", nil)))
+	tree, err := renderHarness(cmd, harness, globals, owners, cfg.Harness[harness].Strict, staging, staticFiles(staging, library.Open("", nil)))
 	if err != nil {
 		return err
 	}
@@ -409,8 +409,9 @@ func (t *harnessTree) collect(owner, root string) error {
 
 // renderHarness compiles harness once per package in owners, with that
 // package's configuration and every other package as a dependency, into
-// staging, and collects the outputs into one tree.
-func renderHarness(cmd *cobra.Command, harness string, packages []library.Package, owners map[string]*config.Config, staging string, resolve build.Resolver) (*harnessTree, error) {
+// staging, and collects the outputs into one tree. An owner's strictness
+// covers its own artifacts; the dependencies' take strict.
+func renderHarness(cmd *cobra.Command, harness string, packages []library.Package, owners map[string]*config.Config, strict bool, staging string, resolve build.Resolver) (*harnessTree, error) {
 	tree := &harnessTree{files: map[string]string{}, from: map[string]string{}}
 	for _, pkg := range packages {
 		pkgCfg, ok := owners[pkg.Name]
@@ -424,7 +425,7 @@ func renderHarness(cmd *cobra.Command, harness string, packages []library.Packag
 			}
 		}
 		out := filepath.Join(staging, pkg.Name)
-		result, err := compilePackage(cmd, pkg.Root, pkgCfg, []string{harness}, out, false, dependencies, resolve)
+		result, err := compilePackage(cmd, pkg.Root, pkgCfg, []string{harness}, out, false, dependencies, &strict, resolve)
 		if err != nil {
 			return nil, fmt.Errorf("package %s: %w", pkg.Name, err)
 		}

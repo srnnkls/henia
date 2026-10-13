@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"maps"
@@ -103,7 +104,7 @@ func buildProject(cmd *cobra.Command, project, source string, cfg *config.Config
 	if len(owners) > 0 {
 		return buildDependencyHarnesses(cmd, source, cfg, owners, selected, destination, clean, dependencies, resolve)
 	}
-	result, err := compilePackage(cmd, source, cfg, selected, destination, clean, dependencies, resolve)
+	result, err := compilePackage(cmd, source, cfg, selected, destination, clean, dependencies, nil, resolve)
 	if err != nil {
 		return 0, err
 	}
@@ -139,7 +140,9 @@ func optionalConfig(cmd *cobra.Command, source string) (*config.Config, error) {
 	return config.LoadOptional(configPath)
 }
 
-func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selected []string, destination string, clean bool, dependencies []library.Package, resolve build.Resolver) (*build.Result, error) {
+// compilePackage builds source with dependencies; strict, when set, is the
+// strictness of the dependencies' artifacts.
+func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selected []string, destination string, clean bool, dependencies []library.Package, strict *bool, resolve build.Resolver) (*build.Result, error) {
 	harnesses := cfg.Harness
 	if len(harnesses) == 0 {
 		return nil, fmt.Errorf("no harnesses configured")
@@ -167,6 +170,9 @@ func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selec
 	layers, err := dependencyLayers(dependencies)
 	if err != nil {
 		return nil, err
+	}
+	for i := range layers {
+		layers[i].Strict = strict
 	}
 	result, err := build.RunSelected(cmd.Context(), sources, destination, harnesses, cfg.Harness, clean, resolve, layers...)
 	if err != nil {
@@ -213,7 +219,7 @@ func dependencyHarnesses(dependencies []library.Package, cfg *config.Config) (ma
 		if len(own) == 0 {
 			continue
 		}
-		pkgCfg, err := config.LoadPackage(dependency.Config, project)
+		pkgCfg, err := config.LoadPackage(dependency.Config, withoutModes(project))
 		if err != nil {
 			return nil, fmt.Errorf("package %s: %w", dependency.Name, err)
 		}
@@ -277,10 +283,12 @@ func buildDependencyHarnesses(cmd *cobra.Command, source string, cfg *config.Con
 			pkgCfg.Harness[name] = projectModes(pkgCfg.Harness[name], own[name], arts)
 			harnessOwners[pkg] = pkgCfg
 		}
+		strict := own[name].Strict
 		if len(harnessOwners) == 0 {
 			harnessOwners[library.Project] = cfg
+			strict = cfg.Harness[name].Strict
 		}
-		tree, err := renderHarness(cmd, name, packages, harnessOwners, filepath.Join(staging, name), resolve)
+		tree, err := renderHarness(cmd, name, packages, harnessOwners, strict, filepath.Join(staging, name), resolve)
 		if err != nil {
 			return 0, fmt.Errorf("harness %s: %w", name, err)
 		}
@@ -314,21 +322,57 @@ func projectHarnesses(tables map[string]any) (map[string]henia.Harness, error) {
 	return config.Harnesses(data)
 }
 
-// projectModes gives the project's own artifacts the modes the project's
-// harness table assigns them, static when it assigns none.
+// modeKeys are the keys of a harness's artifact tables that assign modes.
+var modeKeys = []string{"default", henia.Static, henia.Dynamic, henia.Hybrid}
+
+// withoutModes copies harness tables without the keys that assign modes,
+// which projectModes applies instead of merging them.
+func withoutModes(tables map[string]any) map[string]any {
+	stripped := make(map[string]any, len(tables))
+	for name, value := range tables {
+		table, ok := value.(map[string]any)
+		if !ok {
+			stripped[name] = value
+			continue
+		}
+		table = maps.Clone(table)
+		for _, kind := range []string{"skills", "commands", "agents"} {
+			if modes, ok := table[kind].(map[string]any); ok {
+				modes = maps.Clone(modes)
+				for _, key := range modeKeys {
+					delete(modes, key)
+				}
+				table[kind] = modes
+			}
+		}
+		stripped[name] = table
+	}
+	return stripped
+}
+
+// projectModes applies the modes the project's harness table lists to the
+// artifacts it names, the dependency's included, and gives the project's own
+// unlisted artifacts the table's default, static when it sets none.
 func projectModes(h, own henia.Harness, arts []*artifact.Artifact) henia.Harness {
 	for _, kind := range []string{"skills", "commands", "agents"} {
-		modes := h.Type(kind)
-		lists := map[string][]string{henia.Static: modes.Static, henia.Dynamic: modes.Dynamic, henia.Hybrid: modes.Hybrid}
+		modes, listed := h.Type(kind), own.Type(kind)
+		assigned := map[string]string{}
 		for _, art := range arts {
-			if artifact.TypeDirName(art.Type) != kind {
-				continue
+			if artifact.TypeDirName(art.Type) == kind {
+				assigned[art.Name] = cmp.Or(listed.Default, henia.Static)
 			}
+		}
+		for mode, names := range map[string][]string{henia.Static: listed.Static, henia.Dynamic: listed.Dynamic, henia.Hybrid: listed.Hybrid} {
+			for _, name := range names {
+				assigned[name] = mode
+			}
+		}
+		lists := map[string][]string{henia.Static: modes.Static, henia.Dynamic: modes.Dynamic, henia.Hybrid: modes.Hybrid}
+		for _, name := range slices.Sorted(maps.Keys(assigned)) {
 			for mode, names := range lists {
-				lists[mode] = slices.DeleteFunc(slices.Clone(names), func(name string) bool { return name == art.Name })
+				lists[mode] = slices.DeleteFunc(slices.Clone(names), func(n string) bool { return n == name })
 			}
-			mode := own.Mode(kind, art.Name)
-			lists[mode] = append(lists[mode], art.Name)
+			lists[assigned[name]] = append(lists[assigned[name]], name)
 		}
 		modes.Static, modes.Dynamic, modes.Hybrid = lists[henia.Static], lists[henia.Dynamic], lists[henia.Hybrid]
 		switch kind {

@@ -26,6 +26,9 @@ type Dependency struct {
 	// Project marks the building project's own package rendered under a
 	// dependency's harness; its artifacts keep the project's strictness.
 	Project bool
+	// Strict, when set, replaces the harness's strictness for this package's
+	// artifacts, so a harness's owner does not impose its own on them.
+	Strict *bool
 }
 
 func Layered(harness henia.Harness, name, path string, dependencies []Dependency) henia.Harness {
@@ -34,8 +37,11 @@ func Layered(harness henia.Harness, name, path string, dependencies []Dependency
 			continue
 		}
 		own, ok := d.Harnesses[name]
-		if d.Project {
+		switch {
+		case d.Project:
 			harness.Strict = own.Strict
+		case d.Strict != nil:
+			harness.Strict = *d.Strict
 		}
 		if !ok {
 			continue

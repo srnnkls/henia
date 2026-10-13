@@ -487,3 +487,71 @@ func TestBuildAddsProjectHarnessesToDependencyHarnesses(t *testing.T) {
 		}
 	}
 }
+
+func dependencyHarnessFixture(t *testing.T, projectConfig string) (string, string) {
+	t.Helper()
+	project := t.TempDir()
+	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	store := library.PackagesDir(library.ProjectKey(project))
+	tropos := filepath.Join(store, "tropos")
+	fixture(t, filepath.Join(tropos, "henia.toml"), "[harness.claude]\nstrict = true\n[harness.claude.skills]\ndefault = 'dynamic'\nhybrid = ['entry']\nstatic = ['pinned']\n")
+	fixture(t, filepath.Join(tropos, "skills", "entry", "SKILL.md"), "---\nname: entry\ndescription: Entry skill.\n---\n\n# Entry\n\nMore.\n")
+	fixture(t, filepath.Join(tropos, "skills", "pinned", "SKILL.md"), "---\nname: pinned\ndescription: Pinned skill.\n---\n\n# Pinned\n")
+	fixture(t, filepath.Join(tropos, "skills", "library", "SKILL.md"), "---\nname: library\ndescription: Library skill.\n---\n\n# Library\n")
+	fixture(t, filepath.Join(store, "imp", "skills", "ext", "SKILL.md"), "---\nname: ext\ndescription: External skill.\nversion: 1.0.0\n---\n\n# Ext\n")
+	fixture(t, filepath.Join(project, "henia.toml"), projectConfig)
+	fixture(t, filepath.Join(project, ".henia", "skills", "own", "SKILL.md"), "---\nname: own\ndescription: Own skill.\nversion: 1.0.0\n---\n\n# Own\n")
+	fixture(t, filepath.Join(project, ".henia", "skills", "quiet", "SKILL.md"), "---\nname: quiet\ndescription: Quiet skill.\n---\n\n# Quiet\n")
+	return tropos, filepath.Join(t.TempDir(), "out")
+}
+
+func TestBuildAppliesProjectModesUnderDependencyHarness(t *testing.T) {
+	for _, tc := range []struct {
+		name, config string
+		want         map[string]bool
+	}{
+		{"listing a dependency skill keeps project skills static", "[harness.claude.skills]\nstatic = ['ext']\n",
+			map[string]bool{"own": true, "quiet": true, "ext": true, "pinned": true, "library": false}},
+		{"listing a project skill dynamic changes only it", "[harness.claude.skills]\ndynamic = ['quiet']\n",
+			map[string]bool{"own": true, "quiet": false, "ext": false, "pinned": true, "library": false}},
+		{"a project default covers the project's unlisted skills", "[harness.claude.skills]\ndefault = 'dynamic'\nstatic = ['library']\n",
+			map[string]bool{"own": false, "quiet": false, "ext": false, "pinned": true, "library": true}},
+		{"a project listing overrides the owner's", "[harness.claude.skills]\ndynamic = ['pinned']\n",
+			map[string]bool{"own": true, "quiet": true, "pinned": false}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, output := dependencyHarnessFixture(t, tc.config)
+			if err := executeBuild(t, "--output", output); err != nil {
+				t.Fatal(err)
+			}
+			for skill, want := range tc.want {
+				if _, err := os.Stat(filepath.Join(output, "claude", "skills", skill, "SKILL.md")); (err == nil) != want {
+					t.Errorf("%s built = %v, want %v", skill, err == nil, want)
+				}
+			}
+			if entry, _ := os.ReadFile(filepath.Join(output, "claude/skills/entry/SKILL.md")); !strings.Contains(string(entry), "henia show entry --head") {
+				t.Errorf("entry is not a hybrid head:\n%s", entry)
+			}
+		})
+	}
+}
+
+func TestBuildKeepsDependencyHarnessStrictnessToItsOwner(t *testing.T) {
+	tropos, output := dependencyHarnessFixture(t, "[harness.claude.skills]\nstatic = ['ext']\n")
+	if err := executeBuild(t, "--output", output); err != nil {
+		t.Fatalf("other packages' unsupported frontmatter failed the owner's strict harness: %v", err)
+	}
+	fixture(t, filepath.Join(tropos, "skills", "pinned", "SKILL.md"), "---\nname: pinned\ndescription: Pinned skill.\nversion: 1.0.0\n---\n\n# Pinned\n")
+	if err := executeBuild(t, "--output", output); err == nil || !strings.Contains(err.Error(), "version") {
+		t.Fatalf("the owner's unsupported frontmatter passed its strict harness: %v", err)
+	}
+}
+
+func TestBuildAppliesProjectStrictnessToDependencies(t *testing.T) {
+	_, output := dependencyHarnessFixture(t, "[harness.claude]\nstrict = true\n[harness.claude.skills]\nstatic = ['ext']\n")
+	if err := executeBuild(t, "--output", output); err == nil || !strings.Contains(err.Error(), "version") {
+		t.Fatalf("unsupported frontmatter passed the project's strict table: %v", err)
+	}
+}
