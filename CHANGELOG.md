@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.22](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.21...v0.1.0-alpha.22) (2026-10-13)
+
+
+### Bug Fixes
+
+* **build:** scope project modes and strictness under dependency harnesses ([c019c00](https://github.com/srnnkls/henia/commit/c019c0023e71093a5a2d27da28737f3f8a3cd60e))
+* **build:** scope project modes and strictness under dependency harnesses ([00948ab](https://github.com/srnnkls/henia/commit/00948ab8b6c6136dfb9e9849a44844a1c1d6da8b))
+
 ## [0.1.0-alpha.21](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.20...v0.1.0-alpha.21) (2026-10-13)
 
 
