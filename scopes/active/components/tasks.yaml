@@ -88,9 +88,15 @@ tasks:
     files: [internal/cli/fmt.go, internal/cli/fmt_test.go, internal/cli/root.go, tests/fmt.md]
   - id: CMP-013
     content: "Docs: docs/components.md, docs/build.md drops templates and layouts, docs/lint-rules.md stages and ids (TR-4)"
-    status: pending
+    status: done
     active_form: "Documenting components"
     depends_on: [CMP-012, CMP-016]
+    evidence:
+      - "docs/components.md (new), docs/build.md, docs/lint-rules.md, docs/runtime.md, README.md, examples/.henia/components/"
+      - "every console example in docs/components.md (10) and docs/build.md (6) run against the worktree build of henia; shown output matches"
+      - "docs/lint-rules.md examples rerun: henia lint skills --strict, henia lint test (32), henia lint skills with the [lint] config, both team modules"
+      - "README first-skill build and lint outputs rerun locally (without the Tropos dependency)"
+      - "go vet ./... clean; mise run test: unit ok, scrut 174/174"
     files: [docs/components.md, docs/build.md, docs/lint-rules.md, README.md]
   - id: CMP-014
     content: "Tropos migration: capture the b24ebfe baseline, convert partials to components (related folds into the built-in), instruction as render keep, classes to bare keys, pr to :::when, workflow slots listed, remove .henia/templates, exempt components/ in .henia/.gitignore, henia fmt; build diff empty per harness, lint clean, hybrid heads unchanged (FR-12, AD-7, AD-9)"
@@ -111,8 +117,8 @@ tasks:
       - /Users/srnnkls/projects/tropos/henia.toml
 meta:
   created: 2026-10-08
-  last_updated: "2026-10-13"
-  progress: 15/16
+  last_updated: "2026-10-14"
+  progress: 16/16
 phases:
   - id: syntax
     tasks: [CMP-001, CMP-002, CMP-012]

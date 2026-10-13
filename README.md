@@ -107,11 +107,21 @@ henia query: 1 of 3 rows shown
 
 ### Your first skill
 
-Write a skill in `skills/`, with a template variable and a directive, and
-name the harnesses it builds for:
+Write a skill in `skills/`, with a value and a
+[component](docs/components.md), and name the harnesses it builds for:
 
 ```sh
-mkdir -p skills/changelog
+mkdir -p skills/changelog .henia/components
+cat > .henia/components/instruction.md <<'EOF'
+---
+form: container
+attributes:
+  priority:
+    type: enum
+    values: [normal, high]
+render: keep
+---
+EOF
 cat > skills/changelog/SKILL.md <<'EOF'
 ---
 name: changelog
@@ -168,9 +178,9 @@ Name what changed for the user, not how the code changed.
 Lint catches what would break once deployed:
 
 ```console
-$ echo 'Follow the [house rules](reference/house-rules.md).' >> skills/changelog/SKILL.md
+$ printf '\nFollow the [house rules](reference/house-rules.md).\n' >> skills/changelog/SKILL.md
 $ henia lint skills
-skills/changelog/SKILL.md:16:13: warning [broken-link] local reference does not exist: reference/house-rules.md
+skills/changelog/SKILL.md:17:13: warning [broken-link] local reference does not exist: reference/house-rules.md
 ```
 
 The [example package](examples) shows nested directives, harness variables
@@ -219,8 +229,10 @@ henia lint examples --config examples/henia.toml --strict
 
 - [Skill runtime](docs/runtime.md): dependencies, the library, `show`,
   preloads, skill modes and installing into harnesses.
-- [Building](docs/build.md): templates, directives, build output and
+- [Building](docs/build.md): values, directives, build output and
   configuration.
+- [Components](docs/components.md): declaring, calling and expanding
+  directives; `include`, `when` and `henia fmt`.
 - [henia query](docs/query.md): the pattern language, also printed by
   `henia query --grammar`.
 - [Lint rules](docs/lint-rules.md) and

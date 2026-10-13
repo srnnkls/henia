@@ -3,7 +3,6 @@ name: review
 description: Review a code change for correctness and missing coverage.
 henia:
   variables:
-    priority: high
     review_mode: focused
     checks:
       - Correctness
@@ -25,13 +24,13 @@ henia:
 
 Perform a {{.review_mode}} review using `!read` to inspect changed files.
 
-:::instruction{priority={{.priority}}}
+::::instruction{priority=high}
 Explain each finding with evidence and a concrete failure scenario.
 
 :::note{#scope .guidance}
 Concentrate on :term[behavior]{meaning="observable outcomes"}.
 :::
-:::
+::::
 
 ## Checks
 
