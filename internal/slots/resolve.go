@@ -412,6 +412,19 @@ func (r *Resolution) Markdown(requested []string) string {
 	return b.String()
 }
 
+func (r *Resolution) Skills(requested []string) []*Provider {
+	var found []*Provider
+	for _, row := range r.ordered(requested) {
+		if row.Kind == None || row.Problem() || row.provider == nil {
+			continue
+		}
+		if owner, _ := r.Owner(row.provider.Slot); owner.Type.Value == "" {
+			found = append(found, row.provider)
+		}
+	}
+	return found
+}
+
 func (r *Resolution) pointer(row Row) string {
 	switch {
 	case row.Kind == None:

@@ -37,7 +37,23 @@ type Corpus struct {
 type Rendering struct {
 	Body      func(Entry) string
 	Reference func(Entry) *regexp.Regexp
+	Providers func(slots []string) []Provision
 }
+
+type Provision struct {
+	Slot    string
+	Ref     string
+	Section string
+}
+
+func sectionAddress(ref, section string) string {
+	if section == "" {
+		return ref
+	}
+	return ref + "#" + section
+}
+
+var slotPreload = regexp.MustCompile("`henia slots --(?:markdown|inline)((?: [A-Za-z0-9_.-]+)+)`")
 
 type Document struct {
 	Path       string
@@ -385,6 +401,15 @@ func (c *Corpus) references(body string, syntax *regexp.Regexp) []*markup.Elemen
 			c.inspect(attrs, filepath.Join(skill.Attrs["dir"], filepath.FromSlash(attrs["path"])), ref.Anchor)
 		}
 		add(ref.Start, ref.End+1, attrs)
+	}
+	if c.rendering != nil && c.rendering.Providers != nil {
+		for _, m := range slotPreload.FindAllStringSubmatchIndex(body, -1) {
+			for _, p := range c.rendering.Providers(strings.Fields(body[m[2]:m[3]])) {
+				attrs := c.skillLink(reference.Reference{Name: p.Ref, Raw: ShowCommand(sectionAddress(p.Ref, p.Section)), Anchor: p.Section})
+				attrs["ref"], attrs["slot"] = "slot", p.Slot
+				add(m[0], m[1], attrs)
+			}
+		}
 	}
 	if syntax != nil {
 		for _, m := range syntax.FindAllStringSubmatchIndex(body, -1) {

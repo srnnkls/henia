@@ -585,6 +585,28 @@ $ henia query '(skill :id "style-guide" (heading) @h)'
 @h  style-guide#python  L13  heading  Python
 ```
 
+`:id` also takes the `<package>:<skill>` form `henia show` accepts.
+
+```scrut
+$ henia query '(skill :id "tropos:style-guide" (heading :level 2) @h)'
+@h  style-guide#go  L5  heading  Go
+@h  style-guide#python  L13  heading  Python
+```
+
+A rendered `:slot` links to each skill selected to provide it. A command, text
+or path provider names no skill, and `--canonical` reads the bare directive.
+
+```scrut
+$ henia query '(skill :id "code" (link :ref "slot") @l)'; henia query '(skill :id "code" (link :ref "slot")) @s' --canonical
+@l  code#code  L5  link  code.style.go: henia show tropos:style-guide
+henia query: no matches
+```
+
+```scrut
+$ henia query '(skill :id "code" (link :ref "slot") @l)' --json | jq -c '.[].l.attrs | [.slot, .target]'
+["code.style.go","style-guide"]
+```
+
 Anchored siblings bring the neighbours of a match; an optional sibling that is
 missing prints `-`.
 

@@ -282,6 +282,15 @@ $ (cd "$P" && henia slots --json test.approach.frontend) | jq -c '.providers[] |
 ["acme:tdd","shadowed","acme:frontend"]
 ```
 
+`henia query` follows a slot to each provider it selects, as it follows a link.
+
+```scrut
+$ (cd "$P" && henia query '(skill :id "testing" (reaches (skill) @t))'; henia query '(skill :id "tdd" (inbound (skill) @from))')
+@t  frontend  skill
+@t  tdd  skill
+@from  testing  skill
+```
+
 ```scrut
 $ (cd "$P" && henia show tropos:testing) | sed "s|$T/||g"
 # testing

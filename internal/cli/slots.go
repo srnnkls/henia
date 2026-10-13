@@ -136,3 +136,21 @@ func moreThanOne(flags ...bool) bool {
 	}
 	return n > 1
 }
+
+func provisions(project string, lib *library.Library) func([]string) []library.Provision {
+	var resolution *slots.Resolution
+	var err error
+	return func(requested []string) []library.Provision {
+		if resolution == nil && err == nil {
+			resolution, err = resolveSlots(project, lib)
+		}
+		if err != nil {
+			return nil
+		}
+		var found []library.Provision
+		for _, p := range resolution.Skills(requested) {
+			found = append(found, library.Provision{Slot: p.Slot, Ref: p.Ref, Section: p.Section})
+		}
+		return found
+	}
+}

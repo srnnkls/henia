@@ -954,6 +954,9 @@ func (m *matcher) test(a Attr, e *markup.Element) bool {
 		n, err := strconv.Atoi(value)
 		return err == nil && a.Lo <= float64(n) && float64(n) <= a.Hi
 	}
+	if e.Type == "skill" && a.Key == "id" && e.Attrs["package"] != "" && a.Value == e.Attrs["package"]+":"+value {
+		return true
+	}
 	return equals(typed, isTyped, value, a.Value)
 }
 

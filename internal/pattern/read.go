@@ -115,7 +115,7 @@ var types = map[string][]string{
 	"table":       nil,
 	"code":        {"lang"},
 	"row":         {"table", "key", "value", "index"},
-	"link":        {"target", "path", "anchor", "url", "ref", "name", "artifact", "dest", "exists", "valid", "anchored", "problem"},
+	"link":        {"target", "path", "anchor", "url", "ref", "name", "artifact", "dest", "exists", "valid", "anchored", "problem", "slot"},
 	"image":       {"url", "dest", "exists", "valid", "anchored", "problem"},
 	"entry":       {"key", "value", "index", "tag"},
 	"problem":     {"kind", "message"},

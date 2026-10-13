@@ -56,7 +56,7 @@ a skill preload never aborts.`,
 			var rendering *library.Rendering
 			if !canonical {
 				r := newRenderer(detectHarness(flags.harness), lib)
-				rendering = &library.Rendering{Body: r.body, Reference: r.reference}
+				rendering = &library.Rendering{Body: r.body, Reference: r.reference, Providers: provisions(flags.project, lib)}
 			}
 			corpus := lib.Corpus(rendering)
 			for _, problem := range corpus.Problems {
@@ -292,8 +292,11 @@ func address(e *markup.Element) string {
 
 func firstLine(e *markup.Element) string {
 	text := e.Text
-	if e.Type == "section" {
+	switch {
+	case e.Type == "section":
 		text = e.Attrs["title"]
+	case e.Type == "link" && e.Attrs["ref"] == "slot":
+		text = e.Attrs["slot"] + ": " + e.Attrs["dest"]
 	}
 	for line := range strings.SplitSeq(text, "\n") {
 		if line = strings.TrimSpace(line); line != "" {

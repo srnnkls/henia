@@ -61,14 +61,14 @@ henia query '(code :lang "bash" @l :words ?w @w) @c' --sort '-@w'
 
 | Type | Keys |
 |---|---|
-| `skill` | `:id` (name), `:package` |
+| `skill` | `:id` (name, or `package:name`), `:package` |
 | `file` | `:path` (relative to the skill), `:main` (`true` for SKILL.md) |
 | `section` | `:id` (heading anchor, as in `henia show skill#id`), `:title`, `:level` |
 | `heading` | `:level` |
 | `paragraph`, `item`, `quote`, `table` | |
 | `list` | `:ordered` |
 | `code` | `:lang` |
-| `link` | `:url`; for links into a skill also `:target` (skill name), `:path` (file in it) and `:anchor` (section id), from `` `$name` ``, `` `henia show name/path#anchor` ``, relative paths and `#anchor` |
+| `link` | `:url`; for links into a skill also `:target` (skill name), `:path` (file in it) and `:anchor` (section id), from `` `$name` ``, `` `henia show name/path#anchor` ``, relative paths and `#anchor`; a rendered `:slot` links to each skill selected to provide it, with `:ref "slot"` and `:slot` |
 | `directive` | `:name` and its attributes |
 | `frontmatter` | its scalar keys |
 | `_` | any type, any key |
@@ -189,7 +189,7 @@ comment  := ";" to the end of the line
 - `(not P)` rejects a node with a descendant matching P, or with a related node
   for `(not (to P))` and the like.
 - `(reaches P)` inside a `skill` matches the skills its links reach,
-  transitively. `(inbound P)` matches the skills whose links reach it.
+  transitively, slots included. `(inbound P)` matches the skills whose links reach it.
 - `(to P)` inside a `link` matches what the link names: the section of an
   `:anchor`, else the file of a `:path`, else the skill. A dangling link
   matches nothing. `(from P)` matches the links that name the node.
