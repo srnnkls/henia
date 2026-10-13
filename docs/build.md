@@ -237,10 +237,22 @@ dependency's key by key, so a project with Tropos as a dependency and only
 variables. When several dependencies configure one harness, their outputs
 merge, and a file two of them write differently fails the build.
 
-The project's own skills, commands and agents take their modes from the
-project's harness table, and are static when it sets none. They render
-strictly only when the project's table sets `strict`, whatever the
-dependency's harness does.
+The project's harness table assigns modes only to what it lists. A skill,
+command or agent it names in `static`, `hybrid` or `dynamic` takes that mode,
+whichever package it comes from. The project's own unlisted artifacts take the
+table's `default`, and are static without one; its lists never make them
+dynamic. The configuring package's `default` and lists keep governing its own
+and the other dependencies' unlisted artifacts, so this project table builds
+the dependency `impeccable` static and changes nothing else:
+
+```toml
+[harness.claude.skills]
+static = ["impeccable"]
+```
+
+A configuring package's `strict` covers its own artifacts only. The other
+packages, the project's included, render strictly only when the project's table
+sets `strict`; otherwise their unsupported frontmatter stays a warning.
 
 ## Configuration
 

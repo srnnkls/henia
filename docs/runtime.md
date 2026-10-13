@@ -220,7 +220,9 @@ Installed 24 file(s) for claude into ~/.claude
 
 There each harness gets its static skills, hybrid heads, agents and harness
 files, rendered by the package that configures that harness, with the other
-global packages as its dependencies. Henia installs every harness that an
+global packages as its dependencies. That package's `strict` covers its own
+artifacts; the other packages' render strictly only when the user `henia.toml`
+sets `strict` for the harness. Henia installs every harness that an
 installed package configures and whose home exists on this machine:
 
 | Harness | Home |
@@ -526,6 +528,10 @@ dynamic = []
 A skill is listed in at most one mode. Without `default`, listing `static` or
 `hybrid` skills makes the rest dynamic, and listing none builds every skill
 static. References to dynamic skills render as `henia show` commands.
+
+Under a harness a dependency configures, the project's table sets only the
+modes it lists, and its `default` covers only the project's own skills, which
+stay static without one; see [Dependencies](build.md#dependencies).
 
 ### Hybrid skills
 
