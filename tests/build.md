@@ -16,7 +16,7 @@ Available Commands:
   context     Print a skill's runtime context
   fmt         Rewrite directive fence lengths to their canonical nesting
   help        Help about any command
-  install     Write the global skill packages into harness directories
+  install     Write the project build, or the global packages, into harness directories
   lint        Check skill metadata, references, duplication and freshness
   ls          List the skills in the library
   preload     Run one skill preload under Henia's sandbox and refusal rules

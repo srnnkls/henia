@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/srnnkls/henia/internal/build"
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
@@ -108,5 +110,164 @@ func TestStaleHead(t *testing.T) {
 	fixture(t, skill, "# Route\n\nEdited.\n")
 	if !stale("claude", entry) {
 		t.Fatal("edited library skill not reported stale")
+	}
+}
+
+func projectFixture(t *testing.T, install string) string {
+	t.Helper()
+	project := t.TempDir()
+	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	dep := filepath.Join(library.PackagesDir(library.ProjectKey(project)), "tropos")
+	fixture(t, filepath.Join(dep, "henia.toml"), "[harness.claude]\nartifacts = ['skills', 'agents']\n[harness.claude.files]\n'CLAUDE.md' = { source = 'AGENTS.md' }\n")
+	fixture(t, filepath.Join(dep, "AGENTS.md"), "# Instructions\n")
+	fixture(t, filepath.Join(dep, "skills", "library", "SKILL.md"), "---\nname: library\ndescription: Library skill.\n---\n\n# Library\n")
+	fixture(t, filepath.Join(dep, "agents", "helper.md"), "---\nname: helper\ndescription: Helper agent.\n---\n\nHelp.\n")
+	fixture(t, filepath.Join(project, "henia.toml"), "[harness.codex]\n"+install)
+	fixture(t, filepath.Join(project, ".henia", "skills", "own", "SKILL.md"), "---\nname: own\ndescription: Own skill.\n---\n\n# Own\n")
+	return project
+}
+
+func installCommand(t *testing.T, args ...string) (*cobra.Command, *bytes.Buffer) {
+	t.Helper()
+	previous := configPath
+	t.Cleanup(func() { configPath = previous })
+	out := &bytes.Buffer{}
+	root := &cobra.Command{Use: "henia", SilenceUsage: true, SilenceErrors: true}
+	root.PersistentFlags().StringVar(&configPath, "config", "henia.toml", "Config file path")
+	root.AddCommand(newInstallCommand(), newSyncCommand())
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs(args)
+	return root, out
+}
+
+func TestProjectInstall(t *testing.T) {
+	project := projectFixture(t, "[install.codex]\npath = '.henia/codex'\n")
+	home := filepath.Join(project, ".claude")
+	fixture(t, filepath.Join(home, "settings.json"), "{}\n")
+	fixture(t, filepath.Join(project, "elsewhere", "projects", "keep"), "keep\n")
+	if err := os.Symlink(filepath.Join(project, "elsewhere", "projects"), filepath.Join(home, "projects")); err != nil {
+		t.Fatal(err)
+	}
+	fixture(t, filepath.Join(project, ".henia", "codex", "auth.json"), "{}\n")
+	run := func() {
+		t.Helper()
+		cmd, out := installCommand(t, "install")
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("install: %v\n%s", err, out)
+		}
+	}
+	run()
+	for _, path := range []string{
+		".claude/CLAUDE.md", ".claude/agents/helper/AGENT.md", ".claude/skills/own/SKILL.md", ".claude/skills/henia/SKILL.md", ".claude/settings.json",
+		".henia/codex/skills/own/SKILL.md", ".henia/codex/auth.json",
+		".henia/state/install/claude.json", ".henia/state/install/codex.json",
+	} {
+		if _, err := os.Stat(filepath.Join(project, path)); err != nil {
+			t.Errorf("%s: %v", path, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(project, ".codex")); !os.IsNotExist(err) {
+		t.Errorf("codex installed into its default directory despite its path: %v", err)
+	}
+	if target, err := os.Readlink(filepath.Join(home, "projects")); err != nil || target != filepath.Join(project, "elsewhere", "projects") {
+		t.Errorf("symlink changed: %q %v", target, err)
+	}
+	run()
+	if err := os.RemoveAll(filepath.Join(project, ".henia", "skills", "own")); err != nil {
+		t.Fatal(err)
+	}
+	run()
+	if _, err := os.Stat(filepath.Join(home, "skills", "own")); !os.IsNotExist(err) {
+		t.Errorf("stale skill kept: %v", err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(home, "settings.json")); string(data) != "{}\n" {
+		t.Errorf("foreign file changed: %q", data)
+	}
+	fixture(t, filepath.Join(project, "henia.toml"), "[harness.codex]\n[install.codex]\npath = '.henia/codex'\n[install.claude]\nenabled = false\n")
+	run()
+	if _, err := os.Stat(filepath.Join(home, "skills")); !os.IsNotExist(err) {
+		t.Errorf("disabled harness kept its files: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "settings.json")); err != nil {
+		t.Errorf("disabling removed a foreign file: %v", err)
+	}
+}
+
+func TestProjectInstallNeedsProject(t *testing.T) {
+	t.Chdir(t.TempDir())
+	cmd, out := installCommand(t, "install")
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "--global") {
+		t.Fatalf("install outside a project: %v\n%s", err, out)
+	}
+}
+
+func TestProjectSyncInstalls(t *testing.T) {
+	project := projectFixture(t, "")
+	phora := filepath.Join(t.TempDir(), "phora")
+	fixture(t, phora, "#!/bin/sh\n")
+	if err := os.Chmod(phora, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HENIA_PHORA", phora)
+	cmd, out := installCommand(t, "sync", "--no-install")
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(project, ".claude")); !os.IsNotExist(err) {
+		t.Fatalf("sync --no-install installed: %v", err)
+	}
+	cmd, out = installCommand(t, "sync")
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+	for _, path := range []string{".claude/skills/own/SKILL.md", ".codex/skills/library/SKILL.md"} {
+		if _, err := os.Stat(filepath.Join(project, path)); err != nil {
+			t.Errorf("%s: %v", path, err)
+		}
+	}
+}
+
+func TestProjectTargets(t *testing.T) {
+	off := false
+	targets, err := projectTargets("/p",
+		map[string]config.InstallTarget{"codex": {Path: ".henia/codex"}, "omp": {Enabled: &off}, "abs": {Path: "/srv/abs"}},
+		map[string]bool{"claude": true, "codex": true, "omp": true, "chatgpt": true, "abs": true, "github": true},
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, target := range targets {
+		got = append(got, fmt.Sprintf("%s=%s %v", target.harness, target.path, target.explicit))
+	}
+	want := []string{"abs=/srv/abs true", "claude=/p/.claude false", "codex=/p/.henia/codex true", "github=/p/.github false"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("targets:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if _, err := projectTargets("/p", map[string]config.InstallTarget{"pi": {}}, map[string]bool{"claude": true}, nil); err == nil {
+		t.Fatal("a listed harness the build does not produce")
+	}
+	if _, err := projectTargets("/p", map[string]config.InstallTarget{"custom": {}}, map[string]bool{"custom": true}, nil); err == nil {
+		t.Fatal("a listed harness without a project directory needs a path")
+	}
+}
+
+func TestApplyRefusesSymlinkedDirectories(t *testing.T) {
+	staging, target, outside := t.TempDir(), t.TempDir(), t.TempDir()
+	fixture(t, filepath.Join(staging, "a.md"), "a\n")
+	if err := os.Symlink(outside, filepath.Join(target, "skills")); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{filepath.Join("skills", "a", "SKILL.md"): filepath.Join(staging, "a.md")}
+	if _, _, err := apply(target, files, filepath.Join(t.TempDir(), "m.json"), true, nil); err == nil {
+		t.Fatal("wrote through a symlinked directory")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) > 0 {
+		t.Fatalf("wrote into the symlink target: %v", entries)
 	}
 }

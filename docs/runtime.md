@@ -110,9 +110,9 @@ its own Tropos reads only that one.
 
 `henia build` compiles the project's skills, from `.henia/skills/`, together
 with its dependencies'. A harness a dependency configures builds as
-`henia install` writes it, with the project's skills added and the project's
-harness table of the same name merged over the dependency's key by key; see
-[Building](build.md#dependencies). `henia lint` lints the project's own
+`henia install --global` writes it, with the project's skills added and the
+project's harness table of the same name merged over the dependency's key by
+key; see [Building](build.md#dependencies). `henia lint` lints the project's own
 files and resolves references against its dependencies, whose `.henia/lint/`
 modules join the rule set.
 
@@ -123,9 +123,9 @@ Runtime commands take `--project DIR` to read another project's library, and
 
 ```
 henia add <name> (--git URL | --path DIR) [--branch B | --tag T | --rev R] [--root DIR] [--skill S]... [--global] [--no-sync]
-henia rm <name> [--global]
-henia sync [--global]
-henia update [--global]
+henia rm <name> [--global] [--no-install]
+henia sync [--global] [--no-install]
+henia update [--global] [--no-install]
 ```
 
 `henia add` records the package in `henia.toml` and fetches it. `--no-sync`
@@ -178,7 +178,39 @@ on macOS.
 
 ## Installing
 
-`henia install` writes the global packages into harness directories:
+`henia install` writes the project build into the harness directories under the
+project root. It installs what `henia build` produces for the project, its own
+skills and its dependencies', static skills, hybrid heads, agents, catalog
+skills and harness files, each harness into its project directory:
+
+| Harness | Directory |
+|---|---|
+| `claude` | `.claude` |
+| `codex` | `.codex` |
+| `pi` | `.pi` |
+| `omp` | `.omp` |
+| `opencode` | `.opencode` |
+| `gemini` | `.gemini` |
+| `cursor` | `.cursor` |
+| `github` | `.github` |
+| `agentskills` | `.agents` |
+
+A harness without a directory there, such as `chatgpt`, installs only where the
+project `henia.toml` names a path. `[install.<harness>]` there moves a
+directory, relative to the project root, or turns a harness off, which removes
+what Henia installed for it:
+
+```toml
+[install.codex]
+path = ".henia/codex"
+
+[install.gemini]
+enabled = false
+```
+
+Henia records what it wrote in `.henia/state/install/<harness>.json`, so every
+worktree keeps its own record. Outside a project, `henia install` fails;
+`--global` installs the global packages instead:
 
 ```console
 $ henia add tropos --global --git https://github.com/srnnkls/tropos
@@ -186,10 +218,10 @@ Synced 4 package(s) into ~/.local/share/henia/packages/global: gestalt, limen, l
 Installed 24 file(s) for claude into ~/.claude
 ```
 
-Each harness gets its static skills, hybrid heads, agents and harness files,
-rendered by the package that configures that harness, with the other global
-packages as its dependencies. Henia installs every harness that an installed
-package configures and whose home exists on this machine:
+There each harness gets its static skills, hybrid heads, agents and harness
+files, rendered by the package that configures that harness, with the other
+global packages as its dependencies. Henia installs every harness that an
+installed package configures and whose home exists on this machine:
 
 | Harness | Home |
 |---|---|
@@ -198,9 +230,8 @@ package configures and whose home exists on this machine:
 | `pi` | `~/.pi/agent` |
 | `omp` | `~/.omp/agent` |
 
-`--harness claude,codex` narrows the run. The user `henia.toml` moves a home,
-adds a harness Henia knows no home for, or turns one off, which removes what
-Henia installed there:
+The user `henia.toml` moves a home, adds a harness Henia knows no home for, or
+turns one off, with the same `[install.<harness>]` keys:
 
 ```toml
 [install.codex]
@@ -210,26 +241,31 @@ path = "~/work/codex"
 enabled = false
 ```
 
-Every harness also gets Henia's own `henia` skill. It explains how to read the
-library through `henia show`, `ls` and `query`, then lists the dynamic skills
-of all installed packages, and it takes the place of the packages' catalog
-skills. To keep each package's catalog:
+Every global harness also gets Henia's own `henia` skill. It explains how to
+read the library through `henia show`, `ls` and `query`, then lists the dynamic
+skills of all installed packages, and it takes the place of the packages'
+catalog skills. To keep each package's catalog:
 
 ```toml
 install_henia_skill = false
 ```
 
-`henia sync --global`, `update --global`, `add --global` and `rm --global`
-install afterwards, so a harness copy and the library it reads come from the
-same `henia.lock`. Henia records what it wrote in
-`$XDG_STATE_HOME/henia/install/<harness>.json` and removes files a previous
-install wrote that the packages no longer produce. It never writes through a
-symlink, and it leaves alone any file it did not write or that was edited
-since:
+Henia records a global install in `$XDG_STATE_HOME/henia/install/<harness>.json`.
+
+`--harness claude,codex` narrows either install. `henia sync`, `update`, `add`
+and `rm` install afterwards, the project or, with `--global`, the global
+packages, so a harness copy and the library it reads come from the same
+`henia.lock`; `--no-install` skips it. In a project without `[install]` tables,
+a harness that fails to install afterwards is reported without failing the
+sync.
+
+Henia removes files a previous install wrote that the build no longer produces.
+It never writes through a symlink, neither a file nor a directory, and it
+leaves alone any file it did not write or that was edited since:
 
 ```console
 $ echo '# mine' >> ~/.claude/skills/git/SKILL.md
-$ henia install
+$ henia install --global
 Error: install claude: 1 file(s) in ~/.claude were not installed by henia or were edited since, among them skills/git/SKILL.md; move them away or pass --force
 ```
 
@@ -594,9 +630,9 @@ Sections:
 :::
 ```
 
-Both report a harness copy that `henia install` wrote from an older revision of
-the skill. A hybrid skill without `:::head` blocks is a launcher: its head is
-the contents and related contents alone.
+Both report a harness copy that `henia install --global` wrote from an older
+revision of the skill. A hybrid skill without `:::head` blocks is a launcher:
+its head is the contents and related contents alone.
 
 Relative links to a skill's resources and to other skills render as the
 `henia show` commands that read them, wherever the files are not beside the

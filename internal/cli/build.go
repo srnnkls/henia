@@ -28,11 +28,9 @@ func newBuildCommand() *cobra.Command {
 		Long:  "Compile local canonical artifacts for multiple harnesses.\n\nWithout --config, the source directory's henia.toml is read when present, else ./henia.toml.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			source := "."
+			source := projectSource(".")
 			if len(args) > 0 {
 				source = args[0]
-			} else if holdsArtifacts(library.ProjectDir) && !holdsArtifacts(".") {
-				source = library.ProjectDir
 			}
 			info, err := os.Stat(source)
 			if err != nil {
@@ -53,31 +51,9 @@ func newBuildCommand() *cobra.Command {
 			if !cmd.Flags().Changed("output") {
 				destination = cfg.Build.Output
 			}
-			if err := ensurePackages(cmd, project); err != nil {
+			built, err := buildProject(cmd, project, source, cfg, selected, destination, clean || cfg.Build.Clean)
+			if err != nil {
 				return err
-			}
-			lib := library.Open(project, nil)
-			var dependencies []library.Package
-			for _, dependency := range lib.Packages {
-				if dependency.Tier == library.Dependency {
-					dependencies = append(dependencies, dependency)
-				}
-			}
-			resolve := staticFiles(project, lib)
-			var built int
-			if owners, err := dependencyHarnesses(dependencies, cfg); err != nil {
-				return err
-			} else if len(owners) > 0 {
-				built, err = buildDependencyHarnesses(cmd, source, cfg, owners, selected, destination, clean || cfg.Build.Clean, dependencies, resolve)
-				if err != nil {
-					return err
-				}
-			} else {
-				result, err := compilePackage(cmd, source, cfg, selected, destination, clean || cfg.Build.Clean, dependencies, resolve)
-				if err != nil {
-					return err
-				}
-				built = result.Built
 			}
 			for dir := filepath.Clean(destination); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
 				if filepath.Base(dir) == library.ProjectDir {
@@ -95,6 +71,43 @@ func newBuildCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&output, "output", "o", ".henia/build", "Build output directory (overrides [build].output)")
 	cmd.Flags().StringSliceVar(&selected, "harness", nil, "Harnesses to build (comma-separated; default all configured)")
 	return cmd
+}
+
+// projectSource is the directory a project builds: its .henia/ when that
+// holds skills, commands or agents and the project directory does not.
+func projectSource(project string) string {
+	if dir := filepath.Join(project, library.ProjectDir); holdsArtifacts(dir) && !holdsArtifacts(project) {
+		return dir
+	}
+	return project
+}
+
+// buildProject compiles source with the project's dependencies, the harnesses
+// they configure included, into destination.
+func buildProject(cmd *cobra.Command, project, source string, cfg *config.Config, selected []string, destination string, clean bool) (int, error) {
+	if err := ensurePackages(cmd, project); err != nil {
+		return 0, err
+	}
+	lib := library.Open(project, nil)
+	var dependencies []library.Package
+	for _, dependency := range lib.Packages {
+		if dependency.Tier == library.Dependency {
+			dependencies = append(dependencies, dependency)
+		}
+	}
+	resolve := staticFiles(project, lib)
+	owners, err := dependencyHarnesses(dependencies, cfg)
+	if err != nil {
+		return 0, err
+	}
+	if len(owners) > 0 {
+		return buildDependencyHarnesses(cmd, source, cfg, owners, selected, destination, clean, dependencies, resolve)
+	}
+	result, err := compilePackage(cmd, source, cfg, selected, destination, clean, dependencies, resolve)
+	if err != nil {
+		return 0, err
+	}
+	return result.Built, nil
 }
 
 func optionalConfig(cmd *cobra.Command, source string) (*config.Config, error) {

@@ -368,14 +368,14 @@ Branching:
 Finished.
 ```
 
-`henia install` renders the harness files of a global package the same way,
+`henia install --global` renders the harness files of a global package the same way,
 against the global packages and the user `henia.toml`.
 
 ```scrut
 $ mk "$G/tropos/AGENTS.md" 'Commits:\n\n:slot[git.commits]{.inline}\n\nBranching:\n\n:slot[git.branching]{.inline}\n'
 > mk "$G/tropos/henia.toml" '[harness.claude.files]\n"CLAUDE.md" = { source = "AGENTS.md" }\n'
 > mk "$T/config/henia/henia.toml" "[install.claude]\npath = \"$T/claude\"\n"
-> henia install --harness claude >/dev/null && cat "$T/claude/CLAUDE.md"
+> henia install --global --harness claude >/dev/null && cat "$T/claude/CLAUDE.md"
 Commits:
 
 # gcommits
