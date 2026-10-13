@@ -6,8 +6,8 @@ func Builtins() map[string]Declaration {
 	return map[string]Declaration{
 		Head: builtin(Head, []string{Container}, "markdown", nil, false),
 		"include": builtin("include", []string{Leaf}, "none", map[string]Attribute{
-			"ref":      {Type: "ref"},
-			"template": {Type: "string"},
+			"ref":       {Type: "ref"},
+			"component": {Type: "string"},
 		}, true),
 		"when":     builtin("when", []string{Container}, "markdown", map[string]Attribute{"target": {Type: "list"}}, true),
 		"unless":   builtin("unless", []string{Container}, "markdown", map[string]Attribute{"target": {Type: "list"}}, true),

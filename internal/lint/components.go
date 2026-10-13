@@ -440,7 +440,7 @@ func slotAttributes(u *unit, declared *slots.Resolution) []Diagnostic {
 		}
 		callee := decl
 		if decl.Name == "include" {
-			callee, ok = u.pkg.decls[e.Attrs["template"]]
+			callee, ok = u.pkg.decls[e.Attrs["component"]]
 		}
 		for _, name := range slices.Sorted(maps.Keys(e.Attrs)) {
 			attr, typed := callee.Attributes[name]

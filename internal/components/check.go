@@ -88,8 +88,8 @@ func checkDocument(doc Document, decls map[string]Declaration, used map[string]b
 		case "directive":
 			name := e.Attrs["name"]
 			used[name] = true
-			if name == "include" && e.Attrs["template"] != "" {
-				used[e.Attrs["template"]] = true
+			if name == "include" && e.Attrs["component"] != "" {
+				used[e.Attrs["component"]] = true
 			}
 			if decl, ok := decls[name]; !ok {
 				d.at(UnknownComponent, e, "unknown component %s", name)
@@ -395,8 +395,8 @@ func templateUses(decl Declaration) map[string]bool {
 	root.Walk(func(e *markup.Element) bool {
 		if e.Type == "directive" {
 			uses[e.Attrs["name"]] = true
-			if e.Attrs["name"] == "include" && e.Attrs["template"] != "" {
-				uses[e.Attrs["template"]] = true
+			if e.Attrs["name"] == "include" && e.Attrs["component"] != "" {
+				uses[e.Attrs["component"]] = true
 			}
 		}
 		return true

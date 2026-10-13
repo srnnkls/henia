@@ -15,7 +15,7 @@ const (
 	tagsComponent  = "---\nform: leaf\nattributes:\n  slots:\n    type: list\n    of: slot\nbody:\n  kind: none\n---\n{{.slots}}\n"
 	rowsComponent  = "---\nform: leaf\nattributes:\n  items:\n    type: list\nbody:\n  kind: none\n---\n{{range .items}}{{.label}}{{end}}\n{{$.nope}}\n"
 	titleComponent = "---\nform: leaf\nattributes:\n  title:\n    type: string\nbody:\n  kind: none\n---\n# {{.title}}\n"
-	badComponent   = "---\nform: leaf\nbody:\n  kind: none\n---\n::include{template=\"title\" title=\"X\" nope=1}\n"
+	badComponent   = "---\nform: leaf\nbody:\n  kind: none\n---\n::include{component=\"title\" title=\"X\" nope=1}\n"
 )
 
 func componentProject(t *testing.T) (string, []lint.Diagnostic) {

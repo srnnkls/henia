@@ -50,7 +50,7 @@ form: leaf
 body:
   kind: none
 ---
-::include{template="title" title="X"}
+::include{component="title" title="X"}
 `
 
 const contextComponent = `---
@@ -197,7 +197,7 @@ func TestExpandDocument(t *testing.T) {
 }
 
 func TestExpandDiagnostics(t *testing.T) {
-	bad := "---\nform: leaf\nbody:\n  kind: none\n---\n::include{template=\"title\" title=\"X\" nope=1}\n"
+	bad := "---\nform: leaf\nbody:\n  kind: none\n---\n::include{component=\"title\" title=\"X\" nope=1}\n"
 	loop := "---\nform: leaf\nbody:\n  kind: none\n---\n::loop\n"
 	ping := "---\nform: leaf\nbody:\n  kind: none\n---\n::pong\n"
 	pong := "---\nform: leaf\nbody:\n  kind: none\n---\n::ping\n"

@@ -139,7 +139,7 @@ henia:
           display_name: "{{.title}}"
 ---
 
-::include{template="instructions"}
+::include{component="instructions"}
 `)
 	testConfig(t, `[harness.claude]
 profile = "claude"

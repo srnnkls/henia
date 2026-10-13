@@ -107,8 +107,8 @@ func TestExpandDocumentsIncludeDiagnostics(t *testing.T) {
 	cases := []struct{ name, call, want string }{
 		{"unknown skill", "::include{ref=\"nope#usage\"}", "missing-include error " + includingPath + ":3:1"},
 		{"unknown section anchor", "::include{ref=\"b#nope\"}", "missing-include error " + includingPath + ":3:1"},
-		{"ref and template", "::include{ref=\"b#usage\" template=\"title\" title=\"X\"}", "invalid-include error " + includingPath + ":3:1"},
-		{"neither ref nor template", "::include", "invalid-include error " + includingPath + ":3:1"},
+		{"ref and component", "::include{ref=\"b#usage\" component=\"title\" title=\"X\"}", "invalid-include error " + includingPath + ":3:1"},
+		{"neither ref nor component", "::include", "invalid-include error " + includingPath + ":3:1"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

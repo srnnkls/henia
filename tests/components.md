@@ -338,7 +338,7 @@ as called.
 $ proj lint-source && lint() { henia lint "$@" 2>&1 | sed "s|$P/||g"; }
 > mk .henia/components/note.md '---\nform: container\nbody:\n  kind: markdown\n---\n> Note\n\n::body\n'
 > mk .henia/components/part.md '---\nform: leaf\nbody:\n  kind: none\n---\nPart.\n'
-> mk .henia/components/box.md '---\nform: leaf\nbody:\n  kind: none\n---\n::include{template="part"}\n'
+> mk .henia/components/box.md '---\nform: leaf\nbody:\n  kind: none\n---\n::include{component="part"}\n'
 > mk .henia/components/stale.md '---\nform: leaf\nbody:\n  kind: none\n---\nOld.\n'
 > skill deploy '' ':::note\nNote.\n:::\n\n::box\n\n:::gone\nText.\n:::\n'
 > lint skills --strict
@@ -353,7 +353,7 @@ the skill's call, with a note naming the component line.
 ```scrut
 $ proj lint-expanded
 > mk .henia/components/title.md '---\nform: leaf\nattributes:\n  title:\n    type: string\nbody:\n  kind: none\n---\n# {{.title}}\n'
-> mk .henia/components/bad.md '---\nform: leaf\nbody:\n  kind: none\n---\n::include{template="title" title="X" nope=1}\n'
+> mk .henia/components/bad.md '---\nform: leaf\nbody:\n  kind: none\n---\n::include{component="title" title="X" nope=1}\n'
 > skill gen '' '::bad\n\n:::when{target="clod"}\nx\n:::\n\n:::when{nope=true}\ny\n:::\n'
 > lint skills | sed 's/; want one of .*//'
 skills/gen/SKILL.md:5:1: error [unknown-attribute] title does not declare attribute nope

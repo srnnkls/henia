@@ -90,7 +90,7 @@ func TestSlotAttributesFollowSlotTypes(t *testing.T) {
 	write(t, root, ".henia/components/verbatim.md", "---\nform: container\nbody:\n  kind: text\n---\nVerbatim.\n")
 	write(t, root, "skills/git/SKILL.md", skillFile("git", "henia:\n  slots:\n    git.commits: list\n", "Git.\n"))
 	write(t, root, "skills/nested/SKILL.md", skillFile("nested", "", "::tags{slots=\"git.commits.nope\"}\n"))
-	write(t, root, "skills/forward/SKILL.md", skillFile("forward", "", "::include{template=\"tags\" slots=\"nope\"}\n"))
+	write(t, root, "skills/forward/SKILL.md", skillFile("forward", "", "::include{component=\"tags\" slots=\"nope\"}\n"))
 	write(t, root, "skills/literal/SKILL.md", skillFile("literal", "", ":::verbatim\n::tags{slots=\"nope\"}\n:::\n"))
 	var got []string
 	for _, d := range withRule(lintProject(t, lint.Options{Project: root}, filepath.Join(root, "skills")), "invalid-attribute") {
@@ -104,7 +104,7 @@ func TestSlotAttributesFollowSlotTypes(t *testing.T) {
 func TestDistinctDiagnosticsAtOnePositionSurvive(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, ".henia/components/title.md", titleComponent)
-	write(t, root, ".henia/components/twice.md", "---\nform: leaf\nbody:\n  kind: none\n---\n::include{template=\"title\" extra=1 nope=2}\n")
+	write(t, root, ".henia/components/twice.md", "---\nform: leaf\nbody:\n  kind: none\n---\n::include{component=\"title\" extra=1 nope=2}\n")
 	write(t, root, "skills/gen/SKILL.md", skillFile("gen", "", "::twice\n"))
 	var got []string
 	for _, d := range withRule(lintProject(t, lint.Options{Project: root}, filepath.Join(root, "skills")), "unknown-attribute") {

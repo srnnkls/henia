@@ -14,10 +14,10 @@ func (x *expander) include(it *markup.Item, decl Declaration) []*markup.Item {
 		return x.keep(it)
 	}
 	ref, referenced := it.Attrs["ref"]
-	name, named := it.Attrs["template"]
+	name, named := it.Attrs["component"]
 	switch {
 	case referenced == named:
-		x.report(it, InvalidInclude, "include takes exactly one of ref and template")
+		x.report(it, InvalidInclude, "include takes exactly one of ref and component")
 		return x.keep(it)
 	case referenced:
 		return x.includeRef(it, ref)
@@ -31,11 +31,11 @@ func (x *expander) include(it *markup.Item, decl Declaration) []*markup.Item {
 		x.report(it, MissingInclude, "include names unknown component %s", name)
 		return x.keep(it)
 	case target.Path == "" || target.Body.Kind != "none":
-		x.report(it, InvalidInclude, "include template %s must be a declared component whose body kind is none", name)
+		x.report(it, InvalidInclude, "include component %s must be a declared component whose body kind is none", name)
 		return x.keep(it)
 	}
 	args := maps.Clone(it.Attrs)
-	delete(args, "template")
+	delete(args, "component")
 	before := len(x.diags)
 	values := x.arguments(it, target, args)
 	if len(x.diags) > before {
