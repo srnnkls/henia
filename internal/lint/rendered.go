@@ -190,3 +190,31 @@ func (h *perHarness) diagnostics(harnesses int) []Diagnostic {
 	}
 	return out
 }
+
+// resolveAlternates settles a rendered span that reads both as the harness's
+// skill reference and as another artifact reference: the skill wins unless
+// only the other artifact resolves.
+func resolveAlternates(root *markup.Element, builtin []string) {
+	known := map[string]bool{}
+	for _, a := range builtin {
+		known[a] = true
+	}
+	var ambiguous []*markup.Element
+	root.Walk(func(e *markup.Element) bool {
+		switch {
+		case e.Type == "file" && e.Attrs["artifact"] != "":
+			known[e.Attrs["artifact"]] = true
+		case e.Type == "link" && e.Attrs["alternate"] != "":
+			ambiguous = append(ambiguous, e)
+		}
+		return true
+	})
+	for _, link := range ambiguous {
+		alternate := link.Attrs["alternate"]
+		if known[link.Attrs["artifact"]] || !known[alternate] {
+			continue
+		}
+		link.Attrs["ref"], _, _ = strings.Cut(alternate, ":")
+		link.Attrs["artifact"] = alternate
+	}
+}

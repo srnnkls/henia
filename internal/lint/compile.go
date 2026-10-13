@@ -216,6 +216,7 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 					}
 					ev := &evaluation{corpus: corpus(stageDocs, views, p.options.Provided)}
 					stageFiles(ev.corpus.Root, views, s.stage)
+					resolveAlternates(ev.corpus.Root, p.options.Builtin)
 					staged[s.stage] = append(staged[s.stage], ev)
 					harnessOf[ev] = harness
 				}
