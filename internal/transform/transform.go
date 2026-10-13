@@ -407,13 +407,23 @@ func expandListings(body, self string) string {
 		if m == nil {
 			return "", false
 		}
-		return render(cmp.Or(strings.TrimSpace(m[1]), self)), true
+		target := cmp.Or(strings.TrimSpace(m[1]), self)
+		if target == "" {
+			return "", false
+		}
+		return render(target), true
 	})
 	related := relatedSections(&doc.Children, body)
 	if !listed && !related {
 		return body
 	}
 	return string(markup.Write(doc))
+}
+
+// ExpandFile renders the directives a Markdown file outside a skill carries,
+// :slot[...] and :contents[...] or :related[...] naming a skill, as preloads.
+func ExpandFile(body string) string {
+	return expandListings(slots.Expand(body, slots.Preload), "")
 }
 
 func Listings(doc *markup.Document, self string, skill bool) {

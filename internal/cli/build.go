@@ -51,7 +51,7 @@ func newBuildCommand() *cobra.Command {
 					dependencies = append(dependencies, dependency)
 				}
 			}
-			result, err := compilePackage(cmd, source, cfg, selected, destination, clean || cfg.Build.Clean, dependencies)
+			result, err := compilePackage(cmd, source, cfg, selected, destination, clean || cfg.Build.Clean, dependencies, staticFiles(source, library.Open(source, nil)))
 			if err != nil {
 				return err
 			}
@@ -102,7 +102,7 @@ func optionalConfig(cmd *cobra.Command, source string) (*config.Config, error) {
 	return config.LoadOptional(configPath)
 }
 
-func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selected []string, destination string, clean bool, dependencies []library.Package) (*build.Result, error) {
+func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selected []string, destination string, clean bool, dependencies []library.Package, resolve build.Resolver) (*build.Result, error) {
 	harnesses := cfg.Harness
 	if len(harnesses) == 0 {
 		return nil, fmt.Errorf("no harnesses configured")
@@ -131,7 +131,7 @@ func compilePackage(cmd *cobra.Command, source string, cfg *config.Config, selec
 	if err != nil {
 		return nil, err
 	}
-	result, err := build.RunSelected(cmd.Context(), sources, destination, harnesses, cfg.Harness, clean, layers...)
+	result, err := build.RunSelected(cmd.Context(), sources, destination, harnesses, cfg.Harness, clean, resolve, layers...)
 	if err != nil {
 		return nil, err
 	}

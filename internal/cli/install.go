@@ -208,6 +208,7 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			owners[pkg.Name] = pkgCfg
 		}
 	}
+	resolve := staticFiles(staging, library.Open("", nil))
 	files := map[string]string{}
 	from := map[string]string{}
 	var dynamic []build.Entry
@@ -236,7 +237,7 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			}
 		}
 		out := filepath.Join(staging, pkg.Name)
-		result, err := compilePackage(cmd, pkg.Root, pkgCfg, []string{harness}, out, false, dependencies)
+		result, err := compilePackage(cmd, pkg.Root, pkgCfg, []string{harness}, out, false, dependencies, resolve)
 		if err != nil {
 			return fmt.Errorf("package %s: %w", pkg.Name, err)
 		}

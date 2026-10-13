@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/srnnkls/henia/internal/build"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/slots"
@@ -94,4 +95,13 @@ func (x *resolver) nested(text string) string {
 	x.depth++
 	defer func() { x.depth-- }()
 	return preload.Substitute(text, x.resolve)
+}
+
+// staticFiles resolves the henia preloads of harness files in-process against
+// lib, with the slot configuration of project, so built files carry the
+// providers' content instead of commands.
+func staticFiles(project string, lib *library.Library) build.Resolver {
+	return func(harness, text string) string {
+		return preload.Substitute(text, newResolver(lib, newRenderer(harness, lib), project).resolve)
+	}
 }

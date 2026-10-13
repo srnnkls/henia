@@ -171,7 +171,9 @@ the sentence. A slot without a provider renders nothing, and a problem renders
 as a `henia:` line.
 
 `henia build` projects the directive into the harness's preload syntax. A
-built skill therefore resolves its providers in whichever project it runs.
+built skill therefore resolves its providers in whichever project it runs. A
+[harness file](build.md#extra-files) has no preloads, so its directives
+resolve when it is built.
 
 ## Configuring
 

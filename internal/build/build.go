@@ -50,29 +50,33 @@ type Result struct {
 // Run compiles local source directories. Each harness writes beneath output/name.
 
 func Run(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, dependencies ...Dependency) (*Result, error) {
-	return RunSelected(ctx, sources, output, harnesses, harnesses, false, dependencies...)
+	return RunSelected(ctx, sources, output, harnesses, harnesses, false, nil, dependencies...)
 }
 
 func RunArtifact(ctx context.Context, art *artifact.Artifact, source, output string, harnesses map[string]henia.Harness) (*Result, error) {
-	return run(ctx, []string{source}, output, harnesses, harnesses, false, nil, []*artifact.Artifact{art})
+	return run(ctx, []string{source}, output, harnesses, harnesses, false, nil, nil, []*artifact.Artifact{art})
 }
 
 // RunClean publishes a complete output tree only after every artifact was written successfully.
 func RunClean(ctx context.Context, sources []string, output string, harnesses map[string]henia.Harness, dependencies ...Dependency) (*Result, error) {
-	return RunSelected(ctx, sources, output, harnesses, harnesses, true, dependencies...)
+	return RunSelected(ctx, sources, output, harnesses, harnesses, true, nil, dependencies...)
 }
 
+// Resolver resolves the henia preloads in a Markdown harness file rendered for
+// the named harness. A nil Resolver leaves the file's directives in place.
+type Resolver func(harness, text string) string
+
 // RunSelected writes the harnesses; conditions name every configured harness.
-func RunSelected(ctx context.Context, sources []string, output string, harnesses, configured map[string]henia.Harness, clean bool, dependencies ...Dependency) (*Result, error) {
+func RunSelected(ctx context.Context, sources []string, output string, harnesses, configured map[string]henia.Harness, clean bool, resolve Resolver, dependencies ...Dependency) (*Result, error) {
 	if clean {
 		if err := validateCleanOutput(sources, output); err != nil {
 			return nil, err
 		}
 	}
-	return run(ctx, sources, output, harnesses, configured, clean, dependencies, nil)
+	return run(ctx, sources, output, harnesses, configured, clean, resolve, dependencies, nil)
 }
 
-func run(ctx context.Context, sources []string, output string, harnesses, configured map[string]henia.Harness, clean bool, dependencies []Dependency, extra []*artifact.Artifact) (*Result, error) {
+func run(ctx context.Context, sources []string, output string, harnesses, configured map[string]henia.Harness, clean bool, resolve Resolver, dependencies []Dependency, extra []*artifact.Artifact) (*Result, error) {
 	if output == "" {
 		return nil, fmt.Errorf("build output directory is required")
 	}
@@ -147,7 +151,7 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 		}
 
 		references := &transform.Transformer{Tools: harness.Tools, References: pipeline.References(harness.References), Served: served}
-		files, err := supportFiles(sources, harness.Files, references)
+		files, err := supportFiles(sources, harnessName, harness.Files, references, resolve)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
 			continue
@@ -396,7 +400,7 @@ func Renderer(art *artifact.Artifact, name string, h henia.Harness, served map[s
 
 func Projects(harness henia.Harness, name string) bool { return harness.Builds("skills", name) }
 
-func supportFiles(sources []string, files map[string]henia.File, references *transform.Transformer) (map[string][]byte, error) {
+func supportFiles(sources []string, harness string, files map[string]henia.File, references *transform.Transformer, resolve Resolver) (map[string][]byte, error) {
 	result := make(map[string][]byte, len(files))
 	for _, path := range slices.Sorted(maps.Keys(files)) {
 		file := files[path]
@@ -420,6 +424,9 @@ func supportFiles(sources []string, files map[string]henia.File, references *tra
 			text := string(data)
 			if strings.EqualFold(filepath.Ext(file.Source), ".md") {
 				text = references.RenderReferences(text)
+				if resolve != nil {
+					text = resolve(harness, transform.ExpandFile(text))
+				}
 			}
 			replacements := make([]string, 0, 2*len(file.Replace))
 			for _, old := range slices.Sorted(maps.Keys(file.Replace)) {

@@ -342,3 +342,45 @@ test.approach.mobile global henia show acme:lazy
 test.approach.mobile invalid data/henia/packages/global/acme/henia.toml
 exit 0
 ```
+
+## Harness files
+
+A Markdown harness file renders its slots when it is built, since nothing
+preloads it at runtime. An inlined slot becomes its providers' content, a
+pointer the list of providers, and a slot without a provider nothing.
+`replace` applies afterwards.
+
+```scrut
+$ skill "$P/skills/demo" '' ''
+> mk "$P/AGENTS.md" '# Agents\n\nCommits:\n\n:slot[git.commits]{.inline}\n\nBranching:\n\n:slot[git.branching]\n\n:slot[review.lenses]{.inline}\n\nDone.\n'
+> printf '\n[harness.claude.files]\n"CLAUDE.md" = { source = "AGENTS.md", replace = { "Done." = "Finished." } }\n' >> "$P/henia.toml"
+> (cd "$P" && henia build >/dev/null && cat .henia/build/claude/CLAUDE.md)
+# Agents
+
+Commits:
+
+# gcommits
+
+Branching:
+
+- `git.branching`: `henia show tropos:gbranch`
+
+Finished.
+```
+
+`henia install` renders the harness files of a global package the same way,
+against the global packages and the user `henia.toml`.
+
+```scrut
+$ mk "$G/tropos/AGENTS.md" 'Commits:\n\n:slot[git.commits]{.inline}\n\nBranching:\n\n:slot[git.branching]{.inline}\n'
+> mk "$G/tropos/henia.toml" '[harness.claude.files]\n"CLAUDE.md" = { source = "AGENTS.md" }\n'
+> mk "$T/config/henia/henia.toml" "[install.claude]\npath = \"$T/claude\"\n"
+> henia install --harness claude >/dev/null && cat "$T/claude/CLAUDE.md"
+Commits:
+
+# gcommits
+
+Branching:
+
+# gbranch
+```

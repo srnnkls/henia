@@ -160,8 +160,23 @@ The `claude-agent` profile lives at `.henia/harnesses/claude-agent/transform.tom
 `[harness.<name>.files]` copies support documents into a harness tree, as
 with `AGENTS.md` above. The source resolves inside the input directory, the
 destination inside the harness root. Markdown sources render their references
-in the harness's syntax first; `replace` then applies literal replacements, all
-at once.
+in the harness's syntax and resolve their directives first; `replace` then
+applies literal replacements, all at once. Other sources copy verbatim apart
+from `replace`.
+
+Nothing preloads a harness file at runtime, so its directives resolve when it
+is built. A `:slot[…]` renders as in `henia show`: the list of providers, or
+with `{.inline}` their content. `:contents[<skill>]` and `:related[<skill>]`
+render the named skill's sections and its related skills. Providers resolve
+over the library of whoever builds, as `henia slots` does, with the `[slots]`
+of the project's `henia.toml`, or of the user `henia.toml` for `henia install`.
+A slot without a provider renders nothing:
+
+```md
+Before repository work, orient:
+
+:slot[code.orientation]{.inline}
+```
 
 ## Output
 

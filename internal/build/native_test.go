@@ -118,6 +118,35 @@ func TestSupportingDocumentsRenderReferences(t *testing.T) {
 	}
 }
 
+func TestSupportingDocumentsResolveDirectives(t *testing.T) {
+	root := t.TempDir()
+	put(t, filepath.Join(root, "skills/code/SKILL.md"), "Skill.\n")
+	put(t, filepath.Join(root, "AGENTS.md"), "Style:\n\n:slot[code.style]{.inline}\n\nChecks:\n\n:slot[code.validation]\n\nDraft.\n")
+	put(t, filepath.Join(root, "notes.txt"), ":slot[code.style]{.inline}\n")
+	harnesses := map[string]henia.Harness{"claude": {Files: map[string]henia.File{
+		"CLAUDE.md": {Source: "AGENTS.md", Replace: map[string]string{"Draft.": "Final."}},
+		"notes.txt": {Source: "notes.txt"},
+	}}}
+	resolve := func(harness, text string) string {
+		return strings.NewReplacer(
+			"!`henia slots --inline code.style`", "Prefer "+harness+" idioms.",
+			"!`henia slots --markdown code.validation`", "- `code.validation`: `go test ./...`",
+		).Replace(text)
+	}
+	output := filepath.Join(root, "build")
+	result, err := RunSelected(t.Context(), []string{root}, output, harnesses, harnesses, true, resolve)
+	if err != nil || len(result.Errors) != 0 {
+		t.Fatalf("build: %+v, %v", result, err)
+	}
+	want := "Style:\n\nPrefer claude idioms.\n\nChecks:\n\n- `code.validation`: `go test ./...`\n\nFinal.\n"
+	if data, err := os.ReadFile(filepath.Join(output, "claude/CLAUDE.md")); err != nil || string(data) != want {
+		t.Fatalf("entrypoint: %q, %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(output, "claude/notes.txt")); err != nil || string(data) != ":slot[code.style]{.inline}\n" {
+		t.Fatalf("non-Markdown file changed: %q, %v", data, err)
+	}
+}
+
 func TestCleanBuildPrunesAndKeepsPreviousOutputOnFailure(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source")

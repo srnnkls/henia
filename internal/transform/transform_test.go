@@ -484,3 +484,11 @@ func TestTransformListingsByteIdentical(t *testing.T) {
 		t.Errorf("Transform() body =\n%q\nwant:\n%q", result.Body, want)
 	}
 }
+
+func TestExpandFileListsNamedSkillsOnly(t *testing.T) {
+	body := "Style: :slot[code.style]{.inline}\n\n:contents[git]\n\n:related[git]\n\n:contents[]\n"
+	want := "Style: !`henia slots --inline code.style`\n\n!`henia show git --toc`\n\n!`henia context git`\n\n:contents[]\n"
+	if got := ExpandFile(body); got != want {
+		t.Errorf("ExpandFile() =\n%q\nwant:\n%q", got, want)
+	}
+}
