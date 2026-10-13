@@ -46,56 +46,73 @@ func publish(ctx context.Context, output string, jobs []writeJob, result *Result
 	if len(jobs) == 0 {
 		return result, nil
 	}
+	err := swap(output, func(stage string) error {
+		for _, job := range jobs {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			tgt := target.NewFromConfig(job.target.Name(), filepath.Join(stage, job.target.Name()), job.harness)
+			if err := tgt.Write(job.artifact); err != nil {
+				return err
+			}
+			if job.artifact.Type != artifact.TypeUnknown {
+				result.Built++
+			}
+		}
+		return ctx.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Publish writes a complete output tree through write into a staging sibling
+// and replaces output with it only when write succeeds.
+func Publish(sources []string, output string, write func(stage string) error) error {
+	if err := validateCleanOutput(sources, output); err != nil {
+		return err
+	}
+	return swap(output, write)
+}
+
+func swap(output string, write func(stage string) error) error {
 	parent := filepath.Dir(output)
 	if err := os.MkdirAll(parent, 0755); err != nil {
-		return nil, err
+		return err
 	}
 	stage, err := os.MkdirTemp(parent, ".henia-build-")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer os.RemoveAll(stage)
 	if err := os.Chmod(stage, 0755); err != nil {
-		return nil, err
+		return err
 	}
-	for _, job := range jobs {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		tgt := target.NewFromConfig(job.target.Name(), filepath.Join(stage, job.target.Name()), job.harness)
-		if err := tgt.Write(job.artifact); err != nil {
-			return nil, err
-		}
-		if job.artifact.Type != artifact.TypeUnknown {
-			result.Built++
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if err := write(stage); err != nil {
+		return err
 	}
 	backup, err := os.MkdirTemp(parent, ".henia-previous-")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err := os.Remove(backup); err != nil {
-		return nil, err
+		return err
 	}
 	hadOutput := false
 	if err := os.Rename(output, backup); err == nil {
 		hadOutput = true
 	} else if !os.IsNotExist(err) {
-		return nil, err
+		return err
 	}
 	if err := os.Rename(stage, output); err != nil {
 		if hadOutput {
 			err = errors.Join(err, os.Rename(backup, output))
 		}
-		return nil, err
+		return err
 	}
 	if hadOutput {
-		if err := os.RemoveAll(backup); err != nil {
-			return nil, err
-		}
+		return os.RemoveAll(backup)
 	}
-	return result, nil
+	return nil
 }
