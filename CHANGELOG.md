@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.0-alpha.21](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.20...v0.1.0-alpha.21) (2026-10-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **install:** henia install without --global installs the current project and fails outside one; henia install --global installs the global packages into the user's harness homes.
+
+### Features
+
+* **install:** install the project build into its harness directories ([c4fab1e](https://github.com/srnnkls/henia/commit/c4fab1e34393b7dae21d2c6d8cac9b7769f60a78))
+
 ## [0.1.0-alpha.20](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.19...v0.1.0-alpha.20) (2026-10-13)
 
 
