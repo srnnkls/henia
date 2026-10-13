@@ -94,9 +94,15 @@ tasks:
     files: [docs/components.md, docs/build.md, docs/lint-rules.md, README.md]
   - id: CMP-014
     content: "Tropos migration: capture the b24ebfe baseline, convert partials to components (related folds into the built-in), instruction as render keep, classes to bare keys, pr to :::when, workflow slots listed, remove .henia/templates, exempt components/ in .henia/.gitignore, henia fmt; build diff empty per harness, lint clean, hybrid heads unchanged (FR-12, AD-7, AD-9)"
-    status: pending
+    status: done
     active_form: "Converting Tropos to components"
     depends_on: [CMP-012, CMP-016]
+    evidence:
+      - "tropos 4e40703 on feat/components-migration"
+      - "baseline build (henia b24ebfe): /Users/srnnkls/projects/tropos/.worktrees/cmp014-out/base"
+      - "target build (henia b2c0b63): /Users/srnnkls/projects/tropos/.worktrees/cmp014-out/main"
+      - "hybrid heads: /Users/srnnkls/projects/tropos/.worktrees/cmp014-out/heads-base, heads-main"
+      - "lint: /Users/srnnkls/projects/tropos/.worktrees/cmp014-out/lint-real.json"
     files:
       - /Users/srnnkls/projects/tropos/.henia/components/
       - /Users/srnnkls/projects/tropos/.henia/templates/
@@ -105,8 +111,8 @@ tasks:
       - /Users/srnnkls/projects/tropos/henia.toml
 meta:
   created: 2026-10-08
-  last_updated: "2026-10-09"
-  progress: 14/16
+  last_updated: "2026-10-13"
+  progress: 15/16
 phases:
   - id: syntax
     tasks: [CMP-001, CMP-002, CMP-012]
