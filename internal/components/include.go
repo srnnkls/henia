@@ -72,7 +72,7 @@ func (g *graph) resolve(x *expander, call *markup.Item, ref string) ([]*markup.I
 	}
 	target, ok := g.node(at)
 	if !ok {
-		x.report(call, MissingInclude, "include names unknown skill %s:%s", at.Package, at.Name)
+		x.report(call, MissingInclude, "include names unknown %s", at)
 		return nil, false
 	}
 	if g.env.Included != nil {
@@ -94,7 +94,7 @@ func (g *graph) resolve(x *expander, call *markup.Item, ref string) ([]*markup.I
 		x.report(call, InvalidMarkup, "include %s: %v", ref, err)
 		return nil, false
 	case selected == nil && anchor != "":
-		x.report(call, MissingInclude, "skill %s:%s has no section %s", at.Package, at.Name, anchor)
+		x.report(call, MissingInclude, "%s has no section %s", at, anchor)
 		return nil, false
 	}
 	return selected, true
@@ -104,16 +104,16 @@ func (g *graph) locate(from Unit, ref string) (Key, string, error) {
 	if g.env.Resolve != nil {
 		return g.env.Resolve(from, ref)
 	}
-	name, anchor, _ := strings.Cut(ref, "#")
-	if pkg, skill, qualified := strings.Cut(name, ":"); qualified {
-		return Key{pkg, skill}, anchor, nil
+	pkg, name, resource, anchor := ParseRef(ref)
+	if pkg != "" {
+		return Key{pkg, name, resource}, anchor, nil
 	}
-	if local := (Key{from.Package, name}); g.nodes[local] != nil {
-		return local, anchor, nil
+	if g.nodes[Key{from.Package, name, ""}] != nil {
+		return Key{from.Package, name, resource}, anchor, nil
 	}
 	var found []Key
 	for k := range g.nodes {
-		if k.Name == name {
+		if k.Name == name && k.Resource == "" {
 			found = append(found, k)
 		}
 	}
@@ -121,7 +121,7 @@ func (g *graph) locate(from Unit, ref string) (Key, string, error) {
 	case 0:
 		return Key{}, "", fmt.Errorf("unknown skill %s", name)
 	case 1:
-		return found[0], anchor, nil
+		return Key{found[0].Package, name, resource}, anchor, nil
 	}
 	slices.SortFunc(found, func(a, b Key) int { return strings.Compare(a.Package, b.Package) })
 	packages := make([]string, len(found))
@@ -132,7 +132,7 @@ func (g *graph) locate(from Unit, ref string) (Key, string, error) {
 }
 
 func (g *graph) cycle(x *expander, call *markup.Item, target *node) {
-	x.report(call, IncludeCycle, "include of %s closes an include cycle", target.unit.Name)
+	x.report(call, IncludeCycle, "include of %s closes an include cycle", target.key())
 	from := slices.IndexFunc(g.trail, func(s step) bool { return s.from == target })
 	if from < 0 {
 		return
@@ -140,6 +140,9 @@ func (g *graph) cycle(x *expander, call *markup.Item, target *node) {
 	d := &x.diags[len(x.diags)-1]
 	for _, s := range g.trail[from:] {
 		site := callSite(s.call)
+		if site.File == s.from.unit.Path {
+			site.Line += s.from.unit.Offset
+		}
 		d.Notes = append(d.Notes, fmt.Sprintf("included from %s:%d:%d", site.File, site.Line, site.Column))
 	}
 }
@@ -162,4 +165,18 @@ func replica(it *markup.Item, trace []markup.Call) *markup.Item {
 		c.Children = append(c.Children, replica(child, trace))
 	}
 	return it.Replace(&c)[0]
+}
+
+func ParseRef(ref string) (pkg, name, resource, anchor string) {
+	ref, anchor, _ = strings.Cut(ref, "#")
+	if p, rest, qualified := strings.Cut(ref, ":"); qualified {
+		pkg, ref = p, rest
+	}
+	if skill, path, ok := strings.Cut(ref, "/"); ok {
+		return pkg, skill, path, anchor
+	}
+	if skill, module, ok := strings.Cut(ref, "."); ok {
+		return pkg, skill, module, anchor
+	}
+	return pkg, ref, "", anchor
 }

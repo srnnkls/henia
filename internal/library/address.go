@@ -86,3 +86,18 @@ func ShowCommand(address string) string {
 	}
 	return "henia show '" + strings.ReplaceAll(address, "'", `'\''`) + "'"
 }
+
+func AddressedResource(skillDir, resource string) (string, error) {
+	rel := resource
+	if !strings.HasSuffix(rel, ".md") && !strings.Contains(rel, "/") {
+		module, err := ModulePath(skillDir, strings.Split(rel, "."))
+		if err != nil {
+			return "", err
+		}
+		if strings.HasSuffix(module, "/") {
+			return "", fmt.Errorf("%s is a directory; address a file in it", module)
+		}
+		rel = module
+	}
+	return ResourcePath(skillDir, rel)
+}

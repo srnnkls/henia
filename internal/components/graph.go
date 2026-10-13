@@ -9,6 +9,9 @@ import (
 
 type Unit struct {
 	Name, Package string
+	Resource      string
+	Path          string
+	Offset        int
 	Document      *markup.Document
 	Components    map[string]Declaration
 	Values        map[string]any
@@ -16,7 +19,15 @@ type Unit struct {
 	Finish        func(*markup.Document) []Diagnostic
 }
 
-type Key struct{ Package, Name string }
+type Key struct{ Package, Name, Resource string }
+
+func (k Key) String() string {
+	s := k.Package + ":" + k.Name
+	if k.Resource != "" {
+		s += "/" + k.Resource
+	}
+	return s
+}
 
 type state int
 
@@ -50,7 +61,7 @@ func ExpandDocuments(units []Unit, env Environment) []Diagnostic {
 	order := make([]*node, 0, len(units))
 	for _, u := range units {
 		n := &node{unit: u}
-		g.nodes[Key{u.Package, u.Name}] = n
+		g.nodes[Key{u.Package, u.Name, u.Resource}] = n
 		order = append(order, n)
 	}
 	for _, n := range order {
@@ -98,7 +109,7 @@ func (g *graph) node(at Key) (*node, bool) {
 	return n, true
 }
 
-func (n *node) key() Key { return Key{n.unit.Package, n.unit.Name} }
+func (n *node) key() Key { return Key{n.unit.Package, n.unit.Name, n.unit.Resource} }
 
 func (n *node) section(anchor string) ([]*markup.Item, error) {
 	doc := n.unit.Document

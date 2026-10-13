@@ -92,6 +92,40 @@ Codex usage.
 Claude usage.
 ```
 
+`ref` takes every address `henia show` reads, so it reaches a skill's
+resources by path or as a module. A resource is checked and expanded like a
+skill, with its skill's values.
+
+```scrut
+$ proj resource && skill b 'henia:\n  variables:\n    tool: make\n' '# B\n'
+> mk skills/b/reference/steps.md '# Steps\n\n## Run\n\n:::when{target="claude"}\nRun {{.tool}}.\n:::\n\n## Other\n\nOther.\n'
+> skill a '' '# A\n\n::include{ref="b/reference/steps.md#run"}\n\n::include{ref="b.reference.steps#other"}\n'
+> out claude a | grep -v '^$'
+# A
+## Run
+Run make.
+## Other
+Other.
+```
+
+A resource's errors stop the including skill, and so do a missing resource
+and a cycle through one.
+
+```scrut
+$ proj badresource && skill b '' '# B\n'
+> mk skills/b/reference/bad.md '# Bad\n\n::rotues\n'
+> mk skills/b/reference/loop.md '# Loop\n\n::include{ref="c"}\n'
+> skill a '' '# A\n\n::include{ref="b/reference/bad.md"}\n'
+> skill c '' '# C\n\n::include{ref="b.reference.loop"}\n'
+> skill d '' '# D\n\n::include{ref="b/reference/nope.md"}\n'
+> henia build --output "$T/build/badresource" > /dev/null 2> "$T/err"; sed "s|$P/||g" "$T/err" | grep -o -E '(skills/[^ ]+ error \[[a-z-]+\]|note: included from [^ ]+)' | sort -u
+note: included from skills/a/SKILL.md:7:1
+note: included from skills/c/SKILL.md:7:1
+skills/b/reference/bad.md:3:1: error [unknown-component]
+skills/b/reference/loop.md:3:1: error [include-cycle]
+skills/d/SKILL.md:7:1: error [missing-include]
+```
+
 ## Templates
 
 A skill body templates the skill's values, as frontmatter strings do. Code
@@ -265,6 +299,19 @@ $ mk .henia/skills/b/SKILL.md '---\nname: b\ndescription: B.\n---\n\n# B\n\n## U
 Old usage.
 New usage.
 unknown-component
+```
+
+The same holds for an included resource.
+
+```scrut
+$ mk .henia/skills/r/SKILL.md '---\nname: r\ndescription: R.\n---\n\n# R\n'
+> mk .henia/skills/r/reference/steps.md '# Steps\n\n## Run\n\nOld run.\n'
+> mk .henia/skills/s/SKILL.md '---\nname: s\ndescription: S.\n---\n\n# S\n\n::include{ref="r.reference.steps#run"}\n'
+> henia show s | grep 'run\.'
+> mk .henia/skills/r/reference/steps.md '# Steps\n\n## Run\n\nNew run.\n'
+> henia show s | grep 'run\.'
+Old run.
+New run.
 ```
 
 The cache serves a render only for the harness it was rendered for.

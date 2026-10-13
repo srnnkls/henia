@@ -531,6 +531,7 @@ func (r *renderer) render(e library.Entry, head bool) string {
 
 type resolution struct {
 	Package, Name, ID string
+	Resource          string `json:",omitempty"`
 }
 
 type cached struct {
@@ -555,6 +556,7 @@ func (r *renderer) rendered(e library.Entry, head bool) (string, string) {
 	key := digest([]byte(rootCmd.Version+executableStamp()), []byte(r.harness), []byte(name), []byte(strconv.FormatBool(head)), packageConfig, []byte(strings.Join(slices.Sorted(maps.Keys(served)), " ")), []byte(e.ID), []byte(e.Path))
 	inputs := func(refs []resolution) (string, bool) {
 		closure := []library.Entry{e}
+		var resources [][]byte
 		for _, ref := range refs {
 			target, err := r.locate(ref.Package, ref.Name)
 			if err != nil || target.ID != ref.ID {
@@ -563,8 +565,16 @@ func (r *renderer) rendered(e library.Entry, head bool) (string, string) {
 			if !slices.ContainsFunc(closure, func(c library.Entry) bool { return c.ID == target.ID }) {
 				closure = append(closure, target)
 			}
+			if ref.Resource != "" {
+				path, err := library.AddressedResource(filepath.Dir(target.Path), ref.Resource)
+				if err != nil {
+					return "", false
+				}
+				data, _ := os.ReadFile(path)
+				resources = append(resources, []byte(path), data)
+			}
 		}
-		return digest(r.dependencies(closure)...), true
+		return digest(append(r.dependencies(closure), resources...)...), true
 	}
 	cache := filepath.Join(library.CacheDir(), "render", key[:2], key)
 	if data, err := os.ReadFile(cache); err == nil {
@@ -651,13 +661,17 @@ func (r *renderer) expand(e library.Entry, served map[string]bool, head bool) (*
 	build.Expand([]*build.Unit{first}, build.Target{
 		Name: r.harness, Harnesses: targets,
 		Resolve: func(from components.Unit, ref string) (components.Key, string, error) {
-			name, anchor, _ := strings.Cut(ref, "#")
+			pkg, name, resource, anchor := components.ParseRef(ref)
+			if pkg != "" {
+				name = pkg + ":" + name
+			}
 			target, err := r.locate(from.Package, name)
 			key := components.Key{Package: target.Package, Name: target.Name}
 			if err == nil {
-				refs = append(refs, resolution{from.Package, name, target.ID})
+				refs = append(refs, resolution{from.Package, name, target.ID, resource})
 				resolved[key] = target
 			}
+			key.Resource = resource
 			return key, anchor, err
 		},
 		Load: func(k components.Key) *build.Unit {

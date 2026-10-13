@@ -62,6 +62,7 @@ type Unit struct {
 	Artifact    *artifact.Artifact
 	Transformer *transform.Transformer
 	Package     string
+	Resource    string
 	Root, User  string
 	Known       map[string]bool
 	Variables   map[string]string
@@ -132,10 +133,13 @@ func Expand(units []*Unit, t Target) {
 	env := components.Environment{
 		Target: t.Name, Harnesses: t.Harnesses, Resolve: t.Resolve,
 		Load: func(k components.Key) (components.Unit, bool) {
-			if t.Load == nil {
-				return components.Unit{}, false
+			var u *Unit
+			switch {
+			case k.Resource != "":
+				u = e.resource(k)
+			case t.Load != nil:
+				u = t.Load(k)
 			}
-			u := t.Load(k)
 			if u == nil {
 				return components.Unit{}, false
 			}
@@ -172,7 +176,7 @@ func Expand(units []*Unit, t Target) {
 func (e *expansion) add(u *Unit) components.Unit {
 	e.units = append(e.units, u)
 	art := u.Artifact
-	key := components.Key{Package: u.Package, Name: UnitName(art)}
+	key := components.Key{Package: u.Package, Name: UnitName(art), Resource: u.Resource}
 	e.byKey[key] = u
 	u.path = art.SourcePath
 	if art.IsDirectory {
@@ -200,7 +204,7 @@ func (e *expansion) add(u *Unit) components.Unit {
 		}
 	}
 	return components.Unit{
-		Name: key.Name, Package: key.Package, Document: u.doc, Components: set.decls, Values: values, Variables: u.Variables,
+		Name: key.Name, Package: key.Package, Resource: key.Resource, Path: u.path, Offset: u.offset, Document: u.doc, Components: set.decls, Values: values, Variables: u.Variables,
 		Finish: func(doc *markup.Document) []components.Diagnostic {
 			if e.target.Expanded != nil {
 				e.target.Expanded(u, doc)
@@ -208,6 +212,34 @@ func (e *expansion) add(u *Unit) components.Unit {
 			transform.Listings(doc, art.Name, art.Type == artifact.TypeSkill)
 			return nil
 		},
+	}
+}
+
+func (e *expansion) resource(k components.Key) *Unit {
+	owner := e.byKey[components.Key{Package: k.Package, Name: k.Name}]
+	if owner == nil && e.target.Load != nil {
+		owner = e.target.Load(components.Key{Package: k.Package, Name: k.Name})
+	}
+	if owner == nil || owner.Artifact == nil {
+		return nil
+	}
+	dir := owner.Artifact.SourcePath
+	if !owner.Artifact.IsDirectory {
+		dir = filepath.Dir(dir)
+	}
+	path, err := library.AddressedResource(dir, k.Resource)
+	if err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	art := *owner.Artifact
+	art.SourcePath, art.IsDirectory, art.Body, art.Resources = path, false, string(data), nil
+	return &Unit{
+		Artifact: &art, Transformer: owner.Transformer, Package: owner.Package, Resource: k.Resource,
+		Root: owner.Root, User: owner.User, Known: owner.Known, Variables: owner.Variables, Err: owner.Err,
 	}
 }
 
@@ -254,7 +286,9 @@ func (e *expansion) failures(u *Unit, visiting map[*Unit]bool) Diagnostics {
 		}
 		note := fmt.Sprintf("included from %s:%d:%d", dep.call.File, line, dep.call.Column)
 		for _, d := range e.failures(dep.to, visiting) {
-			d.Notes = append(slices.Clone(d.Notes), note)
+			if !slices.Contains(d.Notes, note) {
+				d.Notes = append(slices.Clone(d.Notes), note)
+			}
 			failed = append(failed, d)
 		}
 	}
