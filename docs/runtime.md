@@ -336,6 +336,18 @@ above its output, as for `changelog` [above](#library). Code spans and blocks
 that only show the syntax never run. An inline preload's `!` must start a line
 or follow whitespace, as in Claude Code.
 
+A preload can run a script the skill ships. When its first word is a relative
+path to a file in the skill's directory, Henia runs that file, still in the
+project directory, so the same preload works in every harness:
+
+```markdown
+!`scripts/pr-context $ARGUMENTS`
+```
+
+A path that leaves the skill's directory, through `..` or a symlink, is
+refused. A path that names no file there runs as written, relative to the
+project.
+
 Preloads have no side effects, and Henia enforces that itself:
 
 - A sandbox denies file writes: `sandbox-exec` on macOS, Landlock or else

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"mvdan.cc/sh/v3/shell"
+	"mvdan.cc/sh/v3/syntax"
 )
 
 const (
@@ -36,6 +37,8 @@ type Context struct {
 	Package string
 	Tier    string
 	Caller  string
+	// SkillDir is the skill's directory; a command whose first word names a file in it runs that file.
+	SkillDir string
 	// Resolve renders a command in-process as Markdown; ok reports whether it did.
 	Resolve func(command string) (markdown string, ok bool)
 }
@@ -248,6 +251,10 @@ func (r *Runner) Run(ctx context.Context, command string, c Context) string {
 	if refusal := Check(command, c.Dir, r.Refuse); refusal != nil {
 		return "henia: " + refusal.String() + " (after " + r.policyName() + " rewrote it)"
 	}
+	command, refusal = skillFile(command, c.SkillDir)
+	if refusal != nil {
+		return "henia: " + refusal.String()
+	}
 	shell, err := exec.LookPath("bash")
 	if err != nil {
 		return "henia: not run: bash not found"
@@ -260,6 +267,53 @@ func (r *Runner) Run(ctx context.Context, command string, c Context) string {
 		argv = []string{shell, "-c", command}
 	}
 	return r.execute(ctx, argv, c.Dir)
+}
+
+// skillFile rewrites a command whose first word is a relative path to a file in
+// the skill directory so that it runs the file by absolute path.
+func skillFile(command, skillDir string) (string, *Refusal) {
+	if skillDir == "" {
+		return command, nil
+	}
+	file, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).Parse(strings.NewReader(command), "")
+	if err != nil || len(file.Stmts) == 0 {
+		return command, nil
+	}
+	call, ok := file.Stmts[0].Cmd.(*syntax.CallExpr)
+	if !ok || len(call.Args) == 0 {
+		return command, nil
+	}
+	name, ok := literal(call.Args[0])
+	if !ok || !strings.Contains(name, "/") || filepath.IsAbs(name) {
+		return command, nil
+	}
+	escapes := refuse("skill-path", "%s leaves the skill directory", name)
+	if !filepath.IsLocal(name) {
+		return "", escapes
+	}
+	root, err := filepath.Abs(skillDir)
+	if err == nil {
+		root, err = filepath.EvalSymlinks(root)
+	}
+	if err != nil {
+		return command, nil
+	}
+	target, err := filepath.EvalSymlinks(filepath.Join(root, name))
+	if err != nil {
+		return command, nil
+	}
+	if rel, err := filepath.Rel(root, target); err != nil || !filepath.IsLocal(rel) {
+		return "", escapes
+	}
+	if info, err := os.Stat(target); err != nil || !info.Mode().IsRegular() {
+		return command, nil
+	}
+	quoted, err := syntax.Quote(target, syntax.LangBash)
+	if err != nil {
+		return command, nil
+	}
+	start, end := call.Args[0].Pos().Offset(), call.Args[0].End().Offset()
+	return command[:start] + quoted + command[end:], nil
 }
 
 func (r *Runner) execute(ctx context.Context, argv []string, dir string) string {
