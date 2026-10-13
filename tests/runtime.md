@@ -572,6 +572,49 @@ pi
 henia: blocked by henia/not-a-preload: flavored declares no such preload
 ````
 
+A preload whose first word is a path to a file in the skill's directory runs
+that file, in the project directory. A path that leaves the skill directory is
+refused; one that names no file there runs as written.
+
+````scrut
+$ mkdir -p "$S/scripts" && printf '#!/bin/sh\necho "argv: $*"\npwd -P\n' > "$S/scripts/argv" && chmod +x "$S/scripts/argv"
+> printf -- '---\nname: pre\ndescription: Preloads.\n---\n\n!`scripts/argv one $ARGUMENTS`\n\n!`../flavored/SKILL.md`\n\n!`scripts/missing`\n' > "$S/SKILL.md"
+> hn show pre | sed "s|$T/||"
+> hn preload --skill pre -- 'scripts/argv one two' | sed "s|$T/||"
+> hn preload --skill pre -- '../flavored/SKILL.md'
+```text
+$ scripts/argv one $ARGUMENTS
+argv: one
+repo
+```
+
+```text
+$ ../flavored/SKILL.md
+henia: blocked by henia/skill-path: ../flavored/SKILL.md leaves the skill directory
+```
+
+```text
+$ scripts/missing
+*scripts/missing: No such file or directory (glob)
+henia: exit status 127
+```
+
+## Resources
+
+Read one with `henia show <address>`:
+
+- `pre.scripts.argv`
+```text
+$ scripts/argv one two
+argv: one two
+repo
+```
+```text
+$ ../flavored/SKILL.md
+henia: blocked by henia/skill-path: ../flavored/SKILL.md leaves the skill directory
+```
+````
+
 ## Query
 
 `henia query` matches S-expression patterns against every library skill and

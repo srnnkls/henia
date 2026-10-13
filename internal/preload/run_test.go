@@ -203,3 +203,43 @@ func TestExpand(t *testing.T) {
 		t.Fatalf("substitute: %q", got)
 	}
 }
+
+func TestRunSkillScript(t *testing.T) {
+	skill, project := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(skill, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skill, "scripts", "x"), []byte("#!/bin/sh\necho \"argv: $*\"\npwd -P\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(skill), "outside"), []byte("#!/bin/sh\necho outside\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(filepath.Dir(skill), "outside"), filepath.Join(skill, "scripts", "link")); err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := filepath.EvalSymlinks(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := Context{Dir: project, SkillDir: skill}
+	for _, tc := range []struct{ name, command, want string }{
+		{"runs the skill's file", "scripts/x a 'b c'", "argv: a b c\n" + cwd + "\n"},
+		{"dot prefix", "./scripts/x", "argv: \n" + cwd + "\n"},
+		{"unset arguments expand empty", "scripts/x $ARGUMENTS", "argv: \n" + cwd + "\n"},
+		{"escaping path", "../outside", "henia: blocked by henia/skill-path: ../outside leaves the skill directory"},
+		{"escaping symlink", "scripts/link", "henia: blocked by henia/skill-path: scripts/link leaves the skill directory"},
+		{"missing file falls back", "scripts/missing", "scripts/missing: No such file or directory\nhenia: exit status 127"},
+		{"bare names resolve on PATH", "echo hi", "hi\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := unsandboxed(t).Run(context.Background(), tc.command, c)
+			if !strings.Contains(got, tc.want) {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+	if got := unsandboxed(t).Run(context.Background(), "scripts/x", Context{Dir: project}); !strings.Contains(got, "exit status 127") {
+		t.Fatalf("without a skill directory: %q", got)
+	}
+}

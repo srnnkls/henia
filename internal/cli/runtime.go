@@ -108,7 +108,7 @@ the command always exits successfully so a skill preload never aborts.`,
 				if err != nil {
 					return fmt.Sprintf("henia: preloads not run: %v\n\n%s", err, preload.Substitute(text, resolve))
 				}
-				return settings.runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, Skill: e.Name, Package: e.Package, Tier: e.Tier, Caller: harness, Resolve: resolve})
+				return settings.runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, SkillDir: filepath.Dir(e.Path), Skill: e.Name, Package: e.Package, Tier: e.Tier, Caller: harness, Resolve: resolve})
 			}
 			disclose := func(e library.Entry) bool { return discloses(settings.disclosure, e) }
 			show(cmd.OutOrStdout(), lib, r, args[0], mode, expand, disclose)
@@ -253,7 +253,7 @@ exits successfully so a skill preload never aborts.`,
 				return nil
 			}
 			harness := detectHarness(flags.harness)
-			c := preload.Context{Dir: flags.project, Skill: entry.Name, Package: entry.Package, Tier: entry.Tier, Caller: harness, Resolve: newResolver(lib, newRenderer(harness, lib), flags.project).resolve}
+			c := preload.Context{Dir: flags.project, SkillDir: filepath.Dir(entry.Path), Skill: entry.Name, Package: entry.Package, Tier: entry.Tier, Caller: harness, Resolve: newResolver(lib, newRenderer(harness, lib), flags.project).resolve}
 			runner, err := preloadRunner(flags.project)
 			if err != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "henia: preload not run: %v\n", err)
