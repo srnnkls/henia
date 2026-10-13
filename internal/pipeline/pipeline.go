@@ -20,14 +20,24 @@ import (
 )
 
 type Dependency struct {
+	Name      string
 	Root      string
 	Harnesses map[string]henia.Harness
+	// Project marks the building project's own package rendered under a
+	// dependency's harness; its artifacts keep the project's strictness.
+	Project bool
 }
 
 func Layered(harness henia.Harness, name, path string, dependencies []Dependency) henia.Harness {
 	for _, d := range dependencies {
+		if !strings.HasPrefix(path, d.Root+string(filepath.Separator)) {
+			continue
+		}
 		own, ok := d.Harnesses[name]
-		if !ok || !strings.HasPrefix(path, d.Root+string(filepath.Separator)) {
+		if d.Project {
+			harness.Strict = own.Strict
+		}
+		if !ok {
 			continue
 		}
 		for _, field := range []struct{ project, dependency *map[string]string }{
@@ -435,6 +445,9 @@ func PackageArtifacts(all []*artifact.Artifact, root, project string, dependenci
 
 func PackageName(root string, dependencies []Dependency) string {
 	for _, d := range dependencies {
+		if d.Root == root && d.Name != "" {
+			return d.Name
+		}
 		if d.Root == root {
 			return filepath.Base(root)
 		}

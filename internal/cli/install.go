@@ -208,48 +208,11 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			owners[pkg.Name] = pkgCfg
 		}
 	}
-	resolve := staticFiles(staging, library.Open("", nil))
-	files := map[string]string{}
-	from := map[string]string{}
-	var dynamic []build.Entry
-	collect := func(owner, root string) error {
-		return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil || entry.IsDir() {
-				return err
-			}
-			rel, _ := filepath.Rel(root, path)
-			if previous, ok := files[rel]; ok && !sameFile(previous, path) {
-				return fmt.Errorf("%s is written by both %s and %s", rel, from[rel], owner)
-			}
-			files[rel], from[rel] = path, owner
-			return nil
-		})
+	tree, err := renderHarness(cmd, harness, globals, owners, staging, staticFiles(staging, library.Open("", nil)))
+	if err != nil {
+		return err
 	}
-	for _, pkg := range globals {
-		pkgCfg, ok := owners[pkg.Name]
-		if !ok {
-			continue
-		}
-		var dependencies []library.Package
-		for _, other := range globals {
-			if _, owner := owners[other.Name]; !owner {
-				dependencies = append(dependencies, other)
-			}
-		}
-		out := filepath.Join(staging, pkg.Name)
-		result, err := compilePackage(cmd, pkg.Root, pkgCfg, []string{harness}, out, false, dependencies, resolve)
-		if err != nil {
-			return fmt.Errorf("package %s: %w", pkg.Name, err)
-		}
-		for _, e := range result.Dynamic[harness] {
-			if !slices.ContainsFunc(dynamic, func(d build.Entry) bool { return d.Name == e.Name }) {
-				dynamic = append(dynamic, e)
-			}
-		}
-		if err := collect(pkg.Name, filepath.Join(out, harness)); err != nil {
-			return err
-		}
-	}
+	files, dynamic, collect := tree.files, tree.dynamic, tree.collect
 	if cfg.HeniaSkill() {
 		if len(owners) == 0 {
 			for _, e := range library.Open("", nil).Entries {
@@ -285,6 +248,61 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 	}
 	fmt.Fprintln(cmd.OutOrStdout())
 	return nil
+}
+
+// harnessTree is one harness's output, collected from the packages that render it.
+type harnessTree struct {
+	files, from map[string]string
+	dynamic     []build.Entry
+	built       int
+}
+
+func (t *harnessTree) collect(owner, root string) error {
+	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		if previous, ok := t.files[rel]; ok && !sameFile(previous, path) {
+			return fmt.Errorf("%s is written by both %s and %s", rel, t.from[rel], owner)
+		}
+		t.files[rel], t.from[rel] = path, owner
+		return nil
+	})
+}
+
+// renderHarness compiles harness once per package in owners, with that
+// package's configuration and every other package as a dependency, into
+// staging, and collects the outputs into one tree.
+func renderHarness(cmd *cobra.Command, harness string, packages []library.Package, owners map[string]*config.Config, staging string, resolve build.Resolver) (*harnessTree, error) {
+	tree := &harnessTree{files: map[string]string{}, from: map[string]string{}}
+	for _, pkg := range packages {
+		pkgCfg, ok := owners[pkg.Name]
+		if !ok {
+			continue
+		}
+		var dependencies []library.Package
+		for _, other := range packages {
+			if _, owner := owners[other.Name]; !owner {
+				dependencies = append(dependencies, other)
+			}
+		}
+		out := filepath.Join(staging, pkg.Name)
+		result, err := compilePackage(cmd, pkg.Root, pkgCfg, []string{harness}, out, false, dependencies, resolve)
+		if err != nil {
+			return nil, fmt.Errorf("package %s: %w", pkg.Name, err)
+		}
+		tree.built += result.Built
+		for _, e := range result.Dynamic[harness] {
+			if !slices.ContainsFunc(tree.dynamic, func(d build.Entry) bool { return d.Name == e.Name }) {
+				tree.dynamic = append(tree.dynamic, e)
+			}
+		}
+		if err := tree.collect(pkg.Name, filepath.Join(out, harness)); err != nil {
+			return nil, err
+		}
+	}
+	return tree, nil
 }
 
 func heniaSkill(cmd *cobra.Command, harness string, h henia.Harness, ok bool, staging string, dynamic []build.Entry, collect func(owner, root string) error) error {

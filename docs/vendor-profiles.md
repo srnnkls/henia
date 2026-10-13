@@ -110,6 +110,10 @@ Profiles merge from three places, later ones over earlier:
 3. `<project>/.henia/harnesses/<profile>/transform.toml`, where the project is
    the directory that holds the selected `henia.toml`.
 
+A harness that a skill package configures resolves its profiles in that
+package instead of the project, so a project build and `henia install` find a
+package's custom profiles in the package's own `.henia/harnesses/`.
+
 Tables merge recursively. Arrays concatenate, and later scalars override. A
 completely different schema takes a new profile name:
 

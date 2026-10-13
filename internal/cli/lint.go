@@ -209,7 +209,7 @@ func dependencyLayers(dependencies []library.Package) ([]build.Dependency, error
 				return nil, fmt.Errorf("package %s: %w", dependency.Name, err)
 			}
 		}
-		layers = append(layers, build.Dependency{Root: dependency.Root, Harnesses: own})
+		layers = append(layers, build.Dependency{Name: dependency.Name, Root: dependency.Root, Harnesses: own, Project: dependency.Tier == library.Project})
 	}
 	return layers, nil
 }

@@ -253,6 +253,16 @@ func TestProvide(t *testing.T) {
 	}
 }
 
+func TestProvideOnceAcrossConfigLayers(t *testing.T) {
+	owner := Skill{Path: "owner", Ref: "tropos:code", Tier: Global, Metadata: Metadata{Declared: []Declaration{{"code.orientation", Untyped}}}}
+	skills := []Skill{owner, provider("gestalt:gestalt", Dependency)}
+	provided := Provide(skills, map[string][]string{"code.orientation": {"gestalt:gestalt#orient", "gestalt:gestalt#orient"}}, "henia.toml")
+	want := "code.orientation\tdependency\thenia show 'gestalt:gestalt#orient'"
+	if got := lines(Evaluate(append(skills, provided...), nil).Rows([]string{"code.orientation"}, false)); got != want {
+		t.Errorf("rows:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestValueOffers(t *testing.T) {
 	owner := Skill{Path: "owner", Ref: "tropos:code", Tier: Global, Metadata: Metadata{Declared: []Declaration{{"code.check", Type{Keyed: true, Value: CommandValue}}, {"code.style", Untyped}}}}
 	skills := []Skill{

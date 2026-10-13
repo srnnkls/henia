@@ -58,7 +58,12 @@ func Provide(skills []Skill, provides map[string][]string, source string) []Skil
 	var provided []Skill
 	configured := Skill{Path: source}
 	for _, slot := range slices.Sorted(maps.Keys(provides)) {
+		seen := map[string]bool{}
 		for _, entry := range provides[slot] {
+			if seen[entry] {
+				continue
+			}
+			seen[entry] = true
 			ref, section, _ := strings.Cut(entry, "#")
 			i := slices.IndexFunc(skills, func(s Skill) bool { return s.Ref == ref })
 			if i < 0 {

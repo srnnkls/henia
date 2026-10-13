@@ -66,6 +66,24 @@ func TestDependencyAndBuiltinReferencesResolve(t *testing.T) {
 	}
 }
 
+func TestDependencySlotDeclarationsCount(t *testing.T) {
+	root, sources := t.TempDir(), t.TempDir()
+	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\nhenia:\n  slots:\n    code.style: unique\n  provides:\n    git.commits:\n    review.criteria:\n---\n\n# One\n\n:slot[code.style]\n")
+	dependency := write(t, sources, "tropos/skills/git/SKILL.md", "---\nname: git\ndescription: A dependency\nhenia:\n  slots:\n    git.commits:\n    code.style:\n    unused.here:\n  provides:\n    nowhere.declared:\n---\n\n# Git\n")
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Dependencies: []string{dependency}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, d := range diagnostics {
+		got = append(got, d.Rule+" "+d.Message)
+	}
+	want := []string{`invalid-slot slot code.style is declared with conflicting types keyed(list), unique`, `unknown-slot "review.criteria" is not declared by any scanned document`}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("diagnostics = %q, want %q", got, want)
+	}
+}
+
 func TestReferencesResolveAndExamplesAreIgnored(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\n:::note\nSee `$two`, [Guide](reference/guide.md), `#reference/guide.md`.\n:::\n\n```md\n:x[bad\n[broken](absent.md) `$absent` legacy-model\n```\n")

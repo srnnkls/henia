@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	toml "github.com/pelletier/go-toml/v2"
@@ -30,6 +31,8 @@ type Config struct {
 	Slots             map[string]SlotOptions     `toml:"slots,omitempty"`
 	Install           map[string]InstallTarget   `toml:"install,omitempty"`
 	InstallHeniaSkill *bool                      `toml:"install_henia_skill,omitempty"`
+	Selected          []string                   `toml:"-"`
+	Path              string                     `toml:"-"`
 }
 
 type InstallTarget struct {
@@ -105,7 +108,60 @@ func Find(dir string) (string, error) {
 	return "", fmt.Errorf("both %s and %s configure the project; keep one", found[0], found[1])
 }
 
+// HarnessTables returns the harness tables that the file at path and its
+// henia.local.toml declare, without the bundled presets or the user layer.
+func HarnessTables(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if data, err = withLocal(path, data); err != nil {
+		return nil, err
+	}
+	var raw map[string]any
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	tables, _ := raw["harness"].(map[string]any)
+	return tables, nil
+}
+
+// LoadPackage loads a skill package's henia.toml with the given harness tables
+// merged over the harnesses the package configures itself.
+func LoadPackage(path string, harnesses map[string]any) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if data, err = withLocal(path, data); err != nil {
+		return nil, err
+	}
+	var raw map[string]any
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	own, _ := raw["harness"].(map[string]any)
+	overrides := map[string]any{}
+	for name, table := range harnesses {
+		if _, ok := own[name]; ok {
+			overrides[name] = table
+		}
+	}
+	if data, err = toml.Marshal(profile.Merge(raw, map[string]any{"harness": overrides})); err != nil {
+		return nil, err
+	}
+	return decodeFile(path, data)
+}
+
 func loadLayers(path string, projectData []byte) (*Config, error) {
+	projectData, err := withLocal(path, projectData)
+	if err != nil {
+		return nil, err
+	}
+	return decodeFile(path, projectData)
+}
+
+func decodeFile(path string, projectData []byte) (*Config, error) {
 	projectRoot, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -118,23 +174,30 @@ func loadLayers(path string, projectData []byte) (*Config, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
+	cfg, err := decodeLayers(projectRoot, userRoot, userData, projectData)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Path = path
+	return cfg, nil
+}
+
+func withLocal(path string, projectData []byte) ([]byte, error) {
 	localData, err := os.ReadFile(deps.Local(path))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	if len(localData) > 0 {
-		var project, local map[string]any
-		if err := toml.Unmarshal(projectData, &project); err != nil {
-			return nil, err
-		}
-		if err := toml.Unmarshal(localData, &local); err != nil {
-			return nil, fmt.Errorf("%s: %w", deps.Local(path), err)
-		}
-		if projectData, err = toml.Marshal(profile.Merge(project, local)); err != nil {
-			return nil, err
-		}
+	if len(localData) == 0 {
+		return projectData, nil
 	}
-	return decodeLayers(projectRoot, userRoot, userData, projectData)
+	var project, local map[string]any
+	if err := toml.Unmarshal(projectData, &project); err != nil {
+		return nil, err
+	}
+	if err := toml.Unmarshal(localData, &local); err != nil {
+		return nil, fmt.Errorf("%s: %w", deps.Local(path), err)
+	}
+	return toml.Marshal(profile.Merge(project, local))
 }
 
 func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*Config, error) {
@@ -153,6 +216,16 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 	// with its preset when harnesses are explicitly selected.
 	userHarnesses, _ := user["harness"].(map[string]any)
 	projectHarnesses, _ := project["harness"].(map[string]any)
+	var explicit []string
+	for name := range userHarnesses {
+		explicit = append(explicit, name)
+	}
+	for name := range projectHarnesses {
+		if _, ok := userHarnesses[name]; !ok {
+			explicit = append(explicit, name)
+		}
+	}
+	slices.Sort(explicit)
 	if len(userHarnesses) > 0 || len(projectHarnesses) > 0 {
 		selected := map[string]any{}
 		for _, layer := range []map[string]any{user, project} {
@@ -202,6 +275,7 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		}
 		return nil, err
 	}
+	cfg.Selected = explicit
 	if cfg.Build.Output == "" {
 		cfg.Build.Output = ".henia/build"
 	}

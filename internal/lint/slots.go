@@ -21,10 +21,16 @@ func addSlots(root *markup.Element, documents []document, provided []slots.Skill
 	})
 	for _, d := range documents {
 		file := files[d.path]
-		if file == nil || len(file.Children) == 0 || file.Children[0].Type != "frontmatter" {
+		if file == nil {
 			continue
 		}
-		head := file.Children[0]
+		head := file
+		switch {
+		case len(file.Children) > 0 && file.Children[0].Type == "frontmatter":
+			head = file.Children[0]
+		case file.Attrs["dependency"] != "true":
+			continue
+		}
 		add := func(attrs map[string]string, offset int) {
 			line := bytes.Count(d.source[:offset], []byte{'\n'}) + 1
 			column := offset - bytes.LastIndexByte(d.source[:offset], '\n')
@@ -38,6 +44,12 @@ func addSlots(root *markup.Element, documents []document, provided []slots.Skill
 		}
 		body := d.art.Body
 		metadata := slots.Read(d.art.Frontmatter, body, slots.Normal)
+		if head == file {
+			for _, declared := range metadata.Declared {
+				add(map[string]string{"role": "declare", "slot": declared.Slot, "type": declared.Type.String()}, inFrontmatter(declared.Slot))
+			}
+			continue
+		}
 		for _, problem := range metadata.Problems {
 			add(map[string]string{"role": problem.Role, "slot": problem.Slot, "error": problem.Message}, inFrontmatter(problem.Slot))
 		}
