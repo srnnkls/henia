@@ -126,6 +126,30 @@ skills/b/reference/loop.md:3:1: error [include-cycle]
 skills/d/SKILL.md:7:1: error [missing-include]
 ```
 
+An address takes a kind, explicitly or by the sigil a reference uses:
+`skill:git`, `$git` or `git`; `agent:reviewer` or `@reviewer`;
+`command:plan` or `/plan`. An include reaches an agent's or a command's
+sections the same way, checked like a skill's. A tool or a file has no
+document, and an unknown agent is a missing include.
+
+```scrut
+$ proj kinds && printf 'artifacts = ["skills", "agents"]\n\n[harness.claude]\nartifacts = ["skills", "agents"]\n' > henia.toml
+> mk agents/reviewer/AGENT.md '---\nname: reviewer\ndescription: Reviews.\n---\n# Reviewer\n\n## Output\n\nReport findings.\n'
+> skill a '' '# A\n\n::include{ref="@reviewer#output"}\n'
+> skill b '' '# B\n\n::include{ref="agent:reviewer#output"}\n'
+> skill c '' '# C\n\n::include{ref="!bash"}\n\n::include{ref="@ghost"}\n'
+> henia build --output "$T/build/kinds" > /dev/null 2> "$T/err"; sed "s|$P/||g" "$T/err" | grep -o -E 'skills/[^ ]+ error \[[a-z-]+\] .*' | sort -u
+> sed '1,/^---$/d' "$(built claude a)" "$(built claude b)" | grep -v -e '^$' -e '^---$' -e '^name:' -e '^description:'
+skills/c/SKILL.md:7:1: error [invalid-attribute] include attribute ref: !bash names a tool, which has no document
+skills/c/SKILL.md:9:1: error [missing-include] include @ghost: unknown agent ghost
+# A
+## Output
+Report findings.
+# B
+## Output
+Report findings.
+```
+
 ## Templates
 
 A skill body templates the skill's values, as frontmatter strings do. Code

@@ -68,19 +68,8 @@ func Parse(body string) []Reference {
 			return ast.WalkSkipChildren, nil
 		}
 
-		var refType Type
-		switch sigil {
-		case "$":
-			refType = TypeSkill
-		case "/":
-			refType = TypeCommand
-		case "@":
-			refType = TypeAgent
-		case "#":
-			refType = TypeFile
-		case "!":
-			refType = TypeTool
-		default:
+		refType, ok := Sigils[sigil]
+		if !ok {
 			return ast.WalkSkipChildren, nil
 		}
 
@@ -97,7 +86,7 @@ func Parse(body string) []Reference {
 	return refs
 }
 
-var shown = regexp.MustCompile("`henia show '?([a-z0-9][a-z0-9._:-]*)(?:/([^`#'\\s]+))?(?:#([^`'\\s]+))?'?")
+var shown = regexp.MustCompile("`henia show '?([^`'\\s]+)'?")
 
 func Skills(body string) []Reference {
 	var refs []Reference
@@ -112,22 +101,14 @@ func Skills(body string) []Reference {
 func Shown(body string) []Reference {
 	var refs []Reference
 	for _, m := range shown.FindAllStringSubmatchIndex(body, -1) {
-		ref := Reference{Type: TypeSkill, Name: body[m[2]:m[3]], Raw: body[m[0]+1 : m[1]], Start: m[0], End: m[1]}
-		if m[4] >= 0 {
-			ref.Resource = body[m[4]:m[5]]
-		} else {
-			prefix, name := "", ref.Name
-			if pkg, rest, qualified := strings.Cut(name, ":"); qualified {
-				prefix, name = pkg+":", rest
-			}
-			if skill, module, dotted := strings.Cut(name, "."); dotted {
-				ref.Name, ref.Module = prefix+skill, module
-			}
+		a, err := ParseAddress(body[m[2]:m[3]])
+		if err != nil || a.Kind != TypeSkill {
+			continue
 		}
-		if m[6] >= 0 {
-			ref.Anchor = body[m[6]:m[7]]
-		}
-		refs = append(refs, ref)
+		refs = append(refs, Reference{
+			Type: TypeSkill, Name: a.Ref(), Resource: a.Path(), Module: strings.Join(a.Modules(), "."), Anchor: a.Anchor,
+			Raw: body[m[0]+1 : m[1]], Start: m[0], End: m[1],
+		})
 	}
 	return refs
 }

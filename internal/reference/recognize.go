@@ -41,6 +41,7 @@ var recognition = sync.OnceValues(func() (*recognizer, error) {
 			return nil, fmt.Errorf("std/references: data %s: %w", name, err)
 		}
 	}
+	r.tables["sigils"] = SigilTable()
 	return r, nil
 })
 

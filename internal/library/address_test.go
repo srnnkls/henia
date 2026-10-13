@@ -16,7 +16,10 @@ func TestAddresses(t *testing.T) {
 		"pr/scripts/pr-context":     {"pr", []string(nil), "scripts/pr-context", true},
 		"tropos.io:git.reference.x": {"tropos.io:git", []string{"reference", "x"}, "", false},
 	} {
-		skill, modules, resource, isResource := SplitAddress(target)
+		skill, modules, resource, isResource, err := SplitAddress(target)
+		if err != nil {
+			t.Fatalf("SplitAddress(%q): %v", target, err)
+		}
 		if got := []any{skill, modules, resource, isResource}; !reflect.DeepEqual(got, want) {
 			t.Errorf("SplitAddress(%q) = %v, want %v", target, got, want)
 		}

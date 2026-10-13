@@ -94,6 +94,17 @@ replace each other silently. `<skill>#<section>` addresses a heading anchor,
 as in `henia show 'tropos:git#commits'`. Quote it in a shell: zsh treats `#` as
 a glob operator. Every address Henia prints comes quoted when it needs it.
 
+An address names its kind explicitly or by the sigil a reference uses:
+
+| Explicit | Sugar |
+|---|---|
+| `skill:[package:]name[/path \| .module][#anchor]` | `name…`, `$name…` |
+| `agent:[package:]name[#anchor]` | `@name…` |
+| `command:[package:]name[#anchor]` | `/name…` |
+
+`skill`, `agent` and `command` are reserved, so no package takes those names.
+`henia show` serves skills; `::include` reaches every kind.
+
 A dependency hides a global package of the same name, so a project that pins
 its own Tropos reads only that one.
 

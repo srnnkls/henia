@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/srnnkls/henia/internal/markup"
+	"github.com/srnnkls/henia/internal/reference"
 )
 
 func (x *expander) include(it *markup.Item, decl Declaration) []*markup.Item {
@@ -104,7 +105,14 @@ func (g *graph) locate(from Unit, ref string) (Key, string, error) {
 	if g.env.Resolve != nil {
 		return g.env.Resolve(from, ref)
 	}
-	pkg, name, resource, anchor := ParseRef(ref)
+	address, err := reference.ParseAddress(ref)
+	if err != nil {
+		return Key{}, "", err
+	}
+	pkg, name, resource, anchor := address.Package, address.Name, address.Resource, address.Anchor
+	if address.Kind != reference.TypeSkill {
+		name = string(address.Kind) + "/" + name
+	}
 	if pkg != "" {
 		return Key{pkg, name, resource}, anchor, nil
 	}
@@ -119,7 +127,7 @@ func (g *graph) locate(from Unit, ref string) (Key, string, error) {
 	}
 	switch len(found) {
 	case 0:
-		return Key{}, "", fmt.Errorf("unknown skill %s", name)
+		return Key{}, "", fmt.Errorf("unknown %s %s", address.Kind, address.Name)
 	case 1:
 		return Key{found[0].Package, name, resource}, anchor, nil
 	}
@@ -128,7 +136,7 @@ func (g *graph) locate(from Unit, ref string) (Key, string, error) {
 	for i, k := range found {
 		packages[i] = k.Package
 	}
-	return Key{}, "", fmt.Errorf("skill %s is ambiguous across packages %s", name, strings.Join(packages, ", "))
+	return Key{}, "", fmt.Errorf("%s %s is ambiguous across packages %s", address.Kind, address.Name, strings.Join(packages, ", "))
 }
 
 func (g *graph) cycle(x *expander, call *markup.Item, target *node) {
@@ -165,18 +173,4 @@ func replica(it *markup.Item, trace []markup.Call) *markup.Item {
 		c.Children = append(c.Children, replica(child, trace))
 	}
 	return it.Replace(&c)[0]
-}
-
-func ParseRef(ref string) (pkg, name, resource, anchor string) {
-	ref, anchor, _ = strings.Cut(ref, "#")
-	if p, rest, qualified := strings.Cut(ref, ":"); qualified {
-		pkg, ref = p, rest
-	}
-	if skill, path, ok := strings.Cut(ref, "/"); ok {
-		return pkg, skill, path, anchor
-	}
-	if skill, module, ok := strings.Cut(ref, "."); ok {
-		return pkg, skill, module, anchor
-	}
-	return pkg, ref, "", anchor
 }

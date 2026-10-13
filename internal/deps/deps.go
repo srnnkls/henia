@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/srnnkls/henia/internal/reference"
 	"io"
 	"maps"
 	"os"
@@ -60,6 +61,9 @@ var name = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 func (d Dependency) validate(key string) error {
 	if !name.MatchString(key) {
 		return fmt.Errorf("dependency %q: names are lowercase letters, digits, dots, underscores and hyphens", key)
+	}
+	if reference.Reserved(key) {
+		return fmt.Errorf("dependency %q: %s is an address kind, not a package name", key, key)
 	}
 	if (d.Git == "") == (d.Path == "") {
 		return fmt.Errorf("dependency %s needs exactly one of git or path", key)

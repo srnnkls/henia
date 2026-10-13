@@ -123,7 +123,11 @@ the command always exits successfully so a skill preload never aborts.`,
 
 func show(out io.Writer, lib *library.Library, r *renderer, target string, mode showMode, expand func(library.Entry, string) string, disclose func(library.Entry) bool) {
 	ref, anchor, sectioned := strings.Cut(target, "#")
-	ref, modules, resource, isResource := library.SplitAddress(ref)
+	ref, modules, resource, isResource, err := library.SplitAddress(ref)
+	if err != nil {
+		fmt.Fprintf(out, "henia: %v\n", err)
+		return
+	}
 	entry, err := lib.Resolve(ref)
 	if err != nil {
 		fmt.Fprintf(out, "henia: %v\n", err)
@@ -661,10 +665,14 @@ func (r *renderer) expand(e library.Entry, served map[string]bool, head bool) (*
 	build.Expand([]*build.Unit{first}, build.Target{
 		Name: r.harness, Harnesses: targets,
 		Resolve: func(from components.Unit, ref string) (components.Key, string, error) {
-			pkg, name, resource, anchor := components.ParseRef(ref)
-			if pkg != "" {
-				name = pkg + ":" + name
+			address, err := reference.ParseAddress(ref)
+			if err != nil {
+				return components.Key{}, "", err
 			}
+			if address.Kind != reference.TypeSkill {
+				return components.Key{}, "", fmt.Errorf("%s: henia show serves skills, not %ss", ref, address.Kind)
+			}
+			name, resource, anchor := address.Ref(), address.Resource, address.Anchor
 			target, err := r.locate(from.Package, name)
 			key := components.Key{Package: target.Package, Name: target.Name}
 			if err == nil {

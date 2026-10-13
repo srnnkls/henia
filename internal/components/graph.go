@@ -23,10 +23,7 @@ type Key struct{ Package, Name, Resource string }
 
 func (k Key) String() string {
 	s := k.Package + ":" + k.Name
-	if k.Resource != "" {
-		s += "/" + k.Resource
-	}
-	return s
+	return s + k.Resource
 }
 
 type state int

@@ -2,6 +2,7 @@ package library
 
 import (
 	"fmt"
+	"github.com/srnnkls/henia/internal/reference"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,19 +11,15 @@ import (
 
 var moduleSegment = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-func SplitAddress(target string) (skill string, modules []string, resource string, isResource bool) {
-	if before, after, found := strings.Cut(target, "/"); found {
-		return before, nil, after, true
+func SplitAddress(target string) (skill string, modules []string, resource string, isResource bool, err error) {
+	a, err := reference.ParseAddress(target)
+	if err != nil {
+		return "", nil, "", false, err
 	}
-	prefix, name := "", target
-	if pkg, rest, qualified := strings.Cut(target, ":"); qualified {
-		prefix, name = pkg+":", rest
+	if a.Kind != reference.TypeSkill {
+		return "", nil, "", false, fmt.Errorf("%s: the library serves skills, not %ss", target, a.Kind)
 	}
-	name, dotted, found := strings.Cut(name, ".")
-	if found {
-		modules = strings.Split(dotted, ".")
-	}
-	return prefix + name, modules, "", false
+	return a.Ref(), a.Modules(), a.Path(), a.Path() != "", nil
 }
 
 func ModulePath(skillDir string, modules []string) (string, error) {
@@ -88,9 +85,9 @@ func ShowCommand(address string) string {
 }
 
 func AddressedResource(skillDir, resource string) (string, error) {
-	rel := resource
-	if !strings.HasSuffix(rel, ".md") && !strings.Contains(rel, "/") {
-		module, err := ModulePath(skillDir, strings.Split(rel, "."))
+	rel, isPath := strings.CutPrefix(resource, "/")
+	if !isPath {
+		module, err := ModulePath(skillDir, strings.Split(strings.TrimPrefix(resource, "."), "."))
 		if err != nil {
 			return "", err
 		}

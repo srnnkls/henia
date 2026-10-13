@@ -72,7 +72,7 @@ henia lint .henia/build/codex --strict
 |---|---|---|
 | `std/structure` | `large-skill`, `large-head`, `duplicate-heading` | `max-lines` (500), `max-head-lines` (150) |
 | `std/metadata` | `metadata`, `stale-review`, `invalid-markup` | `max-age-days` (180) |
-| `std/references` | `broken-link`, `missing-reference`, `outdated-reference`; define `reference` | `outdated` map, `sigils` map |
+| `std/references` | `broken-link`, `missing-reference`, `outdated-reference`; define `reference` | `outdated` map; `sigils` from Henia |
 | `std/duplicates` | `duplicate-skill`, `duplicate-content` | `min-words` (12) |
 | `std/slots` | `invalid-slot`, `unknown-slot`, `missing-section` | |
 | `std/templates` | `unknown-template`, `unused-template` | |
@@ -216,8 +216,8 @@ Frontmatter `params` scalars become `$name` values. `data` maps and lists become
 
 `std/references` defines how a code span names an artifact.
 `(reference @r ?kind ?name)` matches a single-backtick span whose sigil, looked
-up in its `sigils` table, gives the kind: `skill`, `command`, `agent`, `file` or
-`tool`. Lint and `henia query` read the canonical text's references through it.
+up in the `sigils` table, gives the kind: `skill`, `command`, `agent`, `file` or
+`tool`. Henia supplies the table from the same sigils its addresses use. Lint and `henia query` read the canonical text's references through it.
 
 ### Rule keys
 

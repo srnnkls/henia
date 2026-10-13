@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"github.com/srnnkls/henia/internal/reference"
 	"io"
 	"regexp"
 	"slices"
@@ -211,13 +212,33 @@ func (a Attribute) Coerce(raw string) (any, error) {
 	case "list":
 		items := strings.Fields(raw)
 		for _, item := range items {
+			if err := address(a.Of, item); err != nil {
+				return nil, err
+			}
 			if err := a.match(item); err != nil {
 				return nil, err
 			}
 		}
 		return items, nil
 	}
+	if err := address(a.Type, raw); err != nil {
+		return nil, err
+	}
 	return raw, a.match(raw)
+}
+
+func address(kind, raw string) error {
+	if kind != "ref" && kind != "skill" {
+		return nil
+	}
+	a, err := reference.ParseAddress(raw)
+	if err != nil {
+		return err
+	}
+	if kind == "skill" && (a.Kind != reference.TypeSkill || a.Resource != "" || a.Anchor != "") {
+		return fmt.Errorf("%q is not a skill name", raw)
+	}
+	return nil
 }
 
 func (a Attribute) Zero() any {

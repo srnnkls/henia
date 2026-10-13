@@ -16,6 +16,7 @@ import (
 	"github.com/srnnkls/henia/internal/lint/std"
 	"github.com/srnnkls/henia/internal/markup"
 	"github.com/srnnkls/henia/internal/pattern"
+	"github.com/srnnkls/henia/internal/reference"
 	"github.com/srnnkls/henia/internal/similarity"
 	"github.com/srnnkls/henia/internal/slots"
 )
@@ -290,6 +291,7 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 		tables = map[string]pattern.Table{}
 	}
 	tables["builtin"] = pattern.Table{List: true, Values: options.Builtin}
+	tables["sigils"] = reference.SigilTable()
 	env := pattern.Environment{Resolve: ev.corpus, Params: s.params, Data: pattern.DataRoot(tables), Now: options.Now}
 	if rule.Query.Semantic {
 		if !options.Semantic.Enabled {
