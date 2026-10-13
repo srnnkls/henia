@@ -275,6 +275,19 @@ func (u *Unit) prepare() {
 	if data, err := os.ReadFile(u.path); err == nil && bytes.HasSuffix(data, body) {
 		u.source, u.offset = data, bytes.Count(data[:len(data)-len(body)], []byte{'\n'})
 	}
+	data := map[string]any{}
+	for name := range u.Known {
+		data[name] = nil
+	}
+	for name, value := range u.Variables {
+		data[name] = value
+	}
+	maps.Copy(data, u.values)
+	if templated, err := components.TemplateBody(u.path, string(body), data); err != nil {
+		u.diags = append(u.diags, components.Diagnostic{ID: components.InvalidTemplate, Level: components.LevelError, Path: u.path, Line: u.offset + 1, Column: 1, Message: err.Error()})
+	} else {
+		body = []byte(templated)
+	}
 	u.doc, _ = markup.Parse(u.path, body)
 }
 

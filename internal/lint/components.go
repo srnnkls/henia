@@ -29,7 +29,7 @@ var supersededRules = []string{components.InvalidMarkup, components.InvalidTempl
 
 var checkIDs = []string{
 	components.UnknownComponent, components.MissingAttribute, components.UnknownAttribute, components.InvalidAttribute,
-	components.InvalidBody, components.DisallowedChild, components.WrongForm, components.TemplateAction,
+	components.InvalidBody, components.DisallowedChild, components.WrongForm,
 	components.InvalidTemplate, components.UnknownField, components.UnusedComponent, components.InvalidMarkup,
 	components.MissingInclude, components.InvalidInclude, components.UnknownTarget, components.UnknownVariable,
 	components.ComponentCycle, components.IncludeCycle, components.InvalidComponent, components.RemovedComposition,

@@ -96,7 +96,6 @@ func TestCheckCalls(t *testing.T) {
 		{"required body left empty", "intro\n\n:::note{title=a}\n:::\n", []string{"invalid-body error " + skill + ":3:1"}, ""},
 		{"child outside the allow-list", "intro\n\n:::note{title=a}\n```\nx\n```\n:::\n", []string{"disallowed-child error " + skill + ":4:1"}, "code"},
 		{"container called as leaf", "intro\n\n::note{title=a}\n", []string{"wrong-form error " + skill + ":3:1"}, "leaf"},
-		{"template action in a skill body", "Some {{.x}} text\n", []string{"template-action error " + skill + ":1:6"}, ""},
 		{"valid call", "intro\n\n:::note{title=a tone=warn}\ntext\n:::\n", nil, ""},
 	}
 	for _, c := range cases {

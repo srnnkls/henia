@@ -82,12 +82,9 @@ func checkDocument(doc Document, decls map[string]Declaration, used map[string]b
 	}
 	root, err := markup.Tree(d.source)
 	d.markupErrors(err)
-	var code [][2]int
 	var visit func(e *markup.Element)
 	visit = func(e *markup.Element) {
 		switch e.Type {
-		case "code":
-			code = append(code, [2]int{e.Start, e.End})
 		case "directive":
 			name := e.Attrs["name"]
 			used[name] = true
@@ -105,7 +102,6 @@ func checkDocument(doc Document, decls map[string]Declaration, used map[string]b
 		}
 	}
 	visit(root)
-	d.templateActions(code)
 	return d.diags
 }
 
@@ -256,21 +252,6 @@ func label(source []byte, e *markup.Element) string {
 		}
 	}
 	return ""
-}
-
-func (d *document) templateActions(code [][2]int) {
-	for i := 0; ; {
-		j := bytes.Index(d.source[i:], []byte("{{"))
-		if j < 0 {
-			return
-		}
-		at := i + j
-		i = at + 2
-		if slices.ContainsFunc(code, func(span [2]int) bool { return span[0] <= at && at < span[1] }) {
-			continue
-		}
-		d.report(TemplateAction, at, "skill bodies take no Go template actions; use a component")
-	}
 }
 
 func position(source []byte, offset int) (int, int) {

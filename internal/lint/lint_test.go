@@ -162,31 +162,28 @@ func TestConfigurationAndFailures(t *testing.T) {
 	}
 }
 
-func TestBodyTemplateActions(t *testing.T) {
+func TestBodyTemplates(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, ".henia/components/note.md", "---\nform: container\nattributes:\n  priority:\n    type: string\nbody:\n  kind: markdown\nrender: keep\n---\n")
-	actions := func(body string) []string {
-		path := write(t, root, "skills/example/SKILL.md", "---\nname: example\ndescription: Example\n---\n\n"+body)
+	rules := func(body string) []string {
+		path := write(t, root, "skills/example/SKILL.md", "---\nname: example\ndescription: Example\nhenia:\n  variables:\n    enabled: true\n    priority: high\n---\n\n"+body)
 		diagnostics, err := lint.Run(t.Context(), []string{path}, lint.Options{Project: root})
 		if err != nil {
 			t.Fatal(err)
 		}
 		var got []string
 		for _, d := range diagnostics {
-			got = append(got, fmt.Sprintf("%s:%d:%d", d.Rule, d.Line, d.Column))
+			got = append(got, d.Rule)
 		}
 		return got
 	}
-	got := actions("{{if .enabled}}\n:::note{priority=\"{{.priority}}\"}\n{{range .items}}- {{.}}{{end}}\n:::\n{{end}}\n")
-	want := []string{"template-action:6:1", "template-action:7:19", "template-action:8:1", "template-action:8:19", "template-action:8:24", "template-action:10:1"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("templated body: got %q\nwant %q", got, want)
+	if got := rules("{{if .enabled}}\n:::note{priority=\"{{.priority}}\"}\nText.\n:::\n{{end}}\nLiteral `{{.priority}}`.\n"); len(got) != 0 {
+		t.Fatalf("templated body: got %q", got)
 	}
-	if got := actions("{{if .enabled}}\n:::note\n:::\n"); !reflect.DeepEqual(got, []string{"template-action:6:1"}) {
-		t.Fatalf("unterminated action: got %q", got)
-	}
-	if got := actions(":::note{priority=high}\nText.\n:::\n"); len(got) != 0 {
-		t.Fatalf("component attribute: got %q", got)
+	for _, body := range []string{"{{if .enabled}}\n:::note\n:::\n", "Value {{.undeclared}}.\n"} {
+		if got := rules(body); !slices.Contains(got, "invalid-template") {
+			t.Fatalf("%q: got %q, want invalid-template", body, got)
+		}
 	}
 }
 

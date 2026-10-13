@@ -80,101 +80,25 @@ and the directive as written, and gets an `AGENTS.md` with its links fixed up.
 
 ## Templates
 
-A skill body is a Go template. `if`, `range`, `with`, `define` and `template`
-all work, and so does plain interpolation. The values come from three layers,
+A skill body templates the skill's values with Go `text/template`: plain
+interpolation, `if`, `with` and `range`. The values come from three layers,
 later ones winning:
 
 1. the skill's frontmatter;
 2. its `henia.variables`;
 3. the harness's `[harness.<name>.variables]`, which take strings only.
 
-Strings nested in the frontmatter are templated too. The body goes through
-templates first, then directives, then references. Metadata expressions in
-vendor profiles see the templated frontmatter on their own.
-
-### Shared templates
-
-Every `*.md.tmpl` file in `.henia/templates/` and
-`$XDG_CONFIG_HOME/henia/templates/` joins each skill body's template set under
-its file name, so `head.md.tmpl` is the template `static`. A project template
-shadows a user template of the same name. A skill includes one with
-`{{template "head" .}}` and overrides any `{{block}}` it declares with its own
-`{{define}}`:
-
 ```markdown
-{{define "context"}}:slot[git.commits]
-
-{{end}}{{template "head" .}}
+Ask the {{.team}} team.{{with .oncall}} On call: {{.}}.{{end}}
 ```
 
-### Layouts
+A value another skill or harness sets but this one does not is absent: it
+prints nothing, and `if` and `with` treat it as false. A field no skill or
+harness knows fails with `invalid-template`. Code spans and code blocks stay
+literal. Strings nested in the frontmatter are templated too.
 
-`henia.layout` names a shared template that renders the whole body. The skill
-then holds only `{{define}}` blocks; text outside them fails the build, so every
-skill on the layout keeps the layout's sections in the layout's order.
-`{{required "name"}}` as a block's default fails the build when a skill leaves
-that block out:
-
-```markdown
-<!-- .henia/templates/skill.md.tmpl -->
-# {{.name}}
-
-{{block "lead" .}}{{required "lead"}}{{end}}
-
-## Procedure
-
-{{block "procedure" .}}{{required "procedure"}}{{end}}
-{{block "notes" .}}{{end}}
-```
-
-```markdown
----
-name: deploy
-description: Ship a release to production.
-henia:
-  layout: skill
----
-{{define "lead"}}Tags and ships a release.{{end}}
-{{define "procedure"}}1. Run `make release`.{{end}}
-```
-
-### Template directives
-
-A block directive renders a shared template: the one its `template`
-attribute names, or else the one named after the directive, so `:::head`
-always goes through `head.md.tmpl` and `:::related` through
-`related.md.tmpl` when they exist. The template sees the skill's values plus
-`.args`, the directive's other attributes with each class as a `true` flag,
-and `.content`, the directive's rendered body, empty when it holds only blank
-lines. The template's output replaces the directive. `:::head` alone keeps
-its fences, without attributes, so it still marks a hybrid head:
-
-```markdown
-<!-- .henia/templates/head.md.tmpl -->
-{{if .args.context}}## Context
-
-{{end}}{{with .args.slots}}{{template "slots" $}}{{end}}{{with .args.title}}# {{.}}
-
-{{end}}{{.content}}{{if .args.contents}}
-:contents[]
-{{end}}
-```
-
-```markdown
-:::head{.context .contents title="Git" slots="git.branching git.commits"}
-Trunk-based development with short-lived branches.
-:::
-```
-
-With no arguments the template above renders the content alone, so a bare
-`:::head` keeps working as before. Lint renders directive templates with the
-skill's values and the project's harness variables, so a `:slot[...]` a
-partial emits counts as applied.
-
-`henia lint` reports `unknown-template` for a `{{template}}` call or layout
-that names no shared template and no block of the same file, and
-`unused-template` for a project template that no scanned skill or other
-template uses.
+Templates fill in values; shared structure comes from
+[components](components.md), which a skill calls as directives.
 
 ## Directives
 

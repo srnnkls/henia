@@ -92,17 +92,23 @@ Codex usage.
 Claude usage.
 ```
 
-## Template actions
+## Templates
 
-A Go template action in a skill body is an error; frontmatter strings stay
-templated.
+A skill body templates the skill's values, as frontmatter strings do. Code
+spans and blocks stay literal, and a field no skill or harness knows fails.
 
 ```scrut
-$ proj action && skill valued 'henia:\n  variables:\n    x: Valued.\n' '# Valued\n\nValue {{.x}}.\n'
-> out claude valued | grep -o template-action | sort -u
-> test -e "$(built claude valued)" || echo "not rendered"
-template-action
-not rendered
+$ proj action && skill valued 'henia:\n  variables:\n    x: Valued.\n' '# Valued\n\nValue {{.x}} in `{{.x}}`.\n'
+> out claude valued
+# Valued
+
+Value Valued. in `{{.x}}`.
+```
+
+```scrut
+$ skill unknown '' '# Unknown\n\nValue {{.nowhere}}.\n'
+> out claude unknown | grep -o invalid-template | sort -u
+invalid-template
 ```
 
 ```scrut

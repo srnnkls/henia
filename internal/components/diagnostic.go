@@ -13,7 +13,6 @@ const (
 	InvalidBody        = "invalid-body"
 	DisallowedChild    = "disallowed-child"
 	WrongForm          = "wrong-form"
-	TemplateAction     = "template-action"
 	InvalidTemplate    = "invalid-template"
 	UnknownField       = "unknown-field"
 	UnusedComponent    = "unused-component"
