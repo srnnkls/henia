@@ -63,13 +63,14 @@ Lint fetches no URLs. It expands and renders skills itself, for each harness
 
 ## Stages
 
-Lint runs in three stages. Each sees a different tree and runs its own rules:
+Lint runs in four stages. Each sees a different tree and runs its own rules:
 
 | Stage | Sees | Runs |
 |---|---|---|
 | `source` | each file as written | directive syntax, component calls and declarations, metadata, duplicates, similarity, skill size |
 | `expanded` | each document after [component expansion](components.md#expansion), per harness | calls that expansion generates, includes, conditions, component output |
 | `rendered` | each document as `henia show` renders it for the harness, every section included; hybrid heads apart | applied and offered slots, rendered headings, head size, links and references |
+| `config` | `[shared]` and each harness's config, rendered as `henia build` renders it, for every harness whose `artifacts` include `config` | [config checks](#config-checks) |
 
 A finding of the expanded or rendered stage that holds for some harnesses
 only names them before its message, as in
@@ -114,6 +115,22 @@ the expanded stage for generated ones. Each check is an error unless marked:
 | `component-cycle` | a component whose output reaches its own call again |
 
 `removed-composition` and `unused-component` name a path without a line.
+
+### Config checks
+
+Config checks run in Go and point at the `henia.toml` key they concern, in the
+highest-precedence layer that sets it: `henia.local.toml`, the project's
+`henia.toml`, then the user's.
+
+| Id | Reports |
+|---|---|
+| `mcp-transport` | a `[shared.mcp.<server>]` that sets neither or both of `command` and `url` |
+| `config-invalid` | a profile config expression that fails, such as a codex env reference naming another variable |
+| `config-schema` | a warning: a rendered config file its harness schema rejects |
+| `config-unused` | a warning: a harness input, such as `config.statusline`, its profile never reads |
+
+`mcp-transport` holds for all harnesses; the others name the harness they
+concern.
 
 ## Standard library
 

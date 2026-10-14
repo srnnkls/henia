@@ -193,7 +193,11 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 	if err != nil {
 		return nil, err
 	}
-	diagnostics := expanded.diagnostics
+	config, err := p.configDiagnostics()
+	if err != nil {
+		return nil, err
+	}
+	diagnostics := append(expanded.diagnostics, config...)
 	sources := []*evaluation{{corpus: corpus(docs, nil, p.options.Provided)}}
 	staged := map[string][]*evaluation{}
 	harnessOf := map[*evaluation]string{}

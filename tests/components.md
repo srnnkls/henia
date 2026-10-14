@@ -466,6 +466,16 @@ $ proj lint-links && skill gamma '' '# Gamma\n\n## Use\nSee [x](gone.md)\n'
 skills/gamma/SKILL.md:8:6: warning [broken-link] local reference does not exist: gone.md
 ```
 
+Config lint reports a shared MCP server without exactly one of `command` and
+`url` at its `henia.toml` table, for every harness that builds config.
+
+```scrut
+$ proj lint-config && printf 'artifacts = ["skills", "config"]\n\n[harness.claude]\n\n[shared.mcp.docs]\nargs = ["x"]\n\n[shared.mcp.search]\ncommand = "srv"\n' > henia.toml && skill a '' '# A\n'
+> lint skills
+henia.toml:5:2: error [mcp-transport] MCP server docs sets neither command nor url
+Error: lint found 1 diagnostic(s)
+```
+
 A link into a served skill keeps its authored target and position.
 
 ```scrut
