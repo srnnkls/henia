@@ -291,28 +291,25 @@ $ cat .henia/build/claude/.mcp.json
 }
 ```
 
-The output lands next to the harness's skills, inside the same clean-build swap
-and the same collision and escape checks. `henia install` leaves config out:
-its targets, such as `~/.claude/settings.json`, mix generated and hand-edited
-settings.
+Config files land in the harness's build tree next to its skills. `henia
+install` does not install them.
 
 ### Input
 
-`[shared]` holds free-form tables that every harness profile may read; Henia
-checks only that it is a table. `[harness.<name>.config.native]` holds data that
+`[shared]` holds free-form tables that every harness profile may read.
+`[harness.<name>.config.native]` holds data that
 one harness takes as is. A native key naming a config file id addresses that
 file; the remaining keys address the file with id `main`. In henia.toml layers,
 arrays under `artifacts`, `[shared]` and `[harness.<name>.config]` replace
-earlier ones instead of extending them.
+earlier ones.
 
-`[shared]` holds references, never secrets: `"$GITHUB_TOKEN"` names an
-environment variable, and each profile maps the reference to its harness's
-spelling. Henia never reads the variable.
+Secrets stay out of `[shared]`: `"$GITHUB_TOKEN"` names an environment
+variable, and each profile maps the reference to its harness's spelling. Henia
+never reads the variable.
 
-The bundled profiles read this shared vocabulary:
-
-- `[shared.mcp.<server>]`: `command`, `args`, `env` and `url`. An `env` value
-  starting with `$` references a variable; any other value is literal.
+The bundled profiles read `[shared.mcp.<server>]` with `command`, `args`, `env`
+and `url`. An `env` value starting with `$` references a variable; any other
+value is literal.
 
 | Harness | Files | Mapping |
 |---|---|---|
@@ -343,10 +340,9 @@ printf '%s' "$(echo "$input" | jq -r .model.display_name)"
 refresh_interval = 5
 ```
 
-Config expressions read this table as `harness.statusline`; no other harness's
-profile sees it. A harness whose profile has no status line warns and omits it. Codex's status
-line takes only built-in item names, set natively:
-`[harness.codex.config.native.tui] status_line = ["model-with-reasoning"]`.
+Config expressions read this table as `harness.statusline`. A harness whose
+profile has no status line warns and omits it. Codex's status line is set
+natively: `[harness.codex.config.native.tui] status_line = ["model-with-reasoning"]`.
 
 ### File contract
 
@@ -359,16 +355,16 @@ line takes only built-in item names, set natively:
 | `arrays` | how native arrays combine with generated ones: `replace` (default) or `concat` |
 
 `value` sees `shared`, `harness` (the harness's typed config inputs, such as
-`statusline`), `ctx` and the `merge` and `require` helpers; it does not see
-skill input. Native data merges over the generated value last. Nil table
-entries drop out, and a file whose result is empty is not written. Output keys
-are sorted, so builds diff cleanly. With a `schema`, `json` gains a `$schema`
+`statusline`), `ctx` and the `merge` and `require` helpers, but no skill input.
+Native data merges over the generated value last. Nil table entries and array
+items drop out, and a file whose result is empty is not written. Output keys
+are sorted. With a `schema`, `json` gains a `$schema`
 key, `toml` a `#:schema` comment and `yaml` a `yaml-language-server` comment.
 
-Schema violations are warnings, and errors under `strict = true`. The bundled
-schemas ship pinned, so builds stay offline. Henia fetches any other schema once
-into the user cache directory (`henia/schemas`); a schema it cannot load is a
-warning.
+Schema violations are warnings, and errors under `strict = true`. Bundled
+profiles validate against pinned schemas without network access. Henia fetches
+any other schema once into the user cache directory (`henia/schemas`); a schema
+it cannot load is a warning.
 
 A custom harness needs no Go code:
 

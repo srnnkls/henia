@@ -9,9 +9,8 @@ import (
 	"github.com/srnnkls/henia/internal/profile"
 )
 
-// resolveProfiles loads and compiles every profile a harness names, so a
-// broken per-type profile fails at load rather than mid-build, and fills
-// harness-wide defaults the configuration leaves unset.
+// resolveProfiles loads and compiles every profile a harness names and fills
+// the harness-wide defaults the configuration leaves unset.
 func resolveProfiles(name string, h henia.Harness) (henia.Harness, error) {
 	type use struct {
 		profile, kind, layout string

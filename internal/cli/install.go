@@ -488,8 +488,6 @@ func heniaSkill(cmd *cobra.Command, harness string, h henia.Harness, ok bool, st
 	return collect("henia", filepath.Join(out, harness))
 }
 
-// installable drops config: its targets mix generated and hand-edited
-// settings, so install leaves them to the user.
 func installable(artifacts []string) ([]string, bool) {
 	kept := slices.DeleteFunc(slices.Clone(artifacts), func(a string) bool { return a == "config" })
 	return kept, len(artifacts) == 0 || len(kept) > 0

@@ -25,101 +25,85 @@ and [build](../../../docs/build.md#harnesses).
 - Top level: `directives`, `commands`, `agents`. Sections: `[skill]`,
   `[agent]`, `[command]`, `[config]`.
 - The flat form (skill keys at the top level) converts to `[skill]` per layer,
-  before the three layers merge. Bundled profiles are sectioned, and a flat
-  user or project layer still merges over them. Mixing both forms in one file
-  fails.
-- `[command]` is reserved and must stay empty. Commands never rendered through a
-  profile (`transform.Prepare` maps skills and agents only). A per-type
-  `commands.profile` still selects native preloads and `allowed-tools` through
-  that profile's `[skill]` keys, as before.
-- Agents use the harness profile's `[agent]` when present, as before none of
-  the bundled profiles has one. A per-type `[harness.<n>.agents] profile` in
-  the flat form serves agents through its `[skill]` keys, which keeps
-  `claude-agent`-style profiles working.
-- A harness profile without `[skill]` is valid; its skills render without a
-  mapping.
+  before the three layers merge. A file mixing both forms fails.
+- `[command]` is reserved and must stay empty. A per-type `commands.profile`
+  selects native preloads and `allowed-tools` through that profile's `[skill]`.
+- Agents use the harness profile's `[agent]`. A per-type
+  `[harness.<n>.agents] profile` without `[agent]` maps agents through its
+  `[skill]`.
+- A harness profile without `[skill]` renders skills without a mapping.
 - Every profile a harness names, per-type ones included, loads and compiles at
-  config load. Only skill profiles require the nested layout.
+  config load. Skill profiles require the nested layout.
 
 ### Directives
 
-Profiles carry a `directives` default (`xml` for claude and claude-upload,
-`keep` elsewhere). Precedence: profile, then the bundled preset, then
-`[harness.<n>] directives`. The presets keep their values, so a preset harness
-pointed at a custom profile keeps its directives. Config load and
-`pipeline.Transformer` both fill the default, the latter for callers that build
-harnesses without config load (`henia install`'s catalog skill). A
-custom-named harness with `profile = "claude"` and no `directives` now renders
-`xml`; before, it got no default.
+Profiles carry a `directives` default: `xml` for claude and claude-upload,
+`keep` elsewhere. Precedence, lowest first: profile, bundled preset,
+`[harness.<n>] directives`. Config load and `pipeline.Transformer` both apply
+the default.
 
 ### henia.toml
 
-- `[shared]`: free-form tables, carried to every harness.
+- `[shared]`: free-form tables, read by every harness's profile.
 - `[harness.<n>.config.native]`: native data. A key naming a config file id
-  addresses that file; the remaining keys address file `main`, and fail when
-  the profile has no `main`.
+  addresses that file; the remaining keys address file `main` and fail when the
+  profile has no `main`.
+- `[harness.<n>.config.statusline]`: see [status line](#status-line).
 - Arrays under `artifacts` (top level and per harness), `[shared]` and
-  `[harness.<n>.config]` replace earlier layers instead of extending them.
-  Concatenation made `artifacts = ["config"]` build skills too and made a
-  project unable to shorten a user-level MCP server's `args`.
-- `artifacts` accepts `config`. Without it nothing changes; the empty-list
-  default (all document types) excludes it.
+  `[harness.<n>.config]` replace earlier layers.
+- `artifacts` accepts `config`. The empty-list default (all document types)
+  excludes it.
 
 ### Config rendering
 
 - `[config.files.<id>]`: `path`, `format` (`json`, `yaml`, `toml`, `text`),
   optional `value`, `schema`, `arrays` (`replace` default, or `concat`).
-- `value` sees `shared`, `harness` (this harness's typed inputs, such as
-  `statusline`; no other profile sees them), `ctx` (`name`, `profile`, `path`, `variables`,
-  `tools`, `keys`), `merge` and `require`; not `native`. Native data merges over
-  the value exactly once, after evaluation, so native arrays never duplicate
-  under `concat`.
-- Nil table entries drop out (`{mcpServers: shared.mcp}` with no servers
-  writes nothing); an empty result writes no file.
+- `value` sees `shared`, `harness` (this harness's typed inputs), `ctx`
+  (`name`, `profile`, `path`, `variables`, `tools`, `keys`), `merge` and
+  `require`. Native data merges over the result once.
+- Nil table entries and array items drop out; an empty result writes no file.
 - Keys are sorted in every format. A `schema` adds `$schema` (json),
   `#:schema` (toml) or a `yaml-language-server` comment (yaml).
-- Output is a per-harness artifact of type `config`, written under
-  `<output>/<harness>/` with the existing collision, escape and clean-build
-  handling.
+- Output is a per-harness artifact of type `config` under `<output>/<harness>/`,
+  subject to the build's collision, escape and clean-build handling.
 
 ### Schemas
 
-- `santhosh-tekuri/jsonschema/v6`. The Claude settings and Codex config schemas
-  are pinned in `internal/profile/schemas/`.
-- Other URLs are fetched once into `os.UserCacheDir()/henia/schemas`, named
-  after the URL plus a digest of it, so similar URLs never share a file.
-- Violations and unavailable schemas are warnings; `strict = true` turns them
-  into errors.
+- Validation uses `santhosh-tekuri/jsonschema/v6`. The Claude settings and
+  Codex config schemas are pinned in `internal/profile/schemas/`.
+- Other URLs are fetched once into `os.UserCacheDir()/henia/schemas`, one file
+  per URL digest.
+- Violations and unavailable schemas are warnings, errors under `strict`.
 
 ### Bundled config
 
-| Harness | Files | Shared vocabulary |
+| Harness | Files | Inputs |
 |---|---|---|
-| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`) | `mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`; `config.statusline` → `statusLine` |
-| codex | `config.toml` (`main`, schema) | `mcp.<server>`: `command`, `args`, `url`, `env` (`$NAME` → `env_vars`, literals → `env`); renamed references fail |
+| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`) | `shared.mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`; `harness.statusline` → `statusLine` |
+| codex | `config.toml` (`main`, schema) | `shared.mcp.<server>`: `command`, `args`, `url`, `env` (`$NAME` → `env_vars`, literals → `env`); a reference must name its own variable |
 
-The status line is Claude-specific: Codex's `tui.status_line` lists built-in
-item names and runs no command. It lives in `[harness.claude.config.statusline]`,
-read by expressions as `harness.statusline`, and takes exactly one of
-`command` (used as is), `script` (inline, run by the shell) or `file`. A
-`file` resolves against the root of the layer that sets it; building config
-fails when it is missing or not executable, and commands that do not build
-config never look at it. A later layer's `statusline` replaces the earlier one
-whole. A harness whose profile reads no harness inputs warns that its
-`statusline` is omitted (an error under `strict`). Claude Code gets the file's quoted absolute path; Henia does not copy
-it, so the pointer stays valid once config install lands.
+### Status line
+
+`[harness.claude.config.statusline]` takes exactly one of `command` (used as
+is), `script` (inline, run by the shell) or `file`, plus `padding`,
+`refresh_interval` and `hide_vim_mode`.
+
+- A `file` resolves against the root of the layer that sets it and reaches
+  Claude Code as its quoted absolute path. Building config fails when it is
+  missing or not executable.
+- A later layer's `statusline` replaces the earlier one whole.
+- A harness whose profile reads no harness inputs warns that its `statusline`
+  is omitted.
 
 ### Install
 
-`henia install` drops `config` from each package's artifacts; a package that
-selects only config installs nothing and is not built as another package's
-dependency. Without that, an existing
-`~/.claude/settings.json` blocks the whole install, and `--force` overwrites it.
+`henia install` drops `config` from each package's artifacts. A package that
+selects only config is neither installed nor built as another package's
+dependency.
 
 ## Open
 
 1. Install for config: managed key paths with a sidecar manifest, behind a flag.
 2. pi and omp profiles (skills and config).
 3. Lint rules over config.
-4. Header values in the shared MCP vocabulary (credential references inside
-   strings).
+4. Header values in the shared MCP vocabulary.

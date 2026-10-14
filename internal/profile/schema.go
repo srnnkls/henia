@@ -102,8 +102,6 @@ func (s *Schemas) load(url string) ([]byte, error) {
 	return data, nil
 }
 
-// cacheName keeps the URL readable and disambiguates it with a digest of the
-// whole URL, scheme included.
 func cacheName(url string) string {
 	name := url[strings.Index(url, "://")+1:]
 	name = strings.Trim(strings.ReplaceAll(name, "/", "_"), "_")

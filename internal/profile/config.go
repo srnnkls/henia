@@ -175,9 +175,8 @@ func require(value any, message string) (any, error) {
 	return value, nil
 }
 
-// pruned drops nil table entries and array items, so absent shared data
-// leaves no empty keys.
-// Tables built by fromPairs arrive with untyped keys.
+// pruned drops nil table entries and array items. Tables built by fromPairs
+// arrive with untyped keys.
 func pruned(value any) any {
 	var object map[string]any
 	switch v := value.(type) {

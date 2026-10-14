@@ -235,10 +235,9 @@ func layerFile(root, path string) (string, error) {
 	return filepath.Join(root, path), nil
 }
 
-// mergeLayer merges a later henia.toml layer. Selections and config data
-// replace arrays instead of extending them, so a project can narrow
-// artifacts or shorten an MCP server's args. A harness's status line replaces
-// the earlier one whole, so a layer can switch between command, script and file.
+// mergeLayer merges a later henia.toml layer. Arrays under artifacts,
+// [shared] and harness config replace earlier ones; a harness status line
+// replaces the earlier one whole.
 func mergeLayer(base, override map[string]any) map[string]any {
 	merged := profile.Merge(base, override)
 	if artifacts, ok := override["artifacts"]; ok {
