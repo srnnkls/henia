@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -303,21 +302,5 @@ func TestGlobalInstallKeepsHarnessStrictnessToItsOwner(t *testing.T) {
 	fixture(t, user, "install_henia_skill = false\n[install.claude]\npath = '"+home+"'\n[harness.claude]\nstrict = true\n")
 	if err := install(); err == nil || !strings.Contains(err.Error(), "version") {
 		t.Fatalf("unsupported frontmatter passed the user's strict table: %v", err)
-	}
-}
-
-func TestInstallLeavesConfigOut(t *testing.T) {
-	for _, c := range []struct {
-		in, want []string
-		installs bool
-	}{
-		{nil, nil, true},
-		{[]string{"skills", "config"}, []string{"skills"}, true},
-		{[]string{"config"}, []string{}, false},
-	} {
-		got, installs := installable(c.in)
-		if !slices.Equal(got, c.want) || installs != c.installs {
-			t.Errorf("%v: got %v %v", c.in, got, installs)
-		}
 	}
 }

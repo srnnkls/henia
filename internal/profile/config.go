@@ -2,6 +2,7 @@ package profile
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -24,12 +25,32 @@ type Config struct {
 }
 
 type ConfigFile struct {
-	Path   string `toml:"path"` // Relative to harness root.
-	Format string `toml:"format"`
-	Value  string `toml:"value"`  // Expr expression; optional when native data fills the file.
-	Schema string `toml:"schema"` // JSON Schema URL.
-	Arrays string `toml:"arrays"` // How native arrays combine with generated ones: replace (default) or concat.
-	Mode   string `toml:"mode"`   // Octal permissions, 0644 when empty.
+	Path    string   `toml:"path"` // Relative to harness root.
+	Format  string   `toml:"format"`
+	Value   string   `toml:"value"`   // Expr expression; optional when native data fills the file.
+	Schema  string   `toml:"schema"`  // JSON Schema URL.
+	Arrays  string   `toml:"arrays"`  // How native arrays combine with generated ones: replace (default) or concat.
+	Mode    string   `toml:"mode"`    // Octal permissions, 0644 when empty.
+	Root    string   `toml:"root"`    // harness (default), project or home.
+	Merge   bool     `toml:"merge"`   // Install owns units of the file, not the whole file.
+	Entries []string `toml:"entries"` // Dotted paths whose members are units of their own.
+}
+
+type Placement struct {
+	Root    string
+	Merge   bool
+	Format  string
+	Schema  string
+	Entries []string
+}
+
+// Placements maps each config file's build path to where and how install writes it.
+func (c Config) Placements() map[string]Placement {
+	placements := map[string]Placement{}
+	for _, file := range c.Files {
+		placements[file.Path] = Placement{cmp.Or(file.Root, "harness"), file.Merge, file.Format, file.Schema, file.Entries}
+	}
+	return placements
 }
 
 type configEnvironment struct {
@@ -66,6 +87,17 @@ func NewConfigCompiler(config Config) (*ConfigCompiler, error) {
 		if _, err := fileMode(file.Mode); err != nil {
 			return nil, fmt.Errorf("config file %s: %w", id, err)
 		}
+		switch file.Root {
+		case "", "harness", "project", "home":
+		default:
+			return nil, fmt.Errorf("config file %s: root must be harness, project or home", id)
+		}
+		if file.Merge && file.Format != "json" && file.Format != "toml" {
+			return nil, fmt.Errorf("config file %s: merge needs the json or toml format", id)
+		}
+		if len(file.Entries) > 0 && !file.Merge {
+			return nil, fmt.Errorf("config file %s: entries need merge", id)
+		}
 		if other, ok := paths[file.Path]; ok {
 			return nil, fmt.Errorf("config files %s and %s both write %s", other, id, file.Path)
 		}
@@ -93,6 +125,9 @@ func (c *ConfigCompiler) Render(shared, harness, native map[string]any, context 
 	env := configEnvironment{shared, harness, context, Merge, require}
 	for _, id := range slices.Sorted(maps.Keys(c.config.Files)) {
 		file := c.config.Files[id]
+		if file.Root == "project" && context.Install == "global" || file.Root == "home" && context.Install == "project" {
+			continue
+		}
 		var value any
 		if program, ok := c.values[id]; ok {
 			if value, err = expression.Run(program, env); err != nil {
@@ -253,11 +288,12 @@ func encode(file ConfigFile, value any) ([]byte, error) {
 				value = Merge(object, map[string]any{"$schema": file.Schema})
 			}
 		}
-		data, err := json.MarshalIndent(value, "", "  ")
-		if err != nil {
+		encoder := json.NewEncoder(&buf)
+		encoder.SetEscapeHTML(false)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(value); err != nil {
 			return nil, err
 		}
-		buf.Write(append(data, '\n'))
 	case "yaml":
 		if file.Schema != "" {
 			fmt.Fprintf(&buf, "# yaml-language-server: $schema=%s\n", file.Schema)

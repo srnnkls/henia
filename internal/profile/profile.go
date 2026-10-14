@@ -53,12 +53,14 @@ type Profile struct {
 var skillKeys = []string{"fields", "consume", "controls", "aliases", "computed", "files", "preloads"}
 
 type Context struct {
-	Name      string            `expr:"name"`
-	Profile   string            `expr:"profile"`
-	Path      string            `expr:"path"`
-	Variables map[string]string `expr:"variables"`
-	Tools     map[string]string `expr:"tools"`
-	Keys      map[string]string `expr:"keys"`
+	Name       string            `expr:"name"`
+	Profile    string            `expr:"profile"`
+	Path       string            `expr:"path"`
+	Variables  map[string]string `expr:"variables"`
+	Tools      map[string]string `expr:"tools"`
+	Keys       map[string]string `expr:"keys"`
+	Install    string            `expr:"install"`
+	InstallDir string            `expr:"install_dir"`
 }
 
 type environment struct {

@@ -291,8 +291,21 @@ $ cat .henia/build/claude/.mcp.json
 }
 ```
 
-Config files land in the harness's build tree next to its skills. `henia
-install` does not install them.
+Config files land in the harness's build tree next to its skills, and `henia
+install` writes them with the rest of the harness. Claude Code and Codex rewrite
+their own settings at runtime, so install owns only what Henia renders there:
+
+- `settings.json`, `~/.claude.json` and Codex's `config.toml` are merged. Henia
+  owns the top-level values it writes, each MCP server by name, and each
+  permission rule by value; everything else in the file stays as it is.
+- `.mcp.json` (at the project root) and `statusline.sh` belong to Henia whole.
+- A project install writes `.mcp.json`; a global install writes MCP servers into
+  `~/.claude.json` instead.
+
+Install fails before writing anything when a destination holds something Henia
+did not write or that changed since its last install, naming each file or
+value; `--force` replaces them. A Codex `config.toml` with comments conflicts
+too, since Henia cannot rewrite it without dropping them.
 
 ### Input
 
@@ -326,8 +339,9 @@ exactly one of:
 - `file`: a script file.
 
 A `script` or `file` deploys as the executable `statusline.sh` in the harness
-tree, with a `#!/bin/sh` line when it has none, and `statusLine.command` runs
-`"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"`. A relative `file`
+tree, with a `#!/bin/sh` line when it has none. `statusLine.command` runs
+`"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"`, and in a project install
+the project's copy through `$CLAUDE_PROJECT_DIR`. A relative `file`
 resolves against the directory of the henia.toml that sets it, `~/` against
 the home directory; building config fails when it is missing. `padding`,
 `refresh_interval` and `hide_vim_mode` map to `padding`, `refreshInterval` and
@@ -357,6 +371,9 @@ natively: `[harness.codex.config.native.tui] status_line = ["model-with-reasonin
 | `schema` | JSON Schema URL the result is validated against |
 | `arrays` | how native arrays combine with generated ones: `replace` (default) or `concat` |
 | `mode` | octal file permissions, `0644` by default |
+| `root` | where install writes the file: `harness` (default), `project` (project root, project installs) or `home` (home directory, global installs) |
+| `merge` | install owns the file's values instead of the whole file; `json` or `toml` |
+| `entries` | dotted paths of tables or arrays whose members install owns one by one |
 
 `value` sees `shared`, `harness` (the harness's typed config inputs, such as
 `statusline`), `ctx` and the `merge` and `require` helpers, but no skill input.

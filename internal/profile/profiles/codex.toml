@@ -23,6 +23,8 @@ value = 'merge(native.openai ?? {}, settings.auto_invoke == nil ? {} : {policy: 
 path = "config.toml"
 format = "toml"
 schema = "https://developers.openai.com/codex/config-schema.json"
+merge = true
+entries = ["mcp_servers"]
 value = '''
 {mcp_servers: fromPairs(map(toPairs(shared.mcp ?? {}), let s = #[1]; [#[0], {
   command: s.command,

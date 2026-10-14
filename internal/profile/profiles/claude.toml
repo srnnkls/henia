@@ -27,11 +27,15 @@ model = 'input.model_tier == nil ? nil : require(ctx.variables["model_" + input.
 path = "settings.json"
 format = "json"
 schema = "https://www.schemastore.org/claude-code-settings.json"
+merge = true
+entries = ["permissions.allow", "permissions.deny", "permissions.ask"]
 value = '''
 {statusLine: harness?.statusline == nil ? nil : (let s = harness.statusline;
   len(filter([s.command, s.script, s.file], # != nil)) != 1 ? require(nil, "statusline takes exactly one of command, script or file") : {
     type: "command",
-    command: s.command ?? '"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"',
+    command: s.command ?? (ctx.install == "project"
+      ? '"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/' + (ctx.install_dir == "" ? ".claude" : ctx.install_dir) + '/statusline.sh"'
+      : '"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"'),
     padding: s.padding,
     refreshInterval: s.refresh_interval,
     hideVimModeIndicator: s.hide_vim_mode
@@ -47,6 +51,23 @@ value = 'harness?.statusline?.content'
 [config.files.mcp]
 path = ".mcp.json"
 format = "json"
+root = "project"
+value = '''
+{mcpServers: fromPairs(map(toPairs(shared.mcp ?? {}), let s = #[1]; [#[0], {
+  type: s.url == nil ? nil : "http",
+  command: s.command,
+  args: s.args,
+  url: s.url,
+  env: s.env == nil ? nil : fromPairs(map(toPairs(s.env), [#[0], hasPrefix(#[1], "$") ? "${" + trimPrefix(#[1], "$") + "}" : #[1]]))
+}]))}
+'''
+
+[config.files.user]
+path = ".claude.json"
+format = "json"
+root = "home"
+merge = true
+entries = ["mcpServers"]
 value = '''
 {mcpServers: fromPairs(map(toPairs(shared.mcp ?? {}), let s = #[1]; [#[0], {
   type: s.url == nil ? nil : "http",

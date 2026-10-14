@@ -280,7 +280,9 @@ func buildDependencyHarnesses(cmd *cobra.Command, source string, cfg *config.Con
 	for _, name := range names {
 		harnessOwners := map[string]*config.Config{}
 		for pkg, pkgCfg := range owners[name] {
-			pkgCfg.Harness[name] = projectModes(pkgCfg.Harness[name], own[name], arts)
+			h := projectModes(pkgCfg.Harness[name], own[name], arts)
+			h.Install = cfg.Harness[name].Install
+			pkgCfg.Harness[name] = h
 			harnessOwners[pkg] = pkgCfg
 		}
 		strict := own[name].Strict

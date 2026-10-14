@@ -30,7 +30,7 @@ func configArtifact(name, output string, h henia.Harness, source string, schemas
 	if err != nil {
 		return nil, err
 	}
-	context := profile.Context{Name: name, Profile: h.Profile, Path: output, Variables: h.Variables, Tools: h.Tools, Keys: h.Frontmatter.Rename}
+	context := profile.Context{Name: name, Profile: h.Profile, Path: output, Variables: h.Variables, Tools: h.Tools, Keys: h.Frontmatter.Rename, Install: h.Install.Scope, InstallDir: h.Install.Dir}
 	result, err := compiler.Render(h.Shared, inputs, h.Config.Native, context, schemas)
 	if err != nil {
 		return nil, err

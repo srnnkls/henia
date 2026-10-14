@@ -58,7 +58,10 @@ the default.
 
 - `[config.files.<id>]`: `path`, `format` (`json`, `yaml`, `toml`, `text`),
   optional `value`, `schema`, `arrays` (`replace` default, or `concat`),
-  `mode` (octal, `0644` default).
+  `mode` (octal, `0644` default), `root`, `merge` and `entries` (see
+  [install](#install)).
+- `ctx.install` is `project`, `global` or empty for a plain build, and
+  `ctx.install_dir` the harness directory relative to the project root.
 - `value` sees `shared`, `harness` (this harness's typed inputs), `ctx`
   (`name`, `profile`, `path`, `variables`, `tools`, `keys`), `merge` and
   `require`. Native data merges over the result once.
@@ -92,8 +95,8 @@ is), `script` (inline, run by the shell) or `file`, plus `padding`,
 `refresh_interval` and `hide_vim_mode`.
 
 - A `script` or `file` deploys as `statusline.sh` in the harness tree, with a
-  `#!/bin/sh` line when it has none; `statusLine.command` runs
-  `"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"`.
+  `#!/bin/sh` line when it has none; outside project installs
+  `statusLine.command` runs `"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"`.
 - A `file` resolves against the root of the layer that sets it. Building config
   fails when it is missing.
 - A later layer's `statusline` replaces the earlier one whole.
@@ -102,13 +105,45 @@ is), `script` (inline, run by the shell) or `file`, plus `padding`,
 
 ### Install
 
-`henia install` drops `config` from each package's artifacts. A package that
-selects only config is neither installed nor built as another package's
-dependency.
+Install writes config with the rest of the harness tree, project and global.
+Every destination of a harness is checked before any is written; a conflict
+anywhere fails the install, and `--force` overrides.
+
+- A config file's `root` places it: `harness` (the install target), `project`
+  (the project root, project installs only) or `home` (the home directory,
+  global installs only). A build for one scope skips files of the other.
+- Whole files (`merge` unset) follow the install manifest: a destination Henia
+  did not write, or that changed since, conflicts.
+- Merged files (`merge = true`, json or toml) are owned unit by unit. A unit is
+  a top-level value, a member of a table listed in `entries`, or an element of
+  an array listed in `entries`. The manifest `<harness>.units.json` records a
+  hash per unit and destination.
+  - A missing unit is written; one whose hash matches the record is
+    overwritten, or removed when no longer rendered; one already holding the
+    rendered value is adopted; anything else conflicts.
+  - Values Henia does not own are never compared or changed. Numbers keep
+    their exact value.
+  - A TOML destination with comments conflicts, since rewriting drops them.
+  - An unchanged destination is not rewritten. A destination that changes
+    between read and write fails the install.
+  - The merged result is validated against the file's schema; a violation
+    warns, and fails under `strict`.
+- Disabling a harness removes its whole files and its units.
+
+| File | Root | Ownership |
+|---|---|---|
+| claude `settings.json` | harness | units; `permissions.allow`, `deny`, `ask` by element |
+| claude `.mcp.json` | project | whole file |
+| claude `.claude.json` | home | units; `mcpServers` by server |
+| claude `statusline.sh` | harness | whole file |
+| codex `config.toml` | harness | units; `mcp_servers` by server |
+
+In a project install, `statusLine.command` runs
+`"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/<dir>/statusline.sh"`,
+where `<dir>` is the harness directory relative to the project root.
 
 ## Open
 
-1. Install for config: managed key paths with a sidecar manifest, behind a flag.
-2. pi and omp profiles (skills and config).
+1. pi and omp profiles (skills and config).
 3. Lint rules over config.
 4. Header values in the shared MCP vocabulary.
