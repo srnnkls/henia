@@ -129,7 +129,7 @@ unchanged.
 
 ## Harnesses
 
-Without a `[harness]` table, a build writes all nine bundled profiles.
+Without a `[harness]` table, a build writes all eleven bundled profiles.
 Declaring harnesses selects only those, and `--harness claude,codex` narrows
 the selection further. A harness named after a bundled profile inherits its
 bundled settings, `profile` among them. When a skill package dependency
@@ -147,6 +147,8 @@ dependency configures; see [dependencies](#dependencies).
 | `chatgpt` | `chatgpt/skills/<name>/SKILL.md` |
 | `claude-upload` | `claude-upload/skills/<name>/SKILL.md` |
 | `agentskills` | `agentskills/skills/<name>/SKILL.md` |
+| `pi` | `pi/skills/<name>/SKILL.md` |
+| `omp` | `omp/skills/<name>/SKILL.md` |
 
 A profile maps frontmatter keys, values and types, drops what the vendor does
 not support with a warning, and writes sidecar files. `strict = true` turns

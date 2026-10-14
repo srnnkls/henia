@@ -185,3 +185,20 @@ func TestValidateWarnsOnMergedResult(t *testing.T) {
 		t.Fatal(err, warnings)
 	}
 }
+
+func TestYamlMerge(t *testing.T) {
+	path := setup(t, "config.yml", "theme: dark\nmodelRoles:\n  default: opus\n")
+	file := File{Path: path, Format: "yaml", Value: value(t, "yaml", "retry:\n  maxRetries: 3\n")}
+	record, _, err := Apply([]File{file}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := contents(t, path)
+	if !strings.Contains(got, "theme: dark") || !strings.Contains(got, "maxRetries: 3") || !strings.Contains(got, "default: opus") {
+		t.Fatalf("%s", got)
+	}
+	os.WriteFile(path, []byte("# mine\n"+got), 0o644)
+	if _, _, err := Apply([]File{file}, record, false); err == nil || !strings.Contains(err.Error(), "comments") {
+		t.Fatalf("yaml comments not protected: %v", err)
+	}
+}

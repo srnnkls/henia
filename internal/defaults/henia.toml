@@ -77,3 +77,27 @@ skill = "/{{.Name}}"
 profile = "agentskills"
 directives = "keep"
 layout = "nested"
+
+[harness.pi]
+profile = "pi"
+directives = "keep"
+layout = "nested"
+
+[harness.pi.tools]
+bash = "bash"
+read = "read"
+write = "write"
+edit = "edit"
+grep = "grep"
+glob = "find"
+
+[harness.pi.references]
+skill = "/skill:{{.Name}}"
+
+[harness.omp]
+profile = "omp"
+directives = "keep"
+layout = "nested"
+
+[harness.omp.references]
+skill = "/skill:{{.Name}}"

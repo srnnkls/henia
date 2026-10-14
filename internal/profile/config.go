@@ -92,8 +92,8 @@ func NewConfigCompiler(config Config) (*ConfigCompiler, error) {
 		default:
 			return nil, fmt.Errorf("config file %s: root must be harness, project or home", id)
 		}
-		if file.Merge && file.Format != "json" && file.Format != "toml" {
-			return nil, fmt.Errorf("config file %s: merge needs the json or toml format", id)
+		if file.Merge && file.Format == "text" {
+			return nil, fmt.Errorf("config file %s: merge needs the json, toml or yaml format", id)
 		}
 		if len(file.Entries) > 0 && !file.Merge {
 			return nil, fmt.Errorf("config file %s: entries need merge", id)
