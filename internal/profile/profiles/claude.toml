@@ -1,21 +1,79 @@
 # See docs/vendor-research.md for the supporting vendor contracts.
-fields = ["name", "description", "license", "compatibility", "metadata", "allowed-tools", "when_to_use", "argument-hint", "arguments", "disable-model-invocation", "user-invocable", "disallowed-tools", "model", "effort", "context", "agent", "background", "hooks", "paths", "shell"]
-controls = ["auto_invoke", "user_invocable"]
-consume = ["tools", "model_tier"]
-preloads = true
+directives = "xml"
 # Built into Claude Code: https://code.claude.com/docs/en/commands, https://code.claude.com/docs/en/sub-agents
 commands = ["add-dir", "advisor", "agents", "artifact-capabilities", "artifact-diagramming", "artifacts", "auto-mode-setup", "autocompact", "autofix-pr", "background", "batch", "branch", "btw", "bug", "cd", "chrome", "claude-api", "claude-in-chrome", "clear", "code-review", "color", "compact", "config", "context", "copy", "cost", "dataviz", "debug", "deep-research", "design", "design-login", "design-sync", "desktop", "diff", "doctor", "effort", "exit", "export", "fast", "feedback", "fewer-permission-prompts", "focus", "fork", "goal", "heapdump", "help", "hooks", "ide", "import", "init", "insights", "install-github-app", "install-slack-app", "keybindings", "list-agents", "login", "logout", "loop", "mcp", "memory", "mobile", "model", "output-style", "passes", "permissions", "plan", "plugin", "plugin-authoring", "powerup", "privacy-settings", "radio", "rate-limit-options", "recap", "release-notes", "reload-plugins", "reload-skills", "remote-control", "remote-env", "rename", "resume", "review", "rewind", "run", "run-skill-generator", "sandbox", "schedule", "scroll-speed", "security-review", "setup-bedrock", "setup-vertex", "simplify", "skill-doctor", "skills", "slides", "status", "statusline", "stickers", "stop", "subtask", "tasks", "team-onboarding", "teleport", "terminal-setup", "theme", "tui", "ultrareview", "update-config", "upgrade", "usage", "usage-credits", "verify", "voice", "web-setup", "workflow-authoring", "workflows"]
 agents = ["Explore", "Plan", "general-purpose", "claude", "statusline-setup", "claude-code-guide", "fork"]
 
-[aliases]
+[skill]
+fields = ["name", "description", "license", "compatibility", "metadata", "allowed-tools", "when_to_use", "argument-hint", "arguments", "disable-model-invocation", "user-invocable", "disallowed-tools", "model", "effort", "context", "agent", "background", "hooks", "paths", "shell"]
+controls = ["auto_invoke", "user_invocable"]
+consume = ["tools", "model_tier"]
+preloads = true
+
+[skill.aliases]
 allowed_tools = "allowed-tools"
 disallowed_tools = "disallowed-tools"
 argument_hint = "argument-hint"
 disable_model_invocation = "disable-model-invocation"
 
-[computed]
+[skill.computed]
 "allowed-tools" = '(input.tools ?? input.allowed_tools ?? input["allowed-tools"]) == nil ? nil : toolNames(input.tools ?? input.allowed_tools ?? input["allowed-tools"], ctx.tools)'
 "disallowed-tools" = '(input.disallowed_tools ?? input["disallowed-tools"]) == nil ? nil : toolNames(input.disallowed_tools ?? input["disallowed-tools"], ctx.tools)'
 model = 'input.model_tier == nil ? nil : require(ctx.variables["model_" + input.model_tier], "model_tier has no configured model variable")'
 "user-invocable" = 'settings.user_invocable'
 "disable-model-invocation" = 'settings.auto_invoke == nil ? nil : not settings.auto_invoke'
+
+[config.files.main]
+path = "settings.json"
+format = "json"
+schema = "https://www.schemastore.org/claude-code-settings.json"
+merge = true
+entries = ["permissions.allow", "permissions.deny", "permissions.ask"]
+value = '''
+{statusLine: harness?.statusline == nil ? nil : (let s = harness.statusline;
+  len(filter([s.command, s.script, s.file], # != nil)) != 1 ? require(nil, "statusline takes exactly one of command, script or file") : {
+    type: "command",
+    command: s.command ?? (ctx.install == "project"
+      ? '"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/' + (ctx.install_dir == "" ? ".claude" : ctx.install_dir) + '/statusline.sh"'
+      : '"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"'),
+    padding: s.padding,
+    refreshInterval: s.refresh_interval,
+    hideVimModeIndicator: s.hide_vim_mode
+  })}
+'''
+
+[config.files.statusline]
+path = "statusline.sh"
+format = "text"
+mode = "0755"
+value = 'harness?.statusline?.content'
+
+[config.files.mcp]
+path = ".mcp.json"
+format = "json"
+root = "project"
+value = '''
+{mcpServers: fromPairs(map(toPairs(shared.mcp ?? {}), let s = #[1]; [#[0], {
+  type: s.url == nil ? nil : "http",
+  command: s.command,
+  args: s.args,
+  url: s.url,
+  env: s.env == nil ? nil : fromPairs(map(toPairs(s.env), [#[0], hasPrefix(#[1], "$") ? "${" + trimPrefix(#[1], "$") + "}" : #[1]]))
+}]))}
+'''
+
+[config.files.user]
+path = ".claude.json"
+format = "json"
+root = "home"
+merge = true
+entries = ["mcpServers"]
+value = '''
+{mcpServers: fromPairs(map(toPairs(shared.mcp ?? {}), let s = #[1]; [#[0], {
+  type: s.url == nil ? nil : "http",
+  command: s.command,
+  args: s.args,
+  url: s.url,
+  env: s.env == nil ? nil : fromPairs(map(toPairs(s.env), [#[0], hasPrefix(#[1], "$") ? "${" + trimPrefix(#[1], "$") + "}" : #[1]]))
+}]))}
+'''

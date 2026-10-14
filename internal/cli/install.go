@@ -20,6 +20,7 @@ import (
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/defaults"
 	"github.com/srnnkls/henia/internal/library"
+	"github.com/srnnkls/henia/internal/profile"
 )
 
 func newInstallCommand() *cobra.Command {
@@ -128,6 +129,10 @@ func installProject(cmd *cobra.Command, root string, selected []string, force, e
 		return err
 	}
 	defer os.RemoveAll(staging)
+	for name, h := range cfg.Harness {
+		h.Install = henia.Install{Scope: "project", Dir: projectDir(root, name, tables)}
+		cfg.Harness[name] = h
+	}
 	if _, err := buildProject(cmd, root, projectSource(root), cfg, selected, staging, false); err != nil {
 		if strict {
 			return err
@@ -153,8 +158,12 @@ func installProject(cmd *cobra.Command, root string, selected []string, force, e
 	for _, t := range targets {
 		tree := &harnessTree{files: map[string]string{}, from: map[string]string{}}
 		err := tree.collect(library.Project, filepath.Join(staging, t.harness))
+		var where map[string]profile.Placement
 		if err == nil {
-			err = installFiles(cmd, t.harness, t.path, tree.files, manifest(t.harness), force, nil)
+			where, err = placements(cfg.Harness[t.harness])
+		}
+		if err == nil {
+			err = installTree(cmd, t.harness, t.path, root, tree.files, manifest(t.harness), force, cfg.Harness[t.harness].Strict, nil, where)
 		}
 		if err == nil {
 			err = library.EnsureGitignore(filepath.Join(root, library.ProjectDir))
@@ -180,6 +189,19 @@ var projectDirs = map[string]string{
 	"cursor":      ".cursor",
 	"github":      ".github",
 	"agentskills": ".agents",
+}
+
+func projectDir(root, name string, overrides map[string]config.InstallTarget) string {
+	path := expandHome(overrides[name].Path)
+	if path == "" {
+		path = projectDirs[name]
+	}
+	if filepath.IsAbs(path) {
+		if rel, err := filepath.Rel(root, path); err == nil {
+			return rel
+		}
+	}
+	return path
 }
 
 func projectTargets(root string, overrides map[string]config.InstallTarget, produced map[string]bool, selected []string) ([]installTarget, error) {
@@ -299,6 +321,15 @@ func uninstall(manifest string) (int, error) {
 	if err != nil {
 		return removed, err
 	}
+	for _, root := range []string{"project", "home"} {
+		more, err := uninstall(sibling(manifest, root))
+		if removed += more; err != nil {
+			return removed, err
+		}
+	}
+	if err := uninstallUnits(sibling(manifest, "units")); err != nil {
+		return removed, err
+	}
 	return removed, os.Remove(manifest)
 }
 
@@ -335,8 +366,9 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			if cfg.HeniaSkill() {
 				disabled := false
 				h.Skills.Catalog = &disabled
-				pkgCfg.Harness[harness] = h
 			}
+			h.Install = henia.Install{Scope: "global"}
+			pkgCfg.Harness[harness] = h
 			owners[pkg.Name] = pkgCfg
 		}
 	}
@@ -370,7 +402,15 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			}
 		}
 	}
-	return installFiles(cmd, harness, target, files, library.InstallManifest(harness), force, revisions)
+	var configured []henia.Harness
+	for _, name := range slices.Sorted(maps.Keys(owners)) {
+		configured = append(configured, owners[name].Harness[harness])
+	}
+	where, err := placements(configured...)
+	if err != nil {
+		return err
+	}
+	return installTree(cmd, harness, target, "", files, library.InstallManifest(harness), force, cfg.Harness[harness].Strict, revisions, where)
 }
 
 func installFiles(cmd *cobra.Command, harness, target string, files map[string]string, manifest string, force bool, revisions map[string]string) error {
@@ -494,11 +534,13 @@ func hash(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func apply(target string, files map[string]string, manifest string, force bool, revisions map[string]string) (int, int, error) {
+// fileConflicts lists the files in target that henia did not install or that
+// were edited since.
+func fileConflicts(target string, files map[string]string, manifest string) (installRecord, []string, error) {
 	var previous installRecord
 	if data, err := os.ReadFile(manifest); err == nil {
 		if err := json.Unmarshal(data, &previous); err != nil {
-			return 0, 0, fmt.Errorf("%s: %w", manifest, err)
+			return previous, nil, fmt.Errorf("%s: %w", manifest, err)
 		}
 	}
 	if previous.Target != "" && previous.Target != target {
@@ -508,7 +550,7 @@ func apply(target string, files map[string]string, manifest string, force bool, 
 	for _, rel := range slices.Sorted(maps.Keys(files)) {
 		for dir := filepath.Dir(rel); dir != "."; dir = filepath.Dir(dir) {
 			if info, err := os.Lstat(filepath.Join(target, dir)); err == nil && info.Mode()&os.ModeSymlink != 0 {
-				return 0, 0, fmt.Errorf("%s in %s is a symlink; henia does not write through it", dir, target)
+				return previous, nil, fmt.Errorf("%s in %s is a symlink; henia does not write through it", dir, target)
 			}
 		}
 		dest := filepath.Join(target, rel)
@@ -517,7 +559,7 @@ func apply(target string, files map[string]string, manifest string, force bool, 
 			continue
 		}
 		if err != nil {
-			return 0, 0, err
+			return previous, nil, err
 		}
 		current, _ := os.ReadFile(dest)
 		recorded, ours := previous.Files[rel]
@@ -530,6 +572,14 @@ func apply(target string, files map[string]string, manifest string, force bool, 
 		default:
 			conflicts = append(conflicts, rel)
 		}
+	}
+	return previous, conflicts, nil
+}
+
+func apply(target string, files map[string]string, manifest string, force bool, revisions map[string]string) (int, int, error) {
+	previous, conflicts, err := fileConflicts(target, files, manifest)
+	if err != nil {
+		return 0, 0, err
 	}
 	if len(conflicts) > 0 && !force {
 		shown := conflicts[:min(len(conflicts), 5)]

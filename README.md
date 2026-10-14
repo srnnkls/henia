@@ -209,7 +209,7 @@ henia lint examples --config examples/henia.toml --strict
 | *package* | a tree of `skills/` with the `henia.toml` that renders them |
 | *library* | the project's own skills, its dependencies and the global packages |
 | *harness* | an agent runtime such as Claude Code or Codex, with its own skill format |
-| *profile* | how one harness's frontmatter, layout and sidecar files look |
+| *profile* | how one harness's frontmatter, layout, sidecar and config files look |
 | *mode* | per harness, whether a skill is compiled in whole (`static`), read on demand (`dynamic`) or both (`hybrid`) |
 | *slot* | a named extension point a skill declares and other skills fill |
 | *preload* | a command a skill runs when it loads, sandboxed by Henia |

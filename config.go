@@ -30,6 +30,27 @@ const (
 	Hybrid  = "hybrid"
 )
 
+// HarnessConfig is the harness-specific data merged over generated config files.
+type HarnessConfig struct {
+	Native     map[string]any `toml:"native,omitempty"`
+	StatusLine map[string]any `toml:"statusline,omitempty"`
+}
+
+// Inputs is the harness-specific data config expressions read as harness.
+func (c HarnessConfig) Inputs() map[string]any {
+	if c.StatusLine == nil {
+		return nil
+	}
+	return map[string]any{"statusline": c.StatusLine}
+}
+
+// Install describes the install a build renders for. Scope is project, global
+// or empty; Dir is the harness directory relative to the project root.
+type Install struct {
+	Scope string
+	Dir   string
+}
+
 type Harness struct {
 	Files       map[string]File   `toml:"files,omitempty"`
 	Profile     string            `toml:"profile,omitempty"`
@@ -44,6 +65,9 @@ type Harness struct {
 	Skills      Artifacts         `toml:"skills,omitempty"`
 	Agents      Artifacts         `toml:"agents,omitempty"`
 	Commands    Artifacts         `toml:"commands,omitempty"`
+	Config      HarnessConfig     `toml:"config,omitempty"`
+	Shared      map[string]any    `toml:"-"`
+	Install     Install           `toml:"-"`
 	ProjectRoot string            `toml:"-"`
 	UserRoot    string            `toml:"-"`
 }

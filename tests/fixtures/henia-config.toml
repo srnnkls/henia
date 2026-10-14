@@ -1,0 +1,12 @@
+artifacts = ["skills", "config"]
+
+[shared.mcp.github]
+command = "gh-mcp"
+args = ["serve"]
+env = { GITHUB_TOKEN = "$GITHUB_TOKEN" }
+
+[harness.claude.config.native]
+permissions = { allow = ["Read"] }
+
+[harness.codex.config.native]
+approval_policy = "on-request"

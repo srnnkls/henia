@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ func compileFixture(t *testing.T, profile, source string) *Result {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compiler, err := NewCompiler(definition)
+	compiler, err := NewCompiler(*definition.Skill)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ value = '{skill: input.name}'
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := NewCompiler(p)
+	c, err := NewCompiler(*p.Skill)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +162,7 @@ func TestResourcesSetting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := NewCompiler(p)
+	c, err := NewCompiler(*p.Skill)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,5 +180,68 @@ func TestResourcesSetting(t *testing.T) {
 		if _, err := c.Compile("example", input(bad), Context{Profile: "claude"}); err == nil {
 			t.Errorf("accepted %v", bad)
 		}
+	}
+}
+
+func TestSectionedProfileLayers(t *testing.T) {
+	project, user := t.TempDir(), t.TempDir()
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(user, "harnesses/codex/transform.toml"), `fields = ["license"]
+`)
+	write(filepath.Join(project, ".henia/harnesses/codex/transform.toml"), `[config.files.main]
+arrays = "concat"
+`)
+	h, err := Load("codex", project, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Directives != "keep" || h.Skill == nil || !slices.Equal(h.Skill.Fields, []string{"name", "description", "license", "compatibility", "metadata", "license"}) {
+		t.Fatalf("flat user layer did not merge into [skill]: %+v", h.Skill)
+	}
+	if main := h.Config.Files[MainFile]; main.Arrays != "concat" || main.Path != "config.toml" || h.Skill.Files["openai"].Path == "" {
+		t.Fatalf("project [config] override lost bundled tables: %+v", h)
+	}
+
+	write(filepath.Join(project, ".henia/harnesses/mixed/transform.toml"), `fields = ["name"]
+[skill]
+controls = []
+`)
+	if _, err := Load("mixed", project, user); err == nil || !strings.Contains(err.Error(), "[skill]") {
+		t.Fatalf("accepted flat keys next to [skill]: %v", err)
+	}
+	write(filepath.Join(project, ".henia/harnesses/commands/transform.toml"), `[command]
+fields = ["name"]
+`)
+	if _, err := Load("commands", project, user); err == nil {
+		t.Fatal("accepted the reserved [command] section")
+	}
+	write(filepath.Join(project, ".henia/harnesses/badxml/transform.toml"), `directives = "html"
+`)
+	if _, err := Load("badxml", project, user); err == nil {
+		t.Fatal("accepted unknown directives")
+	}
+}
+
+func TestProfileSections(t *testing.T) {
+	skill, agent := &Profile{Fields: []string{"name"}}, &Profile{Fields: []string{"description"}}
+	if (Harness{Skill: skill}).Section("agent", false) != nil {
+		t.Error("a harness profile without [agent] mapped agents")
+	}
+	if (Harness{Skill: skill}).Section("agent", true) != skill {
+		t.Error("a flat per-type profile did not map agents")
+	}
+	if (Harness{Skill: skill, Agent: agent}).Section("agent", true) != agent {
+		t.Error("[agent] did not win")
+	}
+	if (Harness{Skill: skill}).Section("command", true) != nil {
+		t.Error("commands were mapped")
 	}
 }

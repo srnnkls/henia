@@ -112,7 +112,9 @@ harness renders them, whatever its vendor:
 | `xml` | an XML tag per directive; ordinary Markdown stays as it is |
 | `markdown` or `md` | the directive's label in bold, then its content |
 
-XML is Henia's default for Claude only. Any harness can take any of the three.
+The harness's profile sets the default: `xml` for `claude` and
+`claude-upload`, `keep` for the other bundled profiles. Any harness can take any
+of the three.
 Code, escaped syntax and two-colon leaf directives such as `::divider` pass
 through unchanged.
 
@@ -120,10 +122,10 @@ through unchanged.
 
 Without a `[harness]` table, a build writes all nine bundled profiles.
 Declaring harnesses selects only those, and `--harness claude,codex` narrows
-the selection further. A harness named after a bundled profile inherits it.
-When a skill package dependency configures harnesses, the build writes only
-the harnesses the project or a dependency configures; see
-[dependencies](#dependencies).
+the selection further. A harness named after a bundled profile inherits its
+bundled settings, `profile` among them. When a skill package dependency
+configures harnesses, the build writes only the harnesses the project or a
+dependency configures; see [dependencies](#dependencies).
 
 | Profile | Writes |
 | --- | --- |
@@ -144,9 +146,10 @@ uploads nothing and builds no ZIPs.
 [Vendor profiles](vendor-profiles.md) covers custom profiles, and
 [vendor contracts](vendor-research.md) the formats behind them.
 
-Harnesses build skills. `artifacts = ["skills", "commands", "agents"]`, per
-harness or at the top level, adds commands and agents, and each type takes its
-own `profile`, `layout` and `frontmatter`:
+Harnesses build skills. `artifacts = ["skills", "commands", "agents", "config"]`,
+per harness or at the top level, selects the types; a later henia.toml layer
+replaces the list. Each document type takes its own `layout` and `frontmatter`,
+and skills and agents their own `profile`; commands render without one:
 
 ```toml
 [harness.claude.agents]
@@ -157,6 +160,12 @@ layout = "flat"
 The `claude-agent` profile lives at `.henia/harnesses/claude-agent/transform.toml`.
 `[harness.<name>.frontmatter]` renames keys with `rename` and maps values with
 `values`, per harness or per artifact type.
+
+`config` renders the harness's configuration files, such as Codex's
+`config.toml` or Claude Code's `settings.json` and `.mcp.json`, from `[shared]`
+and `[harness.<name>.config.native]`. Unrelated to `[lint.config]`, which
+configures lint rules. [Harness configuration](vendor-profiles.md#harness-configuration)
+covers both tables.
 
 ## Extra files
 
@@ -258,7 +267,9 @@ sets `strict`; otherwise their unsupported frontmatter stays a warning.
 
 Henia merges the bundled defaults, `~/.config/henia/henia.toml`, then the
 project's `henia.toml`. Tables merge recursively, scalars override (`false`
-included), and arrays concatenate. Unknown keys are errors.
+included), and arrays concatenate, except under `artifacts`, `[shared]` and
+`[harness.<name>.config]`, where a later array replaces an earlier one. Unknown
+keys are errors.
 
 `henia build` without a source builds `.henia/` when it holds `skills`,
 `commands` or `agents` and the current directory does not, else the current

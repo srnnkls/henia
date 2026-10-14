@@ -23,6 +23,7 @@ import (
 type Config struct {
 	Lint              lint.Options               `toml:"lint,omitempty"`
 	Artifacts         []string                   `toml:"artifacts,omitempty"`
+	Shared            map[string]any             `toml:"shared,omitempty"`
 	Build             BuildOptions               `toml:"build,omitempty"`
 	Harness           map[string]henia.Harness   `toml:"harness,omitempty"`
 	Preload           preload.Settings           `toml:"preload,omitempty"`
@@ -166,7 +167,7 @@ func LoadPackage(path string, harnesses map[string]any) (*Config, error) {
 			overrides[name] = table
 		}
 	}
-	if data, err = toml.Marshal(profile.Merge(raw, map[string]any{"harness": overrides})); err != nil {
+	if data, err = toml.Marshal(mergeLayer(raw, map[string]any{"harness": overrides})); err != nil {
 		return nil, err
 	}
 	return decodeFile(path, data)
@@ -216,7 +217,66 @@ func withLocal(path string, projectData []byte) ([]byte, error) {
 	if err := toml.Unmarshal(localData, &local); err != nil {
 		return nil, fmt.Errorf("%s: %w", deps.Local(path), err)
 	}
-	return toml.Marshal(profile.Merge(project, local))
+	return toml.Marshal(mergeLayer(project, local))
+}
+
+// layerFile resolves a file a layer points to against that layer's root.
+func layerFile(root, path string) (string, error) {
+	if rest, ok := strings.CutPrefix(path, "~/"); ok {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(home, rest), nil
+	}
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	return filepath.Join(root, path), nil
+}
+
+// mergeLayer merges a later henia.toml layer. Arrays under artifacts,
+// [shared] and harness config replace earlier ones; a harness status line
+// replaces the earlier one whole.
+func mergeLayer(base, override map[string]any) map[string]any {
+	merged := profile.Merge(base, override)
+	if artifacts, ok := override["artifacts"]; ok {
+		merged["artifacts"] = artifacts
+	}
+	if shared, ok := override["shared"].(map[string]any); ok {
+		left, _ := base["shared"].(map[string]any)
+		merged["shared"] = profile.Replace(left, shared)
+	}
+	harnesses, _ := override["harness"].(map[string]any)
+	if len(harnesses) == 0 {
+		return merged
+	}
+	all, _ := merged["harness"].(map[string]any)
+	all = maps.Clone(all)
+	merged["harness"] = all
+	for name, value := range harnesses {
+		right, _ := value.(map[string]any)
+		before, _ := base["harness"].(map[string]any)
+		left, _ := before[name].(map[string]any)
+		target, _ := all[name].(map[string]any)
+		if right == nil || target == nil {
+			continue
+		}
+		target = maps.Clone(target)
+		all[name] = target
+		if artifacts, ok := right["artifacts"]; ok {
+			target["artifacts"] = artifacts
+		}
+		if config, ok := right["config"].(map[string]any); ok {
+			before, _ := left["config"].(map[string]any)
+			replaced := profile.Replace(before, config)
+			if statusline, ok := config["statusline"]; ok {
+				replaced["statusline"] = statusline
+			}
+			target["config"] = replaced
+		}
+	}
+	return merged
 }
 
 func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*Config, error) {
@@ -276,8 +336,21 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		if path, ok := semantic["model_path"].(string); ok && path != "" && !filepath.IsAbs(path) {
 			semantic["model_path"] = filepath.Join(layer.root, path)
 		}
+		harnesses, _ := layer.values["harness"].(map[string]any)
+		for name, value := range harnesses {
+			harness, _ := value.(map[string]any)
+			config, _ := harness["config"].(map[string]any)
+			statusline, _ := config["statusline"].(map[string]any)
+			if path, ok := statusline["file"].(string); ok {
+				resolved, err := layerFile(layer.root, path)
+				if err != nil {
+					return nil, fmt.Errorf("harness.%s.config.statusline.file: %w", name, err)
+				}
+				statusline["file"] = resolved
+			}
+		}
 	}
-	merged := profile.Merge(profile.Merge(base, user), project)
+	merged := mergeLayer(mergeLayer(base, user), project)
 	data, err := toml.Marshal(merged)
 	if err != nil {
 		return nil, err
@@ -305,20 +378,12 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		if err := validateHarness(name, h); err != nil {
 			return nil, err
 		}
-		h.ProjectRoot, h.UserRoot = projectRoot, userRoot
+		h.ProjectRoot, h.UserRoot, h.Shared = projectRoot, userRoot, cfg.Shared
+		h, err := resolveProfiles(name, h)
+		if err != nil {
+			return nil, err
+		}
 		cfg.Harness[name] = h
-		if h.Profile != "" {
-			loaded, err := profile.Load(h.Profile, projectRoot, userRoot)
-			if err == nil {
-				_, err = profile.NewCompiler(loaded)
-			}
-			if err != nil {
-				return nil, fmt.Errorf("harness %s: %w", name, err)
-			}
-		}
-		if h.Profile != "" && h.Layout == "flat" {
-			return nil, fmt.Errorf("harness %s: skill profiles require the nested layout", name)
-		}
 	}
 	if err := cfg.Lint.Validate(); err != nil {
 		return nil, err
