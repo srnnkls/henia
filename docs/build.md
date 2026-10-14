@@ -5,7 +5,14 @@ the skills and the `henia.toml` beside them, and it never changes the input
 files.
 
 ```sh
-mkdir -p skills/release-notes/reference instructions
+mkdir -p skills/release-notes/reference instructions .henia/components
+cat > .henia/components/warning.md <<'EOF'
+---
+form: container
+doc: A warning the harness renders.
+render: keep
+---
+EOF
 cat > skills/release-notes/SKILL.md <<'EOF'
 ---
 name: release-notes
@@ -77,10 +84,11 @@ See [the notes](skills/release-notes/SKILL.md).
 
 Claude gets its own audience and XML tags; Codex keeps the skill's defaults
 and the directive as written, and gets an `AGENTS.md` with its links fixed up.
+`warning` is a [component](components.md) that the harness renders.
 
-## Templates
+## Values
 
-A skill body templates the skill's values with Go `text/template`: plain
+A skill body fills in the skill's values with Go `text/template`: plain
 interpolation, `if`, `with` and `range`. The values come from three layers,
 later ones winning:
 
@@ -97,26 +105,27 @@ prints nothing, and `if` and `with` treat it as false. A field no skill or
 harness knows fails with `invalid-template`. Code spans and code blocks stay
 literal. Strings nested in the frontmatter are templated too.
 
-Templates fill in values; shared structure comes from
+Values fill in text; shared structure comes from
 [components](components.md), which a skill calls as directives.
 
 ## Directives
 
-Block directives `:::name{attrs}` and inline directives `:name[text]{attrs}`
-nest, take quoted attributes, `#id` and `.class`. `directives` sets how a
-harness renders them, whatever its vendor:
+Every directive in a skill is a [component](components.md): declared in
+`.henia/components/`, checked against its declaration, and expanded before the
+skill renders. An undeclared directive fails the build. A component declared
+`render: keep`, such as `warning` above, stays a directive, and `directives`
+sets how a harness renders it, whatever its vendor:
 
 | Value | Output |
 | --- | --- |
 | `keep` | the directive as written, with spacing and attributes normalized; the default |
 | `xml` | an XML tag per directive; ordinary Markdown stays as it is |
-| `markdown` or `md` | the directive's label in bold, then its content |
+| `markdown` or `md` | the directive's name and attributes in bold, then its content |
 
 The harness's profile sets the default: `xml` for `claude` and
 `claude-upload`, `keep` for the other bundled profiles. Any harness can take any
-of the three.
-Code, escaped syntax and two-colon leaf directives such as `::divider` pass
-through unchanged.
+of the three. Directive syntax in code and escaped colons pass through
+unchanged.
 
 ## Harnesses
 

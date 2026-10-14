@@ -58,25 +58,73 @@ References resolve against everything lint can know, never a hand-kept list:
 - the commands and agents built into each harness in `henia.toml`, from its
   profile's `commands` and `agents`.
 
-Templates are parsed and never executed, and lint fetches no URLs. To check
-expanded values, lint the build output:
+Lint fetches no URLs. It expands and renders skills itself, for each harness
+`henia build` builds, so it needs no build output; see [stages](#stages).
 
-```bash
-henia build skills-repo --harness codex --output .henia/build
-henia lint .henia/build/codex --strict
+## Stages
+
+Lint runs in three stages. Each sees a different tree and runs its own rules:
+
+| Stage | Sees | Runs |
+|---|---|---|
+| `source` | each file as written | directive syntax, component calls and declarations, metadata, duplicates, similarity, skill size |
+| `expanded` | each document after [component expansion](components.md#expansion), per harness | calls that expansion generates, includes, conditions, component output |
+| `rendered` | each document as `henia show` renders it for the harness, every section included; hybrid heads apart | applied and offered slots, rendered headings, head size, links and references |
+
+A finding of the expanded or rendered stage that holds for some harnesses
+only names them before its message, as in
+`codex: project:git has no section tagging`. A finding on output a component
+generated points at the call, with a note per component on the way:
+
+```text
+skills/rollback/SKILL.md:16:1: error [unknown-attribute] routes does not declare attribute order
+  note: expanded from component .henia/components/steps.md:6
 ```
+
+`--format json` gives each diagnostic its `stage`, and `harness` and `notes`
+where it has them.
+
+### Component checks
+
+Henia checks components in Go, at the source stage for authored calls and at
+the expanded stage for generated ones. Each check is an error unless marked:
+
+| Id | Reports |
+|---|---|
+| `duplicate-attribute` | an attribute key given twice in one call |
+| `unclosed-directive` | a container without its closing fence |
+| `invalid-markup` | Markdown or frontmatter that does not parse |
+| `unknown-component` | a directive no component declares |
+| `missing-attribute` | a `required` attribute left out |
+| `unknown-attribute` | an attribute the component does not declare |
+| `invalid-attribute` | a value its type rejects, or a slot no package skill declares |
+| `invalid-body` | a body the component does not take or requires; `::body` missing or placed twice |
+| `disallowed-child` | a body node outside `body.children` |
+| `wrong-form` | a call in a form the component does not declare, or text output that is not inline |
+| `invalid-template` | a template that does not parse or fails to run; a body field no skill or harness knows |
+| `unknown-field` | a component template field that is neither an attribute nor a known value |
+| `invalid-component` | a declaration whose schema does not parse, or that takes a built-in's name |
+| `unused-component` | a warning: a project component nothing calls |
+| `removed-composition` | a `.henia/templates` directory or a `henia.layout` key |
+| `missing-include` | an include of an unknown document, section or component |
+| `invalid-include` | an include without exactly one of `ref` and `component`, or of a component whose body is not `none` |
+| `include-cycle` | includes that reach back to their own document |
+| `unknown-target` | a `when` or `unless` target no harness configures |
+| `unknown-variable` | a `when` or `unless` variable no harness declares |
+| `component-cycle` | a component whose output reaches its own call again |
+
+`removed-composition` and `unused-component` name a path without a line.
 
 ## Standard library
 
-| Module | Rules | Params and data |
+| Module | Rules and stages | Params and data |
 |---|---|---|
-| `std/structure` | `large-skill`, `large-head`, `duplicate-heading` | `max-lines` (500), `max-head-lines` (150) |
-| `std/metadata` | `metadata`, `stale-review`, `invalid-markup` | `max-age-days` (180) |
-| `std/references` | `broken-link`, `missing-reference`, `outdated-reference`; define `reference` | `outdated` map; `sigils` from Henia |
-| `std/duplicates` | `duplicate-skill`, `duplicate-content` | `min-words` (12) |
-| `std/slots` | `invalid-slot`, `unknown-slot`, `missing-section` | |
-| `std/templates` | `unknown-template`, `unused-template` | |
-| `std/similarity` | `similar-content`, `semantic-content` | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
+| `std/structure` | `large-skill` (source); `large-head`, `duplicate-heading` (rendered) | `max-lines` (500), `max-head-lines` (150) |
+| `std/metadata` | `metadata`, `stale-review`, `invalid-markup` (source) | `max-age-days` (180) |
+| `std/references` | `broken-link`, `missing-reference`, `outdated-reference` (rendered); define `reference` | `outdated` map; `sigils` from Henia |
+| `std/duplicates` | `duplicate-skill`, `duplicate-content` (source) | `min-words` (12) |
+| `std/slots` | `invalid-slot` (source); `unused-slot`, `unknown-slot`, `missing-section` (rendered) | |
+| `std/similarity` | `similar-content`, `semantic-content` (source) | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
 
 The modules live under `internal/lint/std/`, readable like any other module.
 `henia lint test` runs the examples of every module, the standard library's
@@ -84,7 +132,7 @@ included:
 
 ```console
 $ henia lint test
-29 lint examples passed
+32 lint examples passed
 ```
 
 ## Configuration
@@ -137,6 +185,7 @@ A module is a Markdown file of rules. Save this as
 
 ````md
 ---
+stage: rendered
 data:
   banned: [usage]
 ---
@@ -178,7 +227,9 @@ skills/deploy/SKILL.md:8:11: warning [broken-link] local reference does not exis
 skills/deploy/SKILL.md:14:4: warning [repeated-usage] Usage repeats; first on line 10
 ```
 
-- The frontmatter sets `params` and `data`.
+- The frontmatter sets `stage`, `params` and `data`. `stage` is `source`,
+  `expanded` or `rendered`, or a table from rule id to stage. `henia lint
+  test` fails for a rule without one. Inline rules run at the source stage.
 - Each `## <rule-id>` section explains its rule in prose, defines it in a
   ```` ```hq ```` block, and tests it with ```` ```md ```` examples under
   `### Matches` and `### Passes`. A Matches example must make its rule report;
@@ -240,6 +291,7 @@ that no other skill links to:
 
 ````md
 ---
+stage: source
 params:
   min-inbound: 1
 ---
@@ -279,8 +331,10 @@ Lint rules see the document tree that queries see, plus these facts:
   - `:kind` is `skill`, `command`, `agent`, `resource` or `document`;
   - typed artifacts also carry `:name` and `:artifact` (`kind:name`);
   - `:file` is the path on disk.
-- `problem` nodes under a file, with `:kind` `frontmatter`, `template` or
-  `markup` and a `:message`.
+- `problem` nodes under a file, with `:kind` `frontmatter` or `markup` and a
+  `:message`.
+- `directive` nodes carry their attributes typed by their package's component
+  declarations; see [henia query](query.md).
 - `entry` nodes under `frontmatter`, one per scalar, with a dotted `:key`,
   `:value`, `:index` for list items, and `:tag` (YAML type, as in `!!str`).
 - `slot` nodes for `henia.slots` and `henia.provides` entries and `:slot[...]`
@@ -294,7 +348,7 @@ Lint rules see the document tree that queries see, plus these facts:
     `:name` and `:artifact`.
 - `:position` orders nodes by file path, then offset, which gives "first
   occurrence" across files.
-- `:dynamic true` marks nodes whose text holds a template action.
+- `:dynamic true` marks source nodes whose text holds a template action.
 
 ## Similarity
 

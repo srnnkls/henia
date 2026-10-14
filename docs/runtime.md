@@ -537,7 +537,8 @@ stay static without one; see [Dependencies](build.md#dependencies).
 
 `:::head` blocks mark what a hybrid head carries upfront: routes, hard rules,
 the context it preloads. Everything else stays in the library, and a skill read
-in full keeps the blocks' content without the markers.
+in full keeps the blocks' content without the markers. A project `head`
+[component](components.md#head) can render the blocks.
 
 ```bash
 mkdir -p .henia/skills/release
