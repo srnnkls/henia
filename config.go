@@ -32,7 +32,16 @@ const (
 
 // HarnessConfig is the harness-specific data merged over generated config files.
 type HarnessConfig struct {
-	Native map[string]any `toml:"native,omitempty"`
+	Native     map[string]any `toml:"native,omitempty"`
+	StatusLine map[string]any `toml:"statusline,omitempty"`
+}
+
+// Inputs is the harness-specific data config expressions read as harness.
+func (c HarnessConfig) Inputs() map[string]any {
+	if c.StatusLine == nil {
+		return nil
+	}
+	return map[string]any{"statusline": c.StatusLine}
 }
 
 type Harness struct {

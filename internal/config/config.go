@@ -237,8 +237,8 @@ func layerFile(root, path string) (string, error) {
 
 // mergeLayer merges a later henia.toml layer. Selections and config data
 // replace arrays instead of extending them, so a project can narrow
-// artifacts or shorten an MCP server's args. A status line replaces the
-// earlier one whole, so a layer can switch between command, script and file.
+// artifacts or shorten an MCP server's args. A harness's status line replaces
+// the earlier one whole, so a layer can switch between command, script and file.
 func mergeLayer(base, override map[string]any) map[string]any {
 	merged := profile.Merge(base, override)
 	if artifacts, ok := override["artifacts"]; ok {
@@ -247,9 +247,6 @@ func mergeLayer(base, override map[string]any) map[string]any {
 	if shared, ok := override["shared"].(map[string]any); ok {
 		left, _ := base["shared"].(map[string]any)
 		merged["shared"] = profile.Replace(left, shared)
-		if statusline, ok := shared["statusline"]; ok {
-			merged["shared"].(map[string]any)["statusline"] = statusline
-		}
 	}
 	harnesses, _ := override["harness"].(map[string]any)
 	if len(harnesses) == 0 {
@@ -273,7 +270,11 @@ func mergeLayer(base, override map[string]any) map[string]any {
 		}
 		if config, ok := right["config"].(map[string]any); ok {
 			before, _ := left["config"].(map[string]any)
-			target["config"] = profile.Replace(before, config)
+			replaced := profile.Replace(before, config)
+			if statusline, ok := config["statusline"]; ok {
+				replaced["statusline"] = statusline
+			}
+			target["config"] = replaced
 		}
 	}
 	return merged
@@ -336,14 +337,18 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		if path, ok := semantic["model_path"].(string); ok && path != "" && !filepath.IsAbs(path) {
 			semantic["model_path"] = filepath.Join(layer.root, path)
 		}
-		shared, _ := layer.values["shared"].(map[string]any)
-		statusline, _ := shared["statusline"].(map[string]any)
-		if path, ok := statusline["file"].(string); ok {
-			resolved, err := layerFile(layer.root, path)
-			if err != nil {
-				return nil, fmt.Errorf("shared.statusline.file: %w", err)
+		harnesses, _ := layer.values["harness"].(map[string]any)
+		for name, value := range harnesses {
+			harness, _ := value.(map[string]any)
+			config, _ := harness["config"].(map[string]any)
+			statusline, _ := config["statusline"].(map[string]any)
+			if path, ok := statusline["file"].(string); ok {
+				resolved, err := layerFile(layer.root, path)
+				if err != nil {
+					return nil, fmt.Errorf("harness.%s.config.statusline.file: %w", name, err)
+				}
+				statusline["file"] = resolved
 			}
-			statusline["file"] = resolved
 		}
 	}
 	merged := mergeLayer(mergeLayer(base, user), project)

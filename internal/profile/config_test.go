@@ -11,7 +11,7 @@ func renderConfig(t *testing.T, config Config, shared, native map[string]any) *R
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := compiler.Render(shared, native, Context{Name: "test"}, &Schemas{})
+	result, err := compiler.Render(shared, nil, native, Context{Name: "test"}, &Schemas{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestConfigNativeAddressesFilesByID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := compiler.Render(nil, map[string]any{"theme": "dark"}, Context{}, nil); err == nil {
+	if _, err := compiler.Render(nil, nil, map[string]any{"theme": "dark"}, Context{}, nil); err == nil {
 		t.Fatal("accepted native keys without a main file")
 	}
 }
@@ -75,7 +75,7 @@ func TestConfigFormatsAreDeterministic(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := compiler.Render(nil, nil, Context{}, nil)
+			result, err := compiler.Render(nil, nil, nil, Context{}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -102,7 +102,7 @@ func TestConfigRejectsInvalidDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := compiler.Render(nil, map[string]any{"a": 1}, Context{}, nil); err == nil {
+	if _, err := compiler.Render(nil, nil, map[string]any{"a": 1}, Context{}, nil); err == nil {
 		t.Error("text file accepted native data")
 	}
 }
@@ -121,7 +121,7 @@ func TestBundledConfigSections(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return compiler.Render(shared, native, Context{Name: name, Profile: name}, &Schemas{})
+		return compiler.Render(shared, nil, native, Context{Name: name, Profile: name}, &Schemas{})
 	}
 	claude, err := render("claude", shared, map[string]any{"permissions": map[string]any{"allow": []any{"Read"}}})
 	if err != nil {
@@ -165,7 +165,7 @@ func TestClaudeStatusLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	render := func(statusline map[string]any) (string, *Result, error) {
-		result, err := compiler.Render(map[string]any{"statusline": statusline}, nil, Context{}, &Schemas{})
+		result, err := compiler.Render(nil, map[string]any{"statusline": statusline}, nil, Context{}, &Schemas{})
 		if err != nil {
 			return "", nil, err
 		}

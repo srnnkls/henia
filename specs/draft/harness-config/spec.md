@@ -69,7 +69,8 @@ custom-named harness with `profile = "claude"` and no `directives` now renders
 
 - `[config.files.<id>]`: `path`, `format` (`json`, `yaml`, `toml`, `text`),
   optional `value`, `schema`, `arrays` (`replace` default, or `concat`).
-- `value` sees `shared`, `ctx` (`name`, `profile`, `path`, `variables`,
+- `value` sees `shared`, `harness` (this harness's typed inputs, such as
+  `statusline`; no other profile sees them), `ctx` (`name`, `profile`, `path`, `variables`,
   `tools`, `keys`), `merge` and `require`; not `native`. Native data merges over
   the value exactly once, after evaluation, so native arrays never duplicate
   under `concat`.
@@ -94,19 +95,19 @@ custom-named harness with `profile = "claude"` and no `directives` now renders
 
 | Harness | Files | Shared vocabulary |
 |---|---|---|
-| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`) | `mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`; `statusline` → `statusLine` |
+| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`) | `mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`; `config.statusline` → `statusLine` |
 | codex | `config.toml` (`main`, schema) | `mcp.<server>`: `command`, `args`, `url`, `env` (`$NAME` → `env_vars`, literals → `env`); renamed references fail |
 
-`[shared.statusline]` takes exactly one of `command` (used as is), `script`
-(inline, run by the shell) or `file`. A `file` resolves against the root of the
-layer that sets it; building config fails when it is missing or not
-executable, and commands that do not build config never look at it. A later
-layer's `[shared.statusline]` replaces the earlier one whole; Claude Code gets its quoted
-absolute path. Henia does not copy the file, so the pointer stays valid once
-config install lands.
-
-Claude Code reads `.mcp.json`, not `mcp.json`; user-level MCP servers live in
-`~/.claude.json`, outside `~/.claude/`.
+The status line is Claude-specific: Codex's `tui.status_line` lists built-in
+item names and runs no command. It lives in `[harness.claude.config.statusline]`,
+read by expressions as `harness.statusline`, and takes exactly one of
+`command` (used as is), `script` (inline, run by the shell) or `file`. A
+`file` resolves against the root of the layer that sets it; building config
+fails when it is missing or not executable, and commands that do not build
+config never look at it. A later layer's `statusline` replaces the earlier one
+whole. A harness whose profile reads no harness inputs warns that its
+`statusline` is omitted (an error under `strict`). Claude Code gets the file's quoted absolute path; Henia does not copy
+it, so the pointer stays valid once config install lands.
 
 ### Install
 

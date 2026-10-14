@@ -313,26 +313,40 @@ The bundled profiles read this shared vocabulary:
 
 - `[shared.mcp.<server>]`: `command`, `args`, `env` and `url`. An `env` value
   starting with `$` references a variable; any other value is literal.
-- `[shared.statusline]`: exactly one of `command` (a command line or path, used
-  as is), `script` (an inline shell script) or `file` (a script file), plus
-  `padding`, `refresh_interval` and `hide_vim_mode`. A relative `file` resolves
-  against the directory of the henia.toml that sets it, `~/` against the home
-  directory. Building config fails when the file is missing or not executable.
-A later layer's `[shared.statusline]` replaces an earlier one whole.
 
 | Harness | Files | Mapping |
 |---|---|---|
-| claude | `settings.json` (id `main`), `.mcp.json` (id `mcp`) | references become `${NAME}`; a `url` server gets `type = "http"`; the status line becomes `statusLine`, with `file` as a quoted absolute path |
-| codex | `config.toml` (id `main`) | references become `env_vars`, literals `env`; a reference must name its own variable; no status line |
+| claude | `settings.json` (id `main`), `.mcp.json` (id `mcp`) | references become `${NAME}`; a `url` server gets `type = "http"` |
+| codex | `config.toml` (id `main`) | references become `env_vars`, literals `env`; a reference must name its own variable |
+
+### Claude Code status line
+
+`[harness.claude.config.statusline]` sets Claude Code's `statusLine` from
+exactly one of:
+
+- `command`: a command line or path, used as is;
+- `script`: an inline shell script;
+- `file`: a script file, passed to Claude Code as its quoted absolute path.
+
+`padding`, `refresh_interval` and `hide_vim_mode` map to `padding`,
+`refreshInterval` and `hideVimModeIndicator`. A relative `file` resolves
+against the directory of the henia.toml that sets it, `~/` against the home
+directory. Building config fails when the file is missing or not executable. A
+later layer's `statusline` replaces an earlier one whole.
 
 ```toml
-[shared.statusline]
+[harness.claude.config.statusline]
 script = """
 input=$(cat)
 printf '%s' "$(echo "$input" | jq -r .model.display_name)"
 """
 refresh_interval = 5
 ```
+
+Config expressions read this table as `harness.statusline`; no other harness's
+profile sees it. A harness whose profile has no status line warns and omits it. Codex's status
+line takes only built-in item names, set natively:
+`[harness.codex.config.native.tui] status_line = ["model-with-reasoning"]`.
 
 ### File contract
 
@@ -344,8 +358,9 @@ refresh_interval = 5
 | `schema` | JSON Schema URL the result is validated against |
 | `arrays` | how native arrays combine with generated ones: `replace` (default) or `concat` |
 
-`value` sees `shared`, `ctx` and the `merge` and `require` helpers; it does not
-see skill input. Native data merges over the generated value last. Nil table
+`value` sees `shared`, `harness` (the harness's typed config inputs, such as
+`statusline`), `ctx` and the `merge` and `require` helpers; it does not see
+skill input. Native data merges over the generated value last. Nil table
 entries drop out, and a file whose result is empty is not written. Output keys
 are sorted, so builds diff cleanly. With a `schema`, `json` gains a `$schema`
 key, `toml` a `#:schema` comment and `yaml` a `yaml-language-server` comment.

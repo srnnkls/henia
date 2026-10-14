@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/expr-lang/expr/vm"
 	"github.com/pelletier/go-toml/v2"
@@ -30,6 +31,7 @@ type ConfigFile struct {
 
 type configEnvironment struct {
 	Shared  map[string]any                                      `expr:"shared"`
+	Harness map[string]any                                      `expr:"harness"`
 	Context Context                                             `expr:"ctx"`
 	Merge   func(map[string]any, map[string]any) map[string]any `expr:"merge"`
 	Require func(any, string) (any, error)                      `expr:"require"`
@@ -76,13 +78,13 @@ func NewConfigCompiler(config Config) (*ConfigCompiler, error) {
 
 // Render evaluates every config file and merges this harness's native data
 // over it. A file whose result is empty is not emitted.
-func (c *ConfigCompiler) Render(shared, native map[string]any, context Context, schemas *Schemas) (*Result, error) {
+func (c *ConfigCompiler) Render(shared, harness, native map[string]any, context Context, schemas *Schemas) (*Result, error) {
 	r := &Result{Files: map[string][]byte{}}
 	natives, err := c.natives(native)
 	if err != nil {
 		return nil, err
 	}
-	env := configEnvironment{shared, context, Merge, require}
+	env := configEnvironment{shared, harness, context, Merge, require}
 	for _, id := range slices.Sorted(maps.Keys(c.config.Files)) {
 		file := c.config.Files[id]
 		var value any
@@ -125,6 +127,16 @@ func (c *ConfigCompiler) Render(shared, native map[string]any, context Context, 
 		r.Files[file.Path] = data
 	}
 	return r, nil
+}
+
+// ReadsHarness reports whether any config file expression reads harness inputs.
+func (c *ConfigCompiler) ReadsHarness() bool {
+	for _, file := range c.config.Files {
+		if strings.Contains(file.Value, "harness") {
+			return true
+		}
+	}
+	return false
 }
 
 // natives splits native data by file: a key naming a config file addresses

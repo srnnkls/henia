@@ -55,7 +55,7 @@ func TestBuildConfigArtifact(t *testing.T) {
 	claude := codex
 	claude.Profile = "claude"
 	script := filepath.Join(source, "line.sh")
-	claude.Shared = map[string]any{"statusline": map[string]any{"file": script}}
+	claude.Config.StatusLine = map[string]any{"file": script}
 	result, err = Run(t.Context(), []string{source}, t.TempDir(), map[string]henia.Harness{"claude": claude})
 	if err != nil || len(result.Errors) == 0 || !strings.Contains(result.Errors[0].Error(), "statusline") {
 		t.Fatalf("accepted a missing status line script: %v %v", err, result.Errors)
@@ -64,7 +64,12 @@ func TestBuildConfigArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err = Run(t.Context(), []string{source}, t.TempDir(), map[string]henia.Harness{"claude": claude})
-	if err != nil || len(result.Errors) > 0 {
-		t.Fatal(err, result.Errors)
+	if err != nil || len(result.Errors) > 0 || len(result.Warnings) > 0 {
+		t.Fatal(err, result.Errors, result.Warnings)
+	}
+	codex.Config.StatusLine = map[string]any{"command": "echo hi"}
+	result, err = Run(t.Context(), []string{source}, t.TempDir(), map[string]henia.Harness{"codex": codex})
+	if err != nil || len(result.Errors) > 0 || len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0], "no status line") {
+		t.Fatalf("codex took a status line silently: %v %v %v", err, result.Errors, result.Warnings)
 	}
 }

@@ -135,18 +135,18 @@ layout = "flat"
 
 func TestStatusLineResolvesAndReplacesPerLayer(t *testing.T) {
 	project, user := t.TempDir(), t.TempDir()
-	cfg, err := decodeLayers(project, user, []byte("[shared.statusline]\nfile = \"line.sh\"\n"), nil)
+	cfg, err := decodeLayers(project, user, []byte("[harness.claude.config.statusline]\nfile = \"line.sh\"\n"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := cfg.Shared["statusline"].(map[string]any)["file"]; got != filepath.Join(user, "line.sh") {
+	if got := cfg.Harness["claude"].Config.StatusLine["file"]; got != filepath.Join(user, "line.sh") {
 		t.Fatalf("user file resolved to %v", got)
 	}
-	cfg, err = decodeLayers(project, user, []byte("[shared.statusline]\nfile = \"line.sh\"\npadding = 1\n"), []byte("[shared.statusline]\ncommand = \"echo hi\"\n"))
+	cfg, err = decodeLayers(project, user, []byte("[harness.claude.config.statusline]\nfile = \"line.sh\"\npadding = 1\n"), []byte("[harness.claude.config.statusline]\ncommand = \"echo hi\"\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := cfg.Shared["statusline"]; !reflect.DeepEqual(got, map[string]any{"command": "echo hi"}) {
+	if got := cfg.Harness["claude"].Config.StatusLine; !reflect.DeepEqual(got, map[string]any{"command": "echo hi"}) {
 		t.Fatalf("project status line merged with the user's: %v", got)
 	}
 }
