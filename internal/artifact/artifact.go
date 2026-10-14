@@ -17,8 +17,11 @@ const (
 	TypeSkill   Type = "skill"
 	TypeCommand Type = "command"
 	TypeAgent   Type = "agent"
+	TypeConfig  Type = "config"
 	TypeUnknown Type = ""
 )
+
+func (t Type) Document() bool { return t == TypeSkill || t == TypeCommand || t == TypeAgent }
 
 type Artifact struct {
 	Name        string

@@ -64,7 +64,7 @@ func HeniaArtifact(source string, entries []Entry, h henia.Harness) (*artifact.A
 	}
 	frontmatter := map[string]any{"name": heniaSkill.Frontmatter["name"], "description": heniaSkill.Frontmatter["description"]}
 	if h.Profile != "" {
-		if profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
+		if profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && profile.Skill != nil && slices.Contains(profile.Skill.Fields, "allowed-tools") {
 			frontmatter["allowed-tools"] = catalogTools
 		}
 	}

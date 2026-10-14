@@ -1,8 +1,9 @@
 # Vendor profiles
 
-A *profile* maps canonical skill metadata onto one harness's frontmatter, along
-with any extra files that harness reads. Write the skill once, and each profile
-emits the shape its harness expects.
+A *profile* holds what Henia knows about one harness. It maps canonical skill
+metadata onto the harness's frontmatter and extra files, and renders the
+harness's own configuration files. Write the skill once, and each profile emits
+the shape its harness expects.
 
 ```bash
 mkdir -p skills/review
@@ -114,18 +115,22 @@ A harness that a skill package configures resolves its profiles in that
 package instead of the project, so a project build and `henia install` find a
 package's custom profiles in the package's own `.henia/harnesses/`.
 
-Tables merge recursively. Arrays concatenate, and later scalars override. A
-completely different schema takes a new profile name:
+Tables merge recursively. Arrays concatenate, and later scalars override, so a
+layer can add to `fields` but never remove from it. A completely different
+schema takes a new profile name:
 
 ```toml
 # .henia/harnesses/my-agent/transform.toml
+directives = "keep"
+
+[skill]
 fields = ["name", "description", "automatic"]
 controls = ["auto_invoke"]
 
-[computed]
+[skill.computed]
 automatic = 'settings.auto_invoke'
 
-[files.manifest]
+[skill.files.manifest]
 path = "manifests/{name}.json"
 format = "json"
 value = '{name: input.name, description: input.description}'
@@ -163,7 +168,21 @@ This needs no script and no Go code. Profiles are TOML; computed values are
 
 ## Profile contract
 
-| Field | Purpose |
+A profile has harness-wide keys at the top level and one table per artifact
+type.
+
+| Key | Purpose |
+|---|---|
+| `directives` | default directive rendering (`xml`, `markdown`, `md` or `keep`); `[harness.<name>] directives` overrides it |
+| `commands`, `agents` | the harness's built-in slash commands and subagents |
+| `[skill]` | how skills render |
+| `[agent]` | how agents render; without it, agents keep their canonical frontmatter |
+| `[command]` | reserved; commands do not render through profiles, and a nonempty table fails |
+| `[config]` | the harness's [configuration files](#harness-configuration) |
+
+`[skill]` and `[agent]` take the same keys:
+
+| Key | Purpose |
 |---|---|
 | `fields` | output frontmatter allowlist; must include the required skill metadata |
 | `aliases` | input key renames; conflicting aliases fail |
@@ -172,7 +191,15 @@ This needs no script and no Go code. Profiles are TOML; computed values are
 | `controls` | invocation preferences the profile represents |
 | `files` | named files, each with `path`, `format` and `value` |
 | `preloads` | the harness runs `` !`cmd` `` preloads natively; others get a run-first block |
-| `commands`, `agents` | the harness's built-in slash commands and subagents |
+
+The flat form, with the `[skill]` keys at the top level, still reads as `[skill]`.
+Each layer converts on its own, so a flat user `transform.toml` merges over a
+sectioned bundled profile. One file that mixes top-level skill keys with
+`[skill]` fails.
+
+`[harness.<name>.agents] profile = "..."` selects another profile's `[agent]`
+table for agents. A per-type profile in the flat form serves agents through its
+`[skill]` keys.
 
 Computed expressions see four inputs:
 
@@ -205,10 +232,138 @@ escapes the root or collides with a main file, a resource or another emitted fil
 fails before anything is written. Henia does not merge harness-level files across
 skills; two skills writing one path is an error.
 
-Profiles cover skills. Harness-wide permissions, command conversion, plugin
-publication and uploads are separate concerns. OpenCode skill frontmatter, for
-one, is not where OpenCode agent permissions go. The
-[research matrix](vendor-research.md) links each vendor's contract.
+Command conversion, plugin publication and uploads are separate concerns.
+OpenCode skill frontmatter, for one, is not where OpenCode agent permissions go.
+The [research matrix](vendor-research.md) links each vendor's contract.
+
+## Harness configuration
+
+`[config.files.<id>]` declares the configuration files a harness reads: MCP
+servers, models, permissions and the rest. A build renders them when the
+harness's `artifacts` include `config`:
+
+```toml
+# henia.toml
+artifacts = ["skills", "config"]
+
+[shared.mcp.github]
+command = "gh-mcp"
+args = ["serve"]
+env = { GITHUB_TOKEN = "$GITHUB_TOKEN" }
+
+[harness.claude]
+[harness.claude.config.native]
+permissions = { allow = ["Read"] }
+
+[harness.codex]
+[harness.codex.config.native]
+approval_policy = "on-request"
+```
+
+```console
+$ henia build . --clean
+Built 2 artifact(s) in .henia/build
+
+$ cat .henia/build/codex/config.toml
+#:schema https://developers.openai.com/codex/config-schema.json
+
+approval_policy = 'on-request'
+
+[mcp_servers]
+[mcp_servers.github]
+args = ['serve']
+command = 'gh-mcp'
+env_vars = ['GITHUB_TOKEN']
+
+$ cat .henia/build/claude/.mcp.json
+{
+  "mcpServers": {
+    "github": {
+      "args": [
+        "serve"
+      ],
+      "command": "gh-mcp",
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+The output lands next to the harness's skills, inside the same clean-build swap
+and the same collision and escape checks. `henia install` leaves config out:
+its targets, such as `~/.claude/settings.json`, mix generated and hand-edited
+settings.
+
+### Input
+
+`[shared]` holds free-form tables that every harness profile may read; Henia
+checks only that it is a table. `[harness.<name>.config.native]` holds data that
+one harness takes as is. A native key naming a config file id addresses that
+file; the remaining keys address the file with id `main`. In henia.toml layers,
+arrays under `artifacts`, `[shared]` and `[harness.<name>.config]` replace
+earlier ones instead of extending them.
+
+`[shared]` holds references, never secrets: `"$GITHUB_TOKEN"` names an
+environment variable, and each profile maps the reference to its harness's
+spelling. Henia never reads the variable.
+
+The bundled profiles read this shared vocabulary:
+
+- `[shared.mcp.<server>]`: `command`, `args`, `env` and `url`. An `env` value
+  starting with `$` references a variable; any other value is literal.
+- `[shared.statusline]`: exactly one of `command` (a command line or path, used
+  as is), `script` (an inline shell script) or `file` (a script file), plus
+  `padding`, `refresh_interval` and `hide_vim_mode`. A relative `file` resolves
+  against the directory of the henia.toml that sets it, `~/` against the home
+  directory. Building config fails when the file is missing or not executable.
+A later layer's `[shared.statusline]` replaces an earlier one whole.
+
+| Harness | Files | Mapping |
+|---|---|---|
+| claude | `settings.json` (id `main`), `.mcp.json` (id `mcp`) | references become `${NAME}`; a `url` server gets `type = "http"`; the status line becomes `statusLine`, with `file` as a quoted absolute path |
+| codex | `config.toml` (id `main`) | references become `env_vars`, literals `env`; a reference must name its own variable; no status line |
+
+```toml
+[shared.statusline]
+script = """
+input=$(cat)
+printf '%s' "$(echo "$input" | jq -r .model.display_name)"
+"""
+refresh_interval = 5
+```
+
+### File contract
+
+| Key | Purpose |
+|---|---|
+| `path` | output path relative to the harness root |
+| `format` | `json`, `yaml`, `toml` or `text` |
+| `value` | Expr expression for the generated data; optional when native data fills the file |
+| `schema` | JSON Schema URL the result is validated against |
+| `arrays` | how native arrays combine with generated ones: `replace` (default) or `concat` |
+
+`value` sees `shared`, `ctx` and the `merge` and `require` helpers; it does not
+see skill input. Native data merges over the generated value last. Nil table
+entries drop out, and a file whose result is empty is not written. Output keys
+are sorted, so builds diff cleanly. With a `schema`, `json` gains a `$schema`
+key, `toml` a `#:schema` comment and `yaml` a `yaml-language-server` comment.
+
+Schema violations are warnings, and errors under `strict = true`. The bundled
+schemas ship pinned, so builds stay offline. Henia fetches any other schema once
+into the user cache directory (`henia/schemas`); a schema it cannot load is a
+warning.
+
+A custom harness needs no Go code:
+
+```toml
+# .henia/harnesses/my-agent/transform.toml
+[config.files.main]
+path = "agent.yml"
+format = "yaml"
+value = '{providers: shared.providers, models: shared.models}'
+```
 
 ## Built-in commands and agents
 

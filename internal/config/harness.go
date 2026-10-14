@@ -6,7 +6,60 @@ import (
 
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/srnnkls/henia"
+	"github.com/srnnkls/henia/internal/profile"
 )
+
+// resolveProfiles loads and compiles every profile a harness names, so a
+// broken per-type profile fails at load rather than mid-build, and fills
+// harness-wide defaults the configuration leaves unset.
+func resolveProfiles(name string, h henia.Harness) (henia.Harness, error) {
+	type use struct {
+		profile, kind, layout string
+		perType               bool
+	}
+	uses := []use{{h.Profile, "", h.Layout, false}}
+	for _, kind := range []string{"skills", "agents", "commands"} {
+		a := h.Type(kind)
+		layout := a.Layout
+		if layout == "" {
+			layout = h.Layout
+		}
+		profile := a.Profile
+		if profile == "" {
+			profile = h.Profile
+		}
+		uses = append(uses, use{profile, kind, layout, a.Profile != ""})
+	}
+	for _, u := range uses {
+		if u.profile == "" {
+			continue
+		}
+		loaded, err := profile.Load(u.profile, h.ProjectRoot, h.UserRoot)
+		if err != nil {
+			return h, fmt.Errorf("harness %s: %w", name, err)
+		}
+		if u.kind == "" {
+			if h.Directives == "" {
+				h.Directives = loaded.Directives
+			}
+			if _, err := profile.NewConfigCompiler(loaded.Config); err != nil {
+				return h, fmt.Errorf("harness %s: profile %s: %w", name, u.profile, err)
+			}
+			continue
+		}
+		section := loaded.Section(u.kind[:len(u.kind)-1], u.perType)
+		if section == nil {
+			continue
+		}
+		if _, err := profile.NewCompiler(*section); err != nil {
+			return h, fmt.Errorf("harness %s: profile %s: %w", name, u.profile, err)
+		}
+		if u.kind == "skills" && u.layout == "flat" {
+			return h, fmt.Errorf("harness %s: skill profiles require the nested layout", name)
+		}
+	}
+	return h, nil
+}
 
 func validateHarness(name string, h henia.Harness) error {
 	switch h.Directives {

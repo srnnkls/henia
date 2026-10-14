@@ -26,6 +26,19 @@ type File struct {
 	Value  string `toml:"value"` // Expr expression, not a template.
 }
 
+// Harness is everything Henia knows about one harness: harness-wide defaults
+// and one section per artifact type.
+type Harness struct {
+	Directives string         `toml:"directives"`
+	Commands   []string       `toml:"commands"` // Built-in command names, used by lint.
+	Agents     []string       `toml:"agents"`   // Built-in agent names, used by lint.
+	Skill      *Profile       `toml:"skill"`
+	Agent      *Profile       `toml:"agent"`
+	Command    map[string]any `toml:"command"` // Reserved: commands are not mapped yet.
+	Config     Config         `toml:"config"`
+}
+
+// Profile maps canonical metadata of one artifact type onto a harness.
 type Profile struct {
 	Fields   []string          `toml:"fields"`
 	Consume  []string          `toml:"consume"`
@@ -34,9 +47,10 @@ type Profile struct {
 	Computed map[string]string `toml:"computed"`
 	Files    map[string]File   `toml:"files"`
 	Preloads bool              `toml:"preloads"`
-	Commands []string          `toml:"commands"`
-	Agents   []string          `toml:"agents"`
 }
+
+// skillKeys are the top-level keys of the flat profile form, read as [skill].
+var skillKeys = []string{"fields", "consume", "controls", "aliases", "computed", "files", "preloads"}
 
 type Context struct {
 	Name      string            `expr:"name"`
@@ -71,9 +85,9 @@ type Result struct {
 
 // Load merges a profile's tables from bundled, user and project definitions.
 // A custom name needs only a TOML file, never a Go change.
-func Load(name, project, user string) (Profile, error) {
+func Load(name, project, user string) (Harness, error) {
 	if !filepath.IsLocal(name) || filepath.Base(name) != name || name == "." {
-		return Profile{}, fmt.Errorf("invalid profile name %q", name)
+		return Harness{}, fmt.Errorf("invalid profile name %q", name)
 	}
 	merged := map[string]any{}
 	found := false
@@ -93,31 +107,86 @@ func Load(name, project, user string) (Profile, error) {
 			continue
 		}
 		if err != nil {
-			return Profile{}, err
+			return Harness{}, err
 		}
 		found = true
 		var layer map[string]any
 		if err := toml.Unmarshal(data, &layer); err != nil {
-			return Profile{}, fmt.Errorf("%s: %w", path, err)
+			return Harness{}, fmt.Errorf("%s: %w", path, err)
+		}
+		if layer, err = sectioned(layer); err != nil {
+			return Harness{}, fmt.Errorf("%s: %w", path, err)
 		}
 		merged = Merge(merged, layer)
 	}
 	if !found {
-		return Profile{}, fmt.Errorf("unknown profile %q", name)
+		return Harness{}, fmt.Errorf("unknown profile %q", name)
 	}
 	data, err := toml.Marshal(merged)
 	if err != nil {
-		return Profile{}, err
+		return Harness{}, err
 	}
-	var p Profile
-	if err := toml.NewDecoder(strings.NewReader(string(data))).DisallowUnknownFields().Decode(&p); err != nil {
-		return Profile{}, err
+	var h Harness
+	if err := toml.NewDecoder(strings.NewReader(string(data))).DisallowUnknownFields().Decode(&h); err != nil {
+		return Harness{}, err
 	}
-	return p, nil
+	switch h.Directives {
+	case "", "xml", "markdown", "md", "keep":
+	default:
+		return Harness{}, fmt.Errorf("directives must be xml, markdown, md or keep, got %q", h.Directives)
+	}
+	if len(h.Command) > 0 {
+		return Harness{}, fmt.Errorf("[command] is reserved; commands are not mapped through profiles")
+	}
+	return h, nil
+}
+
+// sectioned moves one layer's flat skill keys under [skill]. Each layer is
+// normalized on its own, so a flat user layer merges over a sectioned bundle.
+func sectioned(layer map[string]any) (map[string]any, error) {
+	var flat []string
+	for _, key := range skillKeys {
+		if _, ok := layer[key]; ok {
+			flat = append(flat, key)
+		}
+	}
+	if len(flat) == 0 {
+		return layer, nil
+	}
+	if _, ok := layer["skill"]; ok {
+		return nil, fmt.Errorf("top-level %s next to [skill]; move them under [skill]", strings.Join(flat, ", "))
+	}
+	result, skill := maps.Clone(layer), map[string]any{}
+	for _, key := range flat {
+		skill[key] = layer[key]
+		delete(result, key)
+	}
+	result["skill"] = skill
+	return result, nil
+}
+
+// Section is the profile an artifact type renders with, or nil. A per-type
+// profile written in the flat form serves agents through its skill section.
+func (h Harness) Section(kind string, perType bool) *Profile {
+	switch kind {
+	case "skill":
+		return h.Skill
+	case "agent":
+		if h.Agent == nil && perType {
+			return h.Skill
+		}
+		return h.Agent
+	}
+	return nil
 }
 
 // Merge follows the scope's table/scalar/array precedence. Inputs stay immutable.
-func Merge(base, override map[string]any) map[string]any {
+func Merge(base, override map[string]any) map[string]any { return merge(base, override, true) }
+
+// Replace merges like Merge, except that a later array replaces an earlier one.
+func Replace(base, override map[string]any) map[string]any { return merge(base, override, false) }
+
+func merge(base, override map[string]any, concat bool) map[string]any {
 	result := maps.Clone(base)
 	if result == nil {
 		result = map[string]any{}
@@ -125,11 +194,11 @@ func Merge(base, override map[string]any) map[string]any {
 	for key, value := range override {
 		if left, ok := result[key].(map[string]any); ok {
 			if right, ok := value.(map[string]any); ok {
-				result[key] = Merge(left, right)
+				result[key] = merge(left, right, concat)
 				continue
 			}
 		}
-		if left, ok := result[key].([]any); ok {
+		if left, ok := result[key].([]any); ok && concat {
 			if right, ok := value.([]any); ok {
 				result[key] = append(slices.Clone(left), right...)
 				continue

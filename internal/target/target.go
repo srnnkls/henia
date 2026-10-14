@@ -57,7 +57,7 @@ func (t *HarnessTarget) Exists(art *artifact.Artifact) (bool, string) {
 func OutputPaths(t Target, art *artifact.Artifact) ([]string, error) {
 	main := t.TargetPath(art)
 	var paths []string
-	if art.Type != artifact.TypeUnknown {
+	if art.Type.Document() {
 		paths = append(paths, main)
 	}
 	resourceDir := filepath.Dir(main)
@@ -109,7 +109,7 @@ func (t *HarnessTarget) Write(art *artifact.Artifact) error {
 		}
 		return root.WriteFile(path, data, mode)
 	}
-	if art.Type != artifact.TypeUnknown {
+	if art.Type.Document() {
 		if err := write(main, []byte(art.Render()), 0644); err != nil {
 			return err
 		}

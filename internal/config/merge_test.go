@@ -1,7 +1,10 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -63,5 +66,111 @@ func TestSemanticModelPathFollowsDeclaringLayer(t *testing.T) {
 	}
 	if cfg.Lint.Semantic.ModelPath != filepath.Join(projectRoot, "local-model") || cfg.Lint.Semantic.Enabled {
 		t.Fatalf("%+v", cfg.Lint.Semantic)
+	}
+}
+
+func TestConfigDataReplacesArraysAcrossLayers(t *testing.T) {
+	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), []byte(`artifacts = ["skills", "agents"]
+[shared.mcp.github]
+command = "gh-mcp"
+args = ["user"]
+[harness.codex]
+artifacts = ["skills"]
+[harness.codex.config.native]
+notify = ["user"]
+[harness.codex.variables]
+keep = "user"
+`), []byte(`artifacts = ["config"]
+[shared.mcp.github]
+args = ["project"]
+[harness.codex]
+artifacts = ["config"]
+[harness.codex.config.native]
+notify = ["project"]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := cfg.Harness["codex"]
+	github := cfg.Shared["mcp"].(map[string]any)["github"].(map[string]any)
+	if !slices.Equal(cfg.Artifacts, []string{"config"}) || !slices.Equal(h.Artifacts, []string{"config"}) {
+		t.Fatalf("artifacts extended: %v %v", cfg.Artifacts, h.Artifacts)
+	}
+	if !reflect.DeepEqual(github["args"], []any{"project"}) || github["command"] != "gh-mcp" {
+		t.Fatalf("shared: %v", github)
+	}
+	if !reflect.DeepEqual(h.Config.Native["notify"], []any{"project"}) || h.Variables["keep"] != "user" {
+		t.Fatalf("harness: %+v", h)
+	}
+	if !reflect.DeepEqual(h.Shared, cfg.Shared) {
+		t.Fatal("harness does not carry [shared]")
+	}
+}
+
+func TestPerTypeProfilesValidateAtLoad(t *testing.T) {
+	if _, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte(`[harness.claude.agents]
+profile = "missing-profile"
+`)); err == nil {
+		t.Fatal("accepted an unknown per-type profile")
+	}
+	if _, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte(`[harness.claude.skills]
+layout = "flat"
+`)); err == nil {
+		t.Fatal("accepted a skill profile with a flat skills layout")
+	}
+	project := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(project, ".henia/harnesses/claude-agent"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".henia/harnesses/claude-agent/transform.toml"), []byte("fields = [\"name\", \"description\"]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := decodeLayers(project, t.TempDir(), nil, []byte(`[harness.claude.agents]
+profile = "claude-agent"
+layout = "flat"
+`)); err != nil {
+		t.Fatalf("rejected a flat agent profile: %v", err)
+	}
+}
+
+func TestStatusLineResolvesAndReplacesPerLayer(t *testing.T) {
+	project, user := t.TempDir(), t.TempDir()
+	cfg, err := decodeLayers(project, user, []byte("[shared.statusline]\nfile = \"line.sh\"\n"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Shared["statusline"].(map[string]any)["file"]; got != filepath.Join(user, "line.sh") {
+		t.Fatalf("user file resolved to %v", got)
+	}
+	cfg, err = decodeLayers(project, user, []byte("[shared.statusline]\nfile = \"line.sh\"\npadding = 1\n"), []byte("[shared.statusline]\ncommand = \"echo hi\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Shared["statusline"]; !reflect.DeepEqual(got, map[string]any{"command": "echo hi"}) {
+		t.Fatalf("project status line merged with the user's: %v", got)
+	}
+}
+
+func TestLocalHarnessOverProjectWithoutHarness(t *testing.T) {
+	merged := mergeLayer(map[string]any{"artifacts": []any{"skills"}}, map[string]any{"harness": map[string]any{"claude": map[string]any{"strict": true}}})
+	if merged["harness"].(map[string]any)["claude"].(map[string]any)["strict"] != true {
+		t.Fatalf("%v", merged)
+	}
+}
+
+func TestPresetDirectivesSurviveACustomProfile(t *testing.T) {
+	project := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(project, ".henia/harnesses/mine"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".henia/harnesses/mine/transform.toml"), []byte("fields = [\"name\", \"description\"]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := decodeLayers(project, t.TempDir(), nil, []byte("[harness.claude]\nprofile = \"mine\"\n[harness.custom]\nprofile = \"claude\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Harness["claude"].Directives != "xml" || cfg.Harness["custom"].Directives != "xml" {
+		t.Fatalf("%q %q", cfg.Harness["claude"].Directives, cfg.Harness["custom"].Directives)
 	}
 }

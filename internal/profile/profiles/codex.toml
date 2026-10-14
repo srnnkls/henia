@@ -1,17 +1,34 @@
 # See docs/vendor-research.md for the supporting vendor contracts.
+directives = "keep"
+
+[skill]
 fields = ["name", "description", "license", "compatibility", "metadata"]
 controls = ["auto_invoke"]
 consume = []
 
-[aliases]
+[skill.aliases]
 allowed_tools = "allowed-tools"
 disallowed_tools = "disallowed-tools"
 argument_hint = "argument-hint"
 disable_model_invocation = "disable-model-invocation"
 
-[computed]
+[skill.computed]
 
-[files.openai]
+[skill.files.openai]
 path = "skills/{name}/agents/openai.yaml"
 format = "yaml"
 value = 'merge(native.openai ?? {}, settings.auto_invoke == nil ? {} : {policy: merge({allow_implicit_invocation: settings.auto_invoke}, native.openai?.policy ?? {})})'
+
+[config.files.main]
+path = "config.toml"
+format = "toml"
+schema = "https://developers.openai.com/codex/config-schema.json"
+value = '''
+{mcp_servers: fromPairs(map(toPairs(shared.mcp ?? {}), let s = #[1]; [#[0], {
+  command: s.command,
+  args: s.args,
+  url: s.url,
+  env: s.env == nil ? nil : fromPairs(filter(toPairs(s.env), !hasPrefix(#[1], "$"))),
+  env_vars: s.env == nil ? nil : any(toPairs(s.env), hasPrefix(#[1], "$") && #[1] != "$" + #[0]) ? require(nil, "codex forwards environment variables by name only; write each reference as \"$NAME\" of its own name") : (let refs = sort(map(filter(toPairs(s.env), hasPrefix(#[1], "$")), #[0])); len(refs) == 0 ? nil : refs)
+}]))}
+'''

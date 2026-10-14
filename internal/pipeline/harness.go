@@ -14,29 +14,41 @@ import (
 )
 
 func Transformer(name, output string, h henia.Harness, kind artifact.Type) (henia.Harness, *transform.Transformer, error) {
-	mapping := h.Type(artifact.TypeDirName(kind))
-	if kind != artifact.TypeSkill {
-		h.Profile = ""
+	var loaded profile.Harness
+	if h.Profile != "" {
+		var err error
+		if loaded, err = profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err != nil {
+			return h, nil, fmt.Errorf("harness %s: %w", name, err)
+		}
+		if h.Directives == "" {
+			h.Directives = loaded.Directives
+		}
 	}
-	if mapping.Profile != "" {
+	mapping := h.Type(artifact.TypeDirName(kind))
+	if mapping.Profile != "" && mapping.Profile != h.Profile {
 		h.Profile = mapping.Profile
+		var err error
+		if loaded, err = profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err != nil {
+			return h, nil, fmt.Errorf("harness %s: %w", name, err)
+		}
 	}
 	if mapping.Layout != "" {
 		h.Layout = mapping.Layout
 	}
 	h.Frontmatter.Rename = mergeMap(h.Frontmatter.Rename, mapping.Frontmatter.Rename)
 	h.Frontmatter.Values = mergeMap(h.Frontmatter.Values, mapping.Frontmatter.Values)
+	section := loaded.Section(string(kind), mapping.Profile != "")
+	if section == nil && (kind != artifact.TypeCommand || mapping.Profile == "") {
+		h.Profile = ""
+	}
 	tr := &transform.Transformer{
 		Profile: h.Profile, Strict: h.Strict, Variables: h.Variables,
 		OutputFormat: markupFormat(h.Directives), Keys: h.Frontmatter.Rename, Values: h.Frontmatter.Values,
 		Tools: h.Tools, References: References(h.References),
 	}
-	if h.Profile != "" {
-		loaded, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot)
-		if err == nil {
-			tr.Compiler, err = profile.NewCompiler(loaded)
-		}
-		if err != nil {
+	if section != nil {
+		var err error
+		if tr.Compiler, err = profile.NewCompiler(*section); err != nil {
 			return h, nil, fmt.Errorf("harness %s: %w", name, err)
 		}
 		tr.Context = profile.Context{Name: name, Profile: h.Profile, Path: output, Variables: h.Variables, Tools: h.Tools, Keys: h.Frontmatter.Rename}

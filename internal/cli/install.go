@@ -323,6 +323,7 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 	}
 	defer os.RemoveAll(staging)
 	owners := map[string]*config.Config{}
+	configOnly := map[string]bool{}
 	for _, pkg := range globals {
 		if pkg.Config == "" {
 			continue
@@ -335,12 +336,22 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			if cfg.HeniaSkill() {
 				disabled := false
 				h.Skills.Catalog = &disabled
-				pkgCfg.Harness[harness] = h
 			}
+			artifacts := h.Artifacts
+			if len(artifacts) == 0 {
+				artifacts = pkgCfg.Artifacts
+			}
+			var installs bool
+			if h.Artifacts, installs = installable(artifacts); !installs {
+				configOnly[pkg.Name] = true
+				continue
+			}
+			pkgCfg.Harness[harness] = h
 			owners[pkg.Name] = pkgCfg
 		}
 	}
-	tree, err := renderHarness(cmd, harness, globals, owners, cfg.Harness[harness].Strict, staging, staticFiles(staging, library.Open("", nil)))
+	packages := slices.DeleteFunc(slices.Clone(globals), func(pkg library.Package) bool { return configOnly[pkg.Name] })
+	tree, err := renderHarness(cmd, harness, packages, owners, cfg.Harness[harness].Strict, staging, staticFiles(staging, library.Open("", nil)))
 	if err != nil {
 		return err
 	}
@@ -475,6 +486,13 @@ func heniaSkill(cmd *cobra.Command, harness string, h henia.Harness, ok bool, st
 		return err
 	}
 	return collect("henia", filepath.Join(out, harness))
+}
+
+// installable drops config: its targets mix generated and hand-edited
+// settings, so install leaves them to the user.
+func installable(artifacts []string) ([]string, bool) {
+	kept := slices.DeleteFunc(slices.Clone(artifacts), func(a string) bool { return a == "config" })
+	return kept, len(artifacts) == 0 || len(kept) > 0
 }
 
 func sameFile(a, b string) bool {

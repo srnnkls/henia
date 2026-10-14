@@ -7,6 +7,7 @@ require (
 	github.com/expr-lang/expr v1.17.8
 	github.com/landlock-lsm/go-landlock v0.10.1
 	github.com/pelletier/go-toml/v2 v2.2.4
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/cobra v1.10.2
 	github.com/townsendmerino/aikit v1.16.0
 	github.com/ulikunitz/xz v0.5.17

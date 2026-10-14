@@ -30,6 +30,11 @@ const (
 	Hybrid  = "hybrid"
 )
 
+// HarnessConfig is the harness-specific data merged over generated config files.
+type HarnessConfig struct {
+	Native map[string]any `toml:"native,omitempty"`
+}
+
 type Harness struct {
 	Files       map[string]File   `toml:"files,omitempty"`
 	Profile     string            `toml:"profile,omitempty"`
@@ -44,6 +49,8 @@ type Harness struct {
 	Skills      Artifacts         `toml:"skills,omitempty"`
 	Agents      Artifacts         `toml:"agents,omitempty"`
 	Commands    Artifacts         `toml:"commands,omitempty"`
+	Config      HarnessConfig     `toml:"config,omitempty"`
+	Shared      map[string]any    `toml:"-"`
 	ProjectRoot string            `toml:"-"`
 	UserRoot    string            `toml:"-"`
 }

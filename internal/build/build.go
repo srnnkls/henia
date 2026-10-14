@@ -132,6 +132,7 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 	}
 	var jobs []writeJob
 	destinations := make(map[string]string)
+	schemas := profile.NewSchemas()
 	for _, harnessName := range slices.Sorted(maps.Keys(harnesses)) {
 		harness := harnesses[harnessName]
 		if err := ctx.Err(); err != nil {
@@ -159,6 +160,16 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 		if len(files) > 0 {
 			filtered = append(filtered, &artifact.Artifact{Name: "support files", SourcePath: sources[0], Files: files})
 		}
+		if slices.Contains(harness.Artifacts, "config") {
+			config, err := configArtifact(harnessName, outputPath, harness, sources[0], schemas)
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("harness %s: %w", harnessName, err))
+				continue
+			}
+			if config != nil {
+				filtered = append(filtered, config)
+			}
+		}
 		type pending struct {
 			art, transformed *artifact.Artifact
 			effective        henia.Harness
@@ -170,7 +181,7 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 		var units []*Unit
 		known := map[string]map[string]bool{}
 		for _, art := range allArtifacts {
-			if art.Type != artifact.TypeUnknown && !slices.Contains(filtered, art) {
+			if art.Type.Document() && !slices.Contains(filtered, art) {
 				units = append(units, unitFor(art, harnessName, outputPath, pipeline.Layered(harness, harnessName, art.SourcePath, dependencies), served, allArtifacts, targets, known, dependencies))
 			}
 		}
@@ -187,7 +198,7 @@ func run(ctx context.Context, sources []string, output string, harnesses, config
 			hybrid := art.Type == artifact.TypeSkill && art.Name != CatalogName && harness.Mode("skills", art.Name) == henia.Hybrid
 			tr.Head, tr.LibraryLinks = hybrid, hybrid
 			p := pending{art: art, transformed: art, effective: effective, tgt: target.NewFromConfig(harnessName, outputPath, effective), hybrid: hybrid}
-			if art.Type != artifact.TypeUnknown {
+			if art.Type.Document() {
 				p.unit = pipelineUnit(art, tr, effective, root, allArtifacts, targets, known, dependencies)
 				units = append(units, p.unit)
 			}
@@ -366,7 +377,7 @@ func nativePreloads(h henia.Harness) bool {
 		return false
 	}
 	profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot)
-	return err == nil && profile.Preloads
+	return err == nil && profile.Skill != nil && profile.Skill.Preloads
 }
 
 func projectPreloads(art *artifact.Artifact, h henia.Harness) {
@@ -379,7 +390,7 @@ func projectPreloads(art *artifact.Artifact, h henia.Harness) {
 	for _, tool := range needed {
 		switch tools := art.Frontmatter["allowed-tools"].(type) {
 		case nil:
-			if profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && slices.Contains(profile.Fields, "allowed-tools") {
+			if profile, err := profile.Load(h.Profile, h.ProjectRoot, h.UserRoot); err == nil && profile.Skill != nil && slices.Contains(profile.Skill.Fields, "allowed-tools") {
 				art.Frontmatter["allowed-tools"] = tool
 			}
 		case string:

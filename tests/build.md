@@ -287,6 +287,55 @@ $ henia build "$TESTDIR/fixtures/simple-source" --config "$TESTDIR/fixtures/heni
 Built 3 artifact(s) in /tmp/henia-test-build
 ```
 
+## Build Harness Config
+
+```scrut
+$ henia build "$TESTDIR/fixtures/simple-source" --config "$TESTDIR/fixtures/henia-config.toml" --output /tmp/henia-test-config --clean 2>/dev/null
+Built 4 artifact(s) in /tmp/henia-test-config
+```
+
+```scrut
+$ cat /tmp/henia-test-config/codex/config.toml
+#:schema https://developers.openai.com/codex/config-schema.json
+
+approval_policy = 'on-request'
+
+[mcp_servers]
+[mcp_servers.github]
+args = ['serve']
+command = 'gh-mcp'
+env_vars = ['GITHUB_TOKEN']
+```
+
+```scrut
+$ cat /tmp/henia-test-config/claude/.mcp.json /tmp/henia-test-config/claude/settings.json
+{
+  "mcpServers": {
+    "github": {
+      "args": [
+        "serve"
+      ],
+      "command": "gh-mcp",
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  }
+}
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read"
+    ]
+  }
+}
+```
+
+```scrut
+$ rm -rf /tmp/henia-test-config
+```
+
 ## Cleanup
 
 ```scrut
