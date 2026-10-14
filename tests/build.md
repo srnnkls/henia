@@ -323,7 +323,7 @@ $ cat /tmp/henia-test-config/claude/.mcp.json /tmp/henia-test-config/claude/sett
   }
 }
 {
-  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "$schema": "https://www.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "Read"

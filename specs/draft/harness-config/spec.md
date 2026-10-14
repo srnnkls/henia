@@ -70,10 +70,12 @@ the default.
 
 ### Schemas
 
-- Validation uses `santhosh-tekuri/jsonschema/v6`. The Claude settings and
-  Codex config schemas are pinned in `internal/profile/schemas/`.
-- Other URLs are fetched once into `os.UserCacheDir()/henia/schemas`, one file
-  per URL digest.
+- Validation uses `santhosh-tekuri/jsonschema/v6` against the schemas
+  SchemaStore lists: `www.schemastore.org/claude-code-settings.json` and
+  `developers.openai.com/codex/config-schema.json`.
+- Schemas are fetched into `os.UserCacheDir()/henia/schemas`, one file per URL
+  digest, and fetched again after 24 hours. A failed fetch falls back to the
+  expired copy, then to the copy pinned in `internal/profile/schemas/`.
 - Violations and unavailable schemas are warnings, errors under `strict`.
 
 ### Bundled config

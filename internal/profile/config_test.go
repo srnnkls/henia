@@ -1,8 +1,10 @@
 package profile
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func renderConfig(t *testing.T, config Config, shared, native map[string]any) *Result {
@@ -211,5 +213,51 @@ func TestConfigDropsNilArrayItems(t *testing.T) {
 	config := Config{Files: map[string]ConfigFile{MainFile: {Path: "c.toml", Format: "toml", Value: `{args: [shared.x, "kept"]}`}}}
 	if got := string(renderConfig(t, config, nil, nil).Files["c.toml"]); got != "args = ['kept']\n" {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestSchemaCacheRefreshesAfterTTL(t *testing.T) {
+	url := "https://example.com/schema.json"
+	now := time.Now()
+	fetched := 0
+	body := `{"type": "object", "required": ["a"]}`
+	s := &Schemas{Cache: t.TempDir(), TTL: time.Hour, Now: func() time.Time { return now }, Fetch: func(string) ([]byte, error) {
+		fetched++
+		return []byte(body), nil
+	}}
+	load := func(url string) string {
+		t.Helper()
+		data, err := s.load(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	load(url)
+	load(url)
+	if fetched != 1 {
+		t.Fatalf("fresh cache refetched: %d", fetched)
+	}
+	now = now.Add(2 * time.Hour)
+	body = `{"type": "object"}`
+	if got := load(url); got != body || fetched != 2 {
+		t.Fatalf("expired cache not refreshed: %s %d", got, fetched)
+	}
+	now = now.Add(2 * time.Hour)
+	s.Fetch = func(string) ([]byte, error) { return nil, errors.New("offline") }
+	if got := load(url); got != body {
+		t.Fatalf("offline did not fall back to the stale copy: %s", got)
+	}
+	s.Cache = t.TempDir()
+	if _, err := s.load(url); err == nil {
+		t.Fatal("an unknown schema loaded offline")
+	}
+	claude := "https://www.schemastore.org/claude-code-settings.json"
+	if !strings.Contains(load(claude), "statusLine") {
+		t.Fatal("offline did not fall back to the pinned copy")
+	}
+	s.Fetch = func(string) ([]byte, error) { return []byte("<html>"), nil }
+	if !strings.Contains(load(claude), "statusLine") {
+		t.Fatal("a non-JSON response replaced the schema")
 	}
 }

@@ -365,10 +365,12 @@ items drop out, and a file whose result is empty is not written. Output keys
 are sorted. With a `schema`, `json` gains a `$schema`
 key, `toml` a `#:schema` comment and `yaml` a `yaml-language-server` comment.
 
-Schema violations are warnings, and errors under `strict = true`. Bundled
-profiles validate against pinned schemas without network access. Henia fetches
-any other schema once into the user cache directory (`henia/schemas`); a schema
-it cannot load is a warning.
+Schema violations are warnings, and errors under `strict = true`. Henia fetches
+each schema into the user cache directory (`henia/schemas`) and fetches it again
+after 24 hours. When a fetch fails, the expired copy validates, and for the
+bundled profiles a copy pinned in Henia; a schema it cannot load is a warning.
+The bundled profiles use the SchemaStore entries for Claude Code settings and
+Codex config.
 
 A custom harness needs no Go code:
 

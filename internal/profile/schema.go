@@ -20,17 +20,18 @@ import (
 //go:embed schemas/*.json
 var pinned embed.FS
 
-// Schemas validates config against JSON Schemas. Pinned copies ship with the
-// bundled profiles; other schemas are fetched once into Cache.
+const SchemaTTL = 24 * time.Hour
+
 type Schemas struct {
 	Cache    string // Fetching is disabled when empty.
+	TTL      time.Duration
 	Fetch    func(url string) ([]byte, error)
+	Now      func() time.Time
 	compiled map[string]*jsonschema.Schema
 }
 
-// NewSchemas caches fetched schemas below the user cache directory.
 func NewSchemas() *Schemas {
-	s := &Schemas{Fetch: fetch}
+	s := &Schemas{Fetch: fetch, TTL: SchemaTTL, Now: time.Now}
 	if dir, err := os.UserCacheDir(); err == nil {
 		s.Cache = filepath.Join(dir, "henia", "schemas")
 	}
@@ -82,24 +83,37 @@ func (l loader) Load(url string) (any, error) {
 
 func (s *Schemas) load(url string) ([]byte, error) {
 	name := cacheName(url)
-	if data, err := pinned.ReadFile("schemas/" + name); err == nil {
-		return data, nil
-	}
 	if s.Cache == "" || s.Fetch == nil {
+		if data, err := pinned.ReadFile("schemas/" + name); err == nil {
+			return data, nil
+		}
 		return nil, fmt.Errorf("not pinned and fetching is disabled")
 	}
 	path := filepath.Join(s.Cache, name)
-	if data, err := os.ReadFile(path); err == nil {
-		return data, nil
+	var stale []byte
+	if info, err := os.Stat(path); err == nil {
+		data, err := os.ReadFile(path)
+		if err == nil && s.Now != nil && s.Now().Sub(info.ModTime()) < s.TTL {
+			return data, nil
+		}
+		stale = data
 	}
 	data, err := s.Fetch(url)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		if _, err = jsonschema.UnmarshalJSON(bytes.NewReader(data)); err == nil {
+			if err := os.MkdirAll(s.Cache, 0o755); err == nil {
+				_ = os.WriteFile(path, data, 0o644)
+			}
+			return data, nil
+		}
 	}
-	if err := os.MkdirAll(s.Cache, 0o755); err == nil {
-		_ = os.WriteFile(path, data, 0o644)
+	if stale != nil {
+		return stale, nil
 	}
-	return data, nil
+	if data, pinnedErr := pinned.ReadFile("schemas/" + name); pinnedErr == nil {
+		return data, nil
+	}
+	return nil, err
 }
 
 func cacheName(url string) string {

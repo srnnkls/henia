@@ -26,7 +26,7 @@ model = 'input.model_tier == nil ? nil : require(ctx.variables["model_" + input.
 [config.files.main]
 path = "settings.json"
 format = "json"
-schema = "https://json.schemastore.org/claude-code-settings.json"
+schema = "https://www.schemastore.org/claude-code-settings.json"
 value = '''
 {statusLine: harness?.statusline == nil ? nil : (let s = harness.statusline;
   len(filter([s.command, s.script, s.file], # != nil)) != 1 ? require(nil, "statusline takes exactly one of command, script or file") : {
