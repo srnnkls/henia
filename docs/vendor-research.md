@@ -31,13 +31,17 @@ and references transform after.
 | GitHub Copilot | `.github/skills/<name>/SKILL.md` | documents name, description, license and `allowed-tools`; also discovers compatible directories |
 | Cursor | `.cursor/skills/<name>/SKILL.md` | adds paths, disable-model-invocation, icon, color and metadata |
 | Agent Skills | portable `<name>/SKILL.md` directory | standard fields only; installation and optional fields depend on the consumer |
+| pi | `.pi/skills/<name>/SKILL.md`, `~/.pi/agent/skills` | standard fields plus `disable-model-invocation`; skills run as `/skill:<name>` |
+| oh-my-pi (omp) | `.omp/skills/<name>/SKILL.md`, `~/.omp/agent/skills` | name, description and `disable-model-invocation`; also `globs`, `alwaysApply`, `hide`, `enabled` |
 
 Sources: [Claude Code](https://code.claude.com/docs/en/skills#frontmatter-reference),
 [OpenAI skills](https://learn.chatgpt.com/docs/build-skills),
 [OpenCode](https://opencode.ai/docs/skills/),
 [Gemini](https://geminicli.com/docs/cli/creating-skills/),
 [Copilot](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills),
-[Cursor](https://cursor.com/docs/skills).
+[Cursor](https://cursor.com/docs/skills),
+[pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md),
+[omp](https://github.com/can1357/oh-my-pi/blob/main/docs/skills.md).
 
 ## Mapping implications
 

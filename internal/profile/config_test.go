@@ -261,3 +261,32 @@ func TestSchemaCacheRefreshesAfterTTL(t *testing.T) {
 		t.Fatal("a non-JSON response replaced the schema")
 	}
 }
+
+func TestPiAndOmpProfiles(t *testing.T) {
+	shared := map[string]any{"mcp": map[string]any{"gh": map[string]any{"command": "gh-mcp", "env": map[string]any{"GITHUB_TOKEN": "$GITHUB_TOKEN"}}}}
+	for name, want := range map[string]string{"pi": `"GITHUB_TOKEN": "${GITHUB_TOKEN}"`, "omp": `"GITHUB_TOKEN": "GITHUB_TOKEN"`} {
+		h, err := Load(name, t.TempDir(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		compiler, err := NewConfigCompiler(h.Config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := compiler.Render(shared, nil, nil, Context{Name: name, Profile: name}, &Schemas{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mcp := string(result.Files["mcp.json"]); !strings.Contains(mcp, want) || len(result.Warnings) > 0 {
+			t.Errorf("%s: %s %v", name, mcp, result.Warnings)
+		}
+		skills, err := NewCompiler(*h.Skill)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := skills.Compile("demo", map[string]any{"name": "demo", "description": "Demo.", "henia": map[string]any{"auto_invoke": false}}, Context{Name: name, Profile: name})
+		if err != nil || out.Frontmatter["disable-model-invocation"] != true || len(out.Warnings) > 0 {
+			t.Errorf("%s skill: %v %v", name, out, err)
+		}
+	}
+}

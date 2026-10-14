@@ -1,0 +1,37 @@
+# See docs/vendor-research.md for the supporting vendor contracts.
+directives = "keep"
+
+[skill]
+fields = ["name", "description", "license", "compatibility", "metadata", "disable-model-invocation"]
+controls = ["auto_invoke"]
+consume = ["tools"]
+
+[skill.aliases]
+allowed_tools = "allowed-tools"
+disallowed_tools = "disallowed-tools"
+argument_hint = "argument-hint"
+disable_model_invocation = "disable-model-invocation"
+
+[skill.computed]
+"disable-model-invocation" = 'settings.auto_invoke == nil ? nil : not settings.auto_invoke'
+
+[config.files.main]
+path = "config.yml"
+format = "yaml"
+merge = true
+
+[config.files.mcp]
+path = "mcp.json"
+format = "json"
+schema = "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json"
+merge = true
+entries = ["mcpServers"]
+value = '''
+{mcpServers: fromPairs(map(toPairs(shared.mcp ?? {}), let s = #[1]; [#[0], {
+  type: s.url == nil ? "stdio" : "http",
+  command: s.command,
+  args: s.args,
+  url: s.url,
+  env: s.env == nil ? nil : fromPairs(map(toPairs(s.env), [#[0], trimPrefix(#[1], "$")]))
+}]))}
+'''

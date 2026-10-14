@@ -35,7 +35,7 @@ func TestBuildOnlyConfigKeepsProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Harness) != 9 {
+	if len(cfg.Harness) != 11 {
 		t.Fatalf("build setting disabled profiles: %+v", cfg.Harness)
 	}
 }

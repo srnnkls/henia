@@ -114,7 +114,7 @@ anywhere fails the install, and `--force` overrides.
   global installs only). A build for one scope skips files of the other.
 - Whole files (`merge` unset) follow the install manifest: a destination Henia
   did not write, or that changed since, conflicts.
-- Merged files (`merge = true`, json or toml) are owned unit by unit. A unit is
+- Merged files (`merge = true`, json, toml or yaml) are owned unit by unit. A unit is
   a top-level value, a member of a table listed in `entries`, or an element of
   an array listed in `entries`. The manifest `<harness>.units.json` records a
   hash per unit and destination.
@@ -123,7 +123,8 @@ anywhere fails the install, and `--force` overrides.
     rendered value is adopted; anything else conflicts.
   - Values Henia does not own are never compared or changed. Numbers keep
     their exact value.
-  - A TOML destination with comments conflicts, since rewriting drops them.
+  - A TOML or YAML destination with comments conflicts, since rewriting drops
+    them.
   - An unchanged destination is not rewritten. A destination that changes
     between read and write fails the install.
   - The merged result is validated against the file's schema; a violation
@@ -137,6 +138,9 @@ anywhere fails the install, and `--force` overrides.
 | claude `.claude.json` | home | units; `mcpServers` by server |
 | claude `statusline.sh` | harness | whole file |
 | codex `config.toml` | harness | units; `mcp_servers` by server |
+| pi `settings.json` | harness | units |
+| pi, omp `mcp.json` | harness | units; `mcpServers` by server |
+| omp `config.yml` | harness | units |
 
 In a project install, `statusLine.command` runs
 `"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/<dir>/statusline.sh"`,
@@ -144,6 +148,6 @@ where `<dir>` is the harness directory relative to the project root.
 
 ## Open
 
-1. pi and omp profiles (skills and config).
-3. Lint rules over config.
-4. Header values in the shared MCP vocabulary.
+1. Lint rules over config.
+2. Header values in the shared MCP vocabulary.
+3. pi prompt templates (`prompts/`) and omp built-in command names.

@@ -18,13 +18,14 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+	"gopkg.in/yaml.v3"
 )
 
 // File is one destination. A nil Value removes every unit a previous install
 // recorded for it.
 type File struct {
 	Path     string
-	Format   string // json or toml
+	Format   string // json, toml or yaml
 	Entries  []string
 	Value    map[string]any
 	Validate func(map[string]any) error
@@ -127,8 +128,11 @@ func run(files []File, previous Record, force, commit bool) (Record, []string, e
 }
 
 func formatOf(path string) string {
-	if strings.HasSuffix(path, ".toml") {
+	switch filepath.Ext(path) {
+	case ".toml":
 		return "toml"
+	case ".yml", ".yaml":
+		return "yaml"
 	}
 	return "json"
 }
@@ -151,7 +155,7 @@ func merge(file File, original []byte, previous map[string]string, force bool) (
 		}
 	}
 	var conflicted []string
-	if file.Format == "toml" && hasComments(original) && file.Value != nil {
+	if file.Format != "json" && hasComments(original) && file.Value != nil {
 		conflicted = append(conflicted, "comments")
 	}
 	units := map[string]string{}
@@ -247,8 +251,17 @@ func hasComments(data []byte) bool {
 
 func Decode(format string, data []byte) (map[string]any, error) {
 	doc := map[string]any{}
-	if format == "toml" {
+	switch format {
+	case "toml":
 		return doc, toml.Unmarshal(data, &doc)
+	case "yaml":
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			return nil, err
+		}
+		if doc == nil {
+			doc = map[string]any{}
+		}
+		return doc, nil
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
@@ -259,8 +272,11 @@ func Decode(format string, data []byte) (map[string]any, error) {
 }
 
 func encode(format string, doc map[string]any) ([]byte, error) {
-	if format == "toml" {
+	switch format {
+	case "toml":
 		return toml.Marshal(doc)
+	case "yaml":
+		return yaml.Marshal(doc)
 	}
 	var buf bytes.Buffer
 	encoder := json.NewEncoder(&buf)

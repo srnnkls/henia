@@ -259,7 +259,7 @@ func harnessHome(harness string, getenv func(string) string) (string, bool) {
 	env, home := map[string][2]string{
 		"claude": {"CLAUDE_CONFIG_DIR", "~/.claude"},
 		"codex":  {"CODEX_HOME", "~/.codex"},
-		"pi":     {"", "~/.pi/agent"},
+		"pi":     {"PI_CODING_AGENT_DIR", "~/.pi/agent"},
 		"omp":    {"", "~/.omp/agent"},
 	}[harness], ""
 	if env[1] == "" {

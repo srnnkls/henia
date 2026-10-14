@@ -328,6 +328,12 @@ value is literal.
 |---|---|---|
 | claude | `settings.json` (id `main`), `.mcp.json` (id `mcp`) | references become `${NAME}`; a `url` server gets `type = "http"` |
 | codex | `config.toml` (id `main`) | references become `env_vars`, literals `env`; a reference must name its own variable |
+| pi | `settings.json` (id `main`), `mcp.json` (id `mcp`) | references become `${NAME}` |
+| omp | `config.yml` (id `main`), `mcp.json` (id `mcp`) | references become the bare variable name, which omp resolves; a `url` server gets `type = "http"`, others `stdio` |
+
+pi and omp keep both files in the harness directory (`~/.pi/agent`, `.pi`,
+`~/.omp/agent`, `.omp`). Both are merged on install, MCP servers by name. A
+YAML `config.yml` with comments conflicts like a commented TOML file.
 
 ### Claude Code status line
 
