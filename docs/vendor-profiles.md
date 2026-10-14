@@ -323,13 +323,16 @@ exactly one of:
 
 - `command`: a command line or path, used as is;
 - `script`: an inline shell script;
-- `file`: a script file, passed to Claude Code as its quoted absolute path.
+- `file`: a script file.
 
-`padding`, `refresh_interval` and `hide_vim_mode` map to `padding`,
-`refreshInterval` and `hideVimModeIndicator`. A relative `file` resolves
-against the directory of the henia.toml that sets it, `~/` against the home
-directory. Building config fails when the file is missing or not executable. A
-later layer's `statusline` replaces an earlier one whole.
+A `script` or `file` deploys as the executable `statusline.sh` in the harness
+tree, with a `#!/bin/sh` line when it has none, and `statusLine.command` runs
+`"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"`. A relative `file`
+resolves against the directory of the henia.toml that sets it, `~/` against
+the home directory; building config fails when it is missing. `padding`,
+`refresh_interval` and `hide_vim_mode` map to `padding`, `refreshInterval` and
+`hideVimModeIndicator`. A later layer's `statusline` replaces an earlier one
+whole.
 
 ```toml
 [harness.claude.config.statusline]
@@ -353,6 +356,7 @@ natively: `[harness.codex.config.native.tui] status_line = ["model-with-reasonin
 | `value` | Expr expression for the generated data; optional when native data fills the file |
 | `schema` | JSON Schema URL the result is validated against |
 | `arrays` | how native arrays combine with generated ones: `replace` (default) or `concat` |
+| `mode` | octal file permissions, `0644` by default |
 
 `value` sees `shared`, `harness` (the harness's typed config inputs, such as
 `statusline`), `ctx` and the `merge` and `require` helpers, but no skill input.

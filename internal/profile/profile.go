@@ -80,6 +80,7 @@ type Compiler struct {
 type Result struct {
 	Frontmatter map[string]any
 	Files       map[string][]byte
+	Modes       map[string]os.FileMode
 	Warnings    []string
 }
 

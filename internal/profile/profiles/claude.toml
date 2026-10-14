@@ -31,12 +31,18 @@ value = '''
 {statusLine: harness?.statusline == nil ? nil : (let s = harness.statusline;
   len(filter([s.command, s.script, s.file], # != nil)) != 1 ? require(nil, "statusline takes exactly one of command, script or file") : {
     type: "command",
-    command: s.file == nil ? s.command ?? s.script : "'" + replace(s.file, "'", "'\\''") + "'",
+    command: s.command ?? '"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"',
     padding: s.padding,
     refreshInterval: s.refresh_interval,
     hideVimModeIndicator: s.hide_vim_mode
   })}
 '''
+
+[config.files.statusline]
+path = "statusline.sh"
+format = "text"
+mode = "0755"
+value = 'harness?.statusline?.content'
 
 [config.files.mcp]
 path = ".mcp.json"

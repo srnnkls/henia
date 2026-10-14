@@ -32,7 +32,8 @@ type Artifact struct {
 	Frontmatter map[string]any
 	Body        string
 	Resources   []string
-	Files       map[string][]byte // Generated files relative to the harness root.
+	Files       map[string][]byte      // Generated files relative to the harness root.
+	Modes       map[string]os.FileMode // Permissions of generated files; 0644 when absent.
 	Warnings    []string
 }
 

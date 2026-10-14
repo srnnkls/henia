@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/expr-lang/expr/vm"
@@ -27,6 +29,7 @@ type ConfigFile struct {
 	Value  string `toml:"value"`  // Expr expression; optional when native data fills the file.
 	Schema string `toml:"schema"` // JSON Schema URL.
 	Arrays string `toml:"arrays"` // How native arrays combine with generated ones: replace (default) or concat.
+	Mode   string `toml:"mode"`   // Octal permissions, 0644 when empty.
 }
 
 type configEnvironment struct {
@@ -58,6 +61,9 @@ func NewConfigCompiler(config Config) (*ConfigCompiler, error) {
 			return nil, fmt.Errorf("config file %s: arrays must be replace or concat", id)
 		}
 		if err := validPath(file.Path); err != nil {
+			return nil, fmt.Errorf("config file %s: %w", id, err)
+		}
+		if _, err := fileMode(file.Mode); err != nil {
 			return nil, fmt.Errorf("config file %s: %w", id, err)
 		}
 		if other, ok := paths[file.Path]; ok {
@@ -125,8 +131,25 @@ func (c *ConfigCompiler) Render(shared, harness, native map[string]any, context 
 			return nil, fmt.Errorf("config file %s: %w", id, err)
 		}
 		r.Files[file.Path] = data
+		if mode, _ := fileMode(file.Mode); mode != 0644 {
+			if r.Modes == nil {
+				r.Modes = map[string]os.FileMode{}
+			}
+			r.Modes[file.Path] = mode
+		}
 	}
 	return r, nil
+}
+
+func fileMode(mode string) (os.FileMode, error) {
+	if mode == "" {
+		return 0644, nil
+	}
+	parsed, err := strconv.ParseUint(mode, 8, 32)
+	if err != nil || parsed > 0o777 {
+		return 0, fmt.Errorf("mode must be octal permissions such as 0755, got %q", mode)
+	}
+	return os.FileMode(parsed), nil
 }
 
 // ReadsHarness reports whether any config file expression reads harness inputs.

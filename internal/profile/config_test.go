@@ -176,12 +176,17 @@ func TestClaudeStatusLine(t *testing.T) {
 		want       string
 	}{
 		{map[string]any{"command": "starship statusline", "padding": 1}, `"command": "starship statusline", "padding": 1,`},
-		{map[string]any{"script": "#!/bin/sh\necho hi\n", "refresh_interval": 5}, `"command": "#!/bin/sh\necho hi\n", "refreshInterval": 5,`},
-		{map[string]any{"file": "/opt/it's/line.sh"}, `"command": "'/opt/it'\\''s/line.sh'",`},
+		{map[string]any{"script": "echo hi", "content": "#!/bin/sh\necho hi", "refresh_interval": 5}, `"command": "\"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh\"", "refreshInterval": 5,`},
+		{map[string]any{"file": "/src/line.sh", "content": "#!/bin/sh\necho hi"}, `"command": "\"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh\"",`},
 	} {
 		got, result, err := render(c.statusline)
 		if err != nil || !strings.Contains(got, c.want) || !strings.Contains(got, `"type": "command"`) || len(result.Warnings) > 0 {
 			t.Errorf("%v: %v %s %v", c.statusline, err, got, result)
+			continue
+		}
+		script, deployed := result.Files["statusline.sh"]
+		if deployed != (c.statusline["content"] != nil) || deployed && (string(script) != c.statusline["content"] || result.Modes["statusline.sh"] != 0o755) {
+			t.Errorf("%v: deployed %q %v", c.statusline, script, result.Modes)
 		}
 	}
 	for _, bad := range []map[string]any{{}, {"command": "a", "script": "b"}} {

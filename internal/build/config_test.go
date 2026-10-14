@@ -60,12 +60,23 @@ func TestBuildConfigArtifact(t *testing.T) {
 	if err != nil || len(result.Errors) == 0 || !strings.Contains(result.Errors[0].Error(), "statusline") {
 		t.Fatalf("accepted a missing status line script: %v %v", err, result.Errors)
 	}
-	if err := os.WriteFile(script, []byte("#!/bin/sh\n"), 0755); err != nil {
+	if err := os.WriteFile(script, []byte("echo hi\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	result, err = Run(t.Context(), []string{source}, t.TempDir(), map[string]henia.Harness{"claude": claude})
+	out := t.TempDir()
+	result, err = Run(t.Context(), []string{source}, out, map[string]henia.Harness{"claude": claude})
 	if err != nil || len(result.Errors) > 0 || len(result.Warnings) > 0 {
 		t.Fatal(err, result.Errors, result.Warnings)
+	}
+	deployed := filepath.Join(out, "claude", "statusline.sh")
+	written, err := os.ReadFile(deployed)
+	info, statErr := os.Stat(deployed)
+	if err != nil || statErr != nil || string(written) != "#!/bin/sh\necho hi\n" || info.Mode().Perm() != 0o755 {
+		t.Fatalf("status line not deployed: %v %q %v", err, written, info)
+	}
+	settings, _ := os.ReadFile(filepath.Join(out, "claude", "settings.json"))
+	if strings.Contains(string(settings), source) {
+		t.Fatalf("settings reference the source path: %s", settings)
 	}
 	codex.Config.StatusLine = map[string]any{"command": "echo hi"}
 	result, err = Run(t.Context(), []string{source}, t.TempDir(), map[string]henia.Harness{"codex": codex})

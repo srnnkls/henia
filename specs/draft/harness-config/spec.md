@@ -57,7 +57,8 @@ the default.
 ### Config rendering
 
 - `[config.files.<id>]`: `path`, `format` (`json`, `yaml`, `toml`, `text`),
-  optional `value`, `schema`, `arrays` (`replace` default, or `concat`).
+  optional `value`, `schema`, `arrays` (`replace` default, or `concat`),
+  `mode` (octal, `0644` default).
 - `value` sees `shared`, `harness` (this harness's typed inputs), `ctx`
   (`name`, `profile`, `path`, `variables`, `tools`, `keys`), `merge` and
   `require`. Native data merges over the result once.
@@ -79,7 +80,7 @@ the default.
 
 | Harness | Files | Inputs |
 |---|---|---|
-| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`) | `shared.mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`; `harness.statusline` → `statusLine` |
+| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`), `statusline.sh` (`statusline`, `0755`) | `shared.mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`; `harness.statusline` → `statusLine` |
 | codex | `config.toml` (`main`, schema) | `shared.mcp.<server>`: `command`, `args`, `url`, `env` (`$NAME` → `env_vars`, literals → `env`); a reference must name its own variable |
 
 ### Status line
@@ -88,9 +89,11 @@ the default.
 is), `script` (inline, run by the shell) or `file`, plus `padding`,
 `refresh_interval` and `hide_vim_mode`.
 
-- A `file` resolves against the root of the layer that sets it and reaches
-  Claude Code as its quoted absolute path. Building config fails when it is
-  missing or not executable.
+- A `script` or `file` deploys as `statusline.sh` in the harness tree, with a
+  `#!/bin/sh` line when it has none; `statusLine.command` runs
+  `"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline.sh"`.
+- A `file` resolves against the root of the layer that sets it. Building config
+  fails when it is missing.
 - A later layer's `statusline` replaces the earlier one whole.
 - A harness whose profile reads no harness inputs warns that its `statusline`
   is omitted.

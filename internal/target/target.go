@@ -132,7 +132,11 @@ func (t *HarnessTarget) Write(art *artifact.Artifact) error {
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(art.Files)) {
-		if err := write(name, art.Files[name], 0644); err != nil {
+		mode, ok := art.Modes[name]
+		if !ok {
+			mode = 0644
+		}
+		if err := write(name, art.Files[name], mode); err != nil {
 			return err
 		}
 	}
