@@ -35,7 +35,7 @@ var checkIDs = []string{
 	components.MissingInclude, components.InvalidInclude, components.UnknownTarget, components.UnknownVariable,
 	components.ComponentCycle, components.IncludeCycle, components.InvalidComponent, components.RemovedComposition,
 	"duplicate-attribute", "unclosed-directive",
-	MCPTransport, ConfigInvalid, ConfigSchema, ConfigUnused,
+	MCPTransport, MCPHeader, ConfigInvalid, ConfigSchema, ConfigUnused,
 }
 
 type unit struct {

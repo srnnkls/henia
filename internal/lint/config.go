@@ -2,7 +2,9 @@ package lint
 
 import (
 	"maps"
+	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/srnnkls/henia/internal/components"
 	"github.com/srnnkls/henia/internal/profile"
@@ -10,6 +12,7 @@ import (
 
 const (
 	MCPTransport  = "mcp-transport"
+	MCPHeader     = "mcp-header"
 	ConfigInvalid = "config-invalid"
 	ConfigSchema  = "config-schema"
 	ConfigUnused  = "config-unused"
@@ -39,7 +42,7 @@ func (p *Plan) configDiagnostics() ([]Diagnostic, error) {
 		loc := keys.locate(key)
 		return Diagnostic{Path: loc.Path, Line: loc.Line, Column: loc.Column, Severity: severity, Rule: rule, Message: message, Stage: StageConfig}
 	}
-	out := mcpTransport(built[names[0]].Shared, at)
+	out := mcpServers(built[names[0]].Shared, at)
 	var specific perHarness
 	for _, name := range names {
 		h := built[name]
@@ -64,7 +67,9 @@ func (p *Plan) configDiagnostics() ([]Diagnostic, error) {
 	return slices.DeleteFunc(out, func(d Diagnostic) bool { return p.disabled[d.Rule] }), nil
 }
 
-func mcpTransport(shared map[string]any, at func(key, severity, rule, message string) Diagnostic) []Diagnostic {
+var headerReference = regexp.MustCompile(`^(Bearer )?\$[A-Za-z_][A-Za-z0-9_]*$`)
+
+func mcpServers(shared map[string]any, at func(key, severity, rule, message string) Diagnostic) []Diagnostic {
 	servers, _ := shared["mcp"].(map[string]any)
 	var out []Diagnostic
 	for _, name := range slices.Sorted(maps.Keys(servers)) {
@@ -77,10 +82,41 @@ func mcpTransport(shared map[string]any, at func(key, severity, rule, message st
 			problem = "sets neither command nor url"
 		case command && url:
 			problem = "sets both command and url"
+		}
+		if problem != "" {
+			out = append(out, at("shared.mcp."+name, components.LevelError, MCPTransport, "MCP server "+name+" "+problem))
+		}
+		out = append(out, mcpHeaders(name, server, url, at)...)
+	}
+	return out
+}
+
+// mcpHeaders accepts the header values every harness can carry: a literal,
+// a whole "$NAME", or "Bearer $NAME" on Authorization.
+func mcpHeaders(name string, server map[string]any, url bool, at func(key, severity, rule, message string) Diagnostic) []Diagnostic {
+	headers, _ := server["headers"].(map[string]any)
+	if len(headers) == 0 {
+		return nil
+	}
+	key := "shared.mcp." + name + ".headers"
+	if !url {
+		return []Diagnostic{at(key, components.LevelError, MCPHeader, "MCP server "+name+" sets headers without url")}
+	}
+	var out []Diagnostic
+	for _, header := range slices.Sorted(maps.Keys(headers)) {
+		value, _ := headers[header].(string)
+		var problem string
+		switch {
+		case !strings.Contains(value, "$"):
+			continue
+		case !headerReference.MatchString(value):
+			problem = "references a variable as neither $NAME nor Bearer $NAME"
+		case strings.HasPrefix(value, "Bearer ") && !strings.EqualFold(header, "Authorization"):
+			problem = "uses Bearer $NAME outside Authorization"
 		default:
 			continue
 		}
-		out = append(out, at("shared.mcp."+name, components.LevelError, MCPTransport, "MCP server "+name+" "+problem))
+		out = append(out, at(key+"."+header, components.LevelError, MCPHeader, "MCP server "+name+" header "+header+" "+problem))
 	}
 	return out
 }

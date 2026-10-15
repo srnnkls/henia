@@ -301,6 +301,13 @@ $ cat /tmp/henia-test-config/codex/config.toml
 approval_policy = 'on-request'
 
 [mcp_servers]
+[mcp_servers.docs]
+bearer_token_env_var = 'DOCS_TOKEN'
+url = 'https://docs.example.com/mcp'
+
+[mcp_servers.docs.http_headers]
+X-Client = 'henia'
+
 [mcp_servers.github]
 args = ['serve']
 command = 'gh-mcp'
@@ -311,6 +318,14 @@ env_vars = ['GITHUB_TOKEN']
 $ cat /tmp/henia-test-config/claude/.mcp.json /tmp/henia-test-config/claude/settings.json
 {
   "mcpServers": {
+    "docs": {
+      "headers": {
+        "Authorization": "Bearer ${DOCS_TOKEN}",
+        "X-Client": "henia"
+      },
+      "type": "http",
+      "url": "https://docs.example.com/mcp"
+    },
     "github": {
       "args": [
         "serve"
