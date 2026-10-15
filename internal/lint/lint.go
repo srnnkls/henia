@@ -16,6 +16,7 @@ import (
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/pipeline"
+	"github.com/srnnkls/henia/internal/profile"
 	"github.com/srnnkls/henia/internal/slots"
 )
 
@@ -60,6 +61,9 @@ type Options struct {
 	Packages     []pipeline.Dependency     `toml:"-"`
 	Configured   map[string]henia.Harness  `toml:"-"`
 	Provided     []slots.Skill             `toml:"-"`
+	Artifacts    []string                  `toml:"-"`
+	ConfigFiles  []string                  `toml:"-"`
+	Schemas      *profile.Schemas          `toml:"-"`
 	Now          time.Time                 `toml:"-"`
 }
 

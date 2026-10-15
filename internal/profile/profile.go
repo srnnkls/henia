@@ -84,6 +84,7 @@ type Result struct {
 	Files       map[string][]byte
 	Modes       map[string]os.FileMode
 	Warnings    []string
+	Omitted     []string
 }
 
 // Load merges a profile's tables from bundled, user and project definitions.

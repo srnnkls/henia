@@ -146,8 +146,18 @@ In a project install, `statusLine.command` runs
 `"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}/<dir>/statusline.sh"`,
 where `<dir>` is the harness directory relative to the project root.
 
+### Lint
+
+- `henia lint` checks config at its own `config` stage, in Go rather than as
+  query rules, for every harness whose `artifacts` include `config`.
+- Rules: `mcp-transport` (a shared server without exactly one of `command`
+  and `url`), `config-invalid` (a failing profile expression), `config-schema`
+  (a schema violation, warning) and `config-unused` (an input the profile
+  never reads, warning).
+- A finding points at the `henia.toml` key it concerns, in the
+  highest-precedence layer that sets it.
+
 ## Open
 
-1. Lint rules over config.
-2. Header values in the shared MCP vocabulary.
-3. pi prompt templates (`prompts/`) and omp built-in command names.
+1. Header values in the shared MCP vocabulary.
+2. pi prompt templates (`prompts/`) and omp built-in command names.

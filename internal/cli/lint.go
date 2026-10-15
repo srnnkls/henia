@@ -14,6 +14,7 @@ import (
 	"github.com/srnnkls/henia"
 	"github.com/srnnkls/henia/internal/build"
 	"github.com/srnnkls/henia/internal/config"
+	"github.com/srnnkls/henia/internal/deps"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
 	"github.com/srnnkls/henia/internal/profile"
@@ -171,6 +172,11 @@ func lintOptions(cmd *cobra.Command) (lint.Options, *config.Config, error) {
 		}
 	}
 	options.Project, options.User, options.Configured = project, library.ConfigDir(), cfg.Harness
+	if cfg.Path != "" {
+		options.ConfigFiles = []string{deps.Local(cfg.Path), cfg.Path}
+	}
+	options.ConfigFiles = append(options.ConfigFiles, filepath.Join(library.ConfigDir(), "henia.toml"))
+	options.Artifacts, options.Schemas = cfg.Artifacts, profile.NewSchemas()
 	var dependencies []library.Package
 	for _, pkg := range lib.Packages {
 		if pkg.Tier == library.Dependency {
