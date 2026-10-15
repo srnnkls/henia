@@ -34,6 +34,7 @@ value = '''
   command: s.command,
   args: s.args,
   url: s.url,
-  env: s.env == nil ? nil : fromPairs(map(toPairs(s.env), [#[0], hasPrefix(#[1], "$") ? "${" + trimPrefix(#[1], "$") + "}" : #[1]]))
+  env: s.env == nil ? nil : fromPairs(map(toPairs(s.env), [#[0], hasPrefix(#[1], "$") ? "${" + trimPrefix(#[1], "$") + "}" : #[1]])),
+  headers: s.headers == nil ? nil : fromPairs(map(toPairs(s.headers), [#[0], hasPrefix(#[1], "$") ? "${" + trimPrefix(#[1], "$") + "}" : hasPrefix(#[1], "Bearer $") ? "Bearer ${" + trimPrefix(#[1], "Bearer $") + "}" : #[1]]))
 }]))}
 '''

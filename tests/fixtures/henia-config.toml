@@ -5,6 +5,10 @@ command = "gh-mcp"
 args = ["serve"]
 env = { GITHUB_TOKEN = "$GITHUB_TOKEN" }
 
+[shared.mcp.docs]
+url = "https://docs.example.com/mcp"
+headers = { Authorization = "Bearer $DOCS_TOKEN", X-Client = "henia" }
+
 [harness.claude.config.native]
 permissions = { allow = ["Read"] }
 

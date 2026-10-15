@@ -120,6 +120,42 @@ func TestConfigRejectsInvalidDefinitions(t *testing.T) {
 	}
 }
 
+func TestBundledMCPHeaders(t *testing.T) {
+	shared := map[string]any{"mcp": map[string]any{"docs": map[string]any{"url": "https://docs.example.com/mcp", "headers": map[string]any{
+		"Authorization": "Bearer $DOCS_TOKEN", "X-Team": "$TEAM_ID", "X-Client": "henia",
+	}}}}
+	want := map[string][]string{
+		"claude": {`"Authorization": "Bearer ${DOCS_TOKEN}"`, `"X-Team": "${TEAM_ID}"`, `"X-Client": "henia"`},
+		"pi":     {`"Authorization": "Bearer ${DOCS_TOKEN}"`, `"X-Team": "${TEAM_ID}"`, `"X-Client": "henia"`},
+		"omp":    {`"Authorization": "!printf 'Bearer %s' \"$DOCS_TOKEN\""`, `"X-Team": "TEAM_ID"`, `"X-Client": "henia"`},
+		"codex":  {"bearer_token_env_var = 'DOCS_TOKEN'", "[mcp_servers.docs.env_http_headers]\nX-Team = 'TEAM_ID'", "[mcp_servers.docs.http_headers]\nX-Client = 'henia'"},
+	}
+	files := map[string]string{"claude": ".mcp.json", "pi": "mcp.json", "omp": "mcp.json", "codex": "config.toml"}
+	for name, fragments := range want {
+		h, err := Load(name, t.TempDir(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		compiler, err := NewConfigCompiler(h.Config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := compiler.Render(shared, nil, nil, Context{Name: name, Profile: name}, &Schemas{})
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		out := string(result.Files[files[name]])
+		for _, fragment := range fragments {
+			if !strings.Contains(out, fragment) {
+				t.Errorf("%s %s lacks %s:\n%s", name, files[name], fragment, out)
+			}
+		}
+		if len(result.Warnings) != 0 {
+			t.Errorf("%s warnings = %v", name, result.Warnings)
+		}
+	}
+}
+
 func TestBundledConfigSections(t *testing.T) {
 	shared := map[string]any{"mcp": map[string]any{
 		"github": map[string]any{"command": "gh-mcp", "env": map[string]any{"GITHUB_TOKEN": "$GITHUB_TOKEN", "LOG_LEVEL": "debug"}},

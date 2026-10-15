@@ -85,8 +85,14 @@ the default.
 
 | Harness | Files | Inputs |
 |---|---|---|
-| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`), `statusline.sh` (`statusline`, `0755`) | `shared.mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`; `harness.statusline` → `statusLine` |
-| codex | `config.toml` (`main`, schema) | `shared.mcp.<server>`: `command`, `args`, `url`, `env` (`$NAME` → `env_vars`, literals → `env`); a reference must name its own variable |
+| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`), `statusline.sh` (`statusline`, `0755`) | `shared.mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`, `headers` (`$NAME` → `${NAME}`); `harness.statusline` → `statusLine` |
+| codex | `config.toml` (`main`, schema) | `shared.mcp.<server>`: `command`, `args`, `url`, `env` (`$NAME` → `env_vars`, literals → `env`), `headers` (literals → `http_headers`, `$NAME` → `env_http_headers`, `Bearer $NAME` → `bearer_token_env_var`); a reference must name its own variable |
+| pi | `settings.json` (`main`, schema), `mcp.json` (`mcp`) | `shared.mcp.<server>`: as claude, without `type` |
+| omp | `config.yml` (`main`), `mcp.json` (`mcp`, schema) | `shared.mcp.<server>`: `$NAME` → `NAME`, which omp resolves; `Bearer $NAME` → `!printf 'Bearer %s' "$NAME"`; `type` is `http` or `stdio` |
+
+A `headers` value is a literal, a whole `$NAME`, or `Bearer $NAME` on
+`Authorization`: the forms every bundled harness can carry. Headers need a
+`url` server.
 
 ### Status line
 
@@ -151,7 +157,8 @@ where `<dir>` is the harness directory relative to the project root.
 - `henia lint` checks config at its own `config` stage, in Go rather than as
   query rules, for every harness whose `artifacts` include `config`.
 - Rules: `mcp-transport` (a shared server without exactly one of `command`
-  and `url`), `config-invalid` (a failing profile expression), `config-schema`
+  and `url`), `mcp-header` (headers on a server without `url`, or a value in
+  a form not every harness carries), `config-invalid` (a failing profile expression), `config-schema`
   (a schema violation, warning) and `config-unused` (an input the profile
   never reads, warning).
 - A finding points at the `henia.toml` key it concerns, in the
@@ -159,5 +166,4 @@ where `<dir>` is the harness directory relative to the project root.
 
 ## Open
 
-1. Header values in the shared MCP vocabulary.
-2. pi prompt templates (`prompts/`) and omp built-in command names.
+1. pi prompt templates (`prompts/`) and omp built-in command names.

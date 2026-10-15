@@ -21,7 +21,7 @@ func configProject(t *testing.T, toml string, harnesses map[string]henia.Harness
 	for _, f := range extra {
 		f(&options)
 	}
-	return withRule(lintProject(t, options, filepath.Join(root, "skills")), lint.MCPTransport, lint.ConfigInvalid, lint.ConfigSchema, lint.ConfigUnused)
+	return withRule(lintProject(t, options, filepath.Join(root, "skills")), lint.MCPTransport, lint.MCPHeader, lint.ConfigInvalid, lint.ConfigSchema, lint.ConfigUnused)
 }
 
 func mcp(servers map[string]any) map[string]any { return map[string]any{"mcp": servers} }
@@ -106,5 +106,27 @@ func TestConfigKeysLocateInPrecedenceOrder(t *testing.T) {
 	found := withRule(lintProject(t, options, filepath.Join(root, "skills")), lint.MCPTransport)
 	if len(found) != 1 || found[0].Path != user || found[0].Line != 2 || !strings.Contains(found[0].Message, "docs") {
 		t.Fatalf("diagnostics = %+v, want docs located at %s:2", found, user)
+	}
+}
+
+func TestMCPHeadersTakeOnlyFormsEveryHarnessCarries(t *testing.T) {
+	toml := "[shared.mcp.docs]\nurl = \"https://docs.example/mcp\"\n\n[shared.mcp.docs.headers]\nAuthorization = \"Bearer $TOKEN\"\nX-Team = \"$TEAM\"\nX-Client = \"henia\"\nX-Key = \"key-$KEY\"\nX-Auth = \"Bearer $TOKEN\"\n\n[shared.mcp.local]\ncommand = \"srv\"\nheaders = { X-Team = \"$TEAM\" }\n"
+	shared := mcp(map[string]any{
+		"docs":  map[string]any{"url": "https://docs.example/mcp", "headers": map[string]any{"Authorization": "Bearer $TOKEN", "X-Team": "$TEAM", "X-Client": "henia", "X-Key": "key-$KEY", "X-Auth": "Bearer $TOKEN"}},
+		"local": map[string]any{"command": "srv", "headers": map[string]any{"X-Team": "$TEAM"}},
+	})
+	var got []string
+	for _, d := range configProject(t, toml, map[string]henia.Harness{"claude": {Profile: "claude", Shared: shared}}) {
+		if d.Rule == lint.MCPHeader {
+			got = append(got, fmt.Sprintf("%d:%s", d.Line, d.Message))
+		}
+	}
+	want := []string{
+		"8:MCP server docs header X-Key references a variable as neither $NAME nor Bearer $NAME",
+		"9:MCP server docs header X-Auth uses Bearer $NAME outside Authorization",
+		"13:MCP server local sets headers without url",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("diagnostics = %q, want %q", got, want)
 	}
 }

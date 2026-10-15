@@ -32,6 +32,7 @@ value = '''
   command: s.command,
   args: s.args,
   url: s.url,
-  env: s.env == nil ? nil : fromPairs(map(toPairs(s.env), [#[0], trimPrefix(#[1], "$")]))
+  env: s.env == nil ? nil : fromPairs(map(toPairs(s.env), [#[0], trimPrefix(#[1], "$")])),
+  headers: s.headers == nil ? nil : fromPairs(map(toPairs(s.headers), [#[0], hasPrefix(#[1], "Bearer $") ? "!printf 'Bearer %s' \"$" + trimPrefix(#[1], "Bearer $") + "\"" : trimPrefix(#[1], "$")]))
 }]))}
 '''

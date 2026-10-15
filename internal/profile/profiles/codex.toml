@@ -31,6 +31,9 @@ value = '''
   args: s.args,
   url: s.url,
   env: s.env == nil ? nil : fromPairs(filter(toPairs(s.env), !hasPrefix(#[1], "$"))),
-  env_vars: s.env == nil ? nil : any(toPairs(s.env), hasPrefix(#[1], "$") && #[1] != "$" + #[0]) ? require(nil, "codex forwards environment variables by name only; write each reference as \"$NAME\" of its own name") : (let refs = sort(map(filter(toPairs(s.env), hasPrefix(#[1], "$")), #[0])); len(refs) == 0 ? nil : refs)
+  env_vars: s.env == nil ? nil : any(toPairs(s.env), hasPrefix(#[1], "$") && #[1] != "$" + #[0]) ? require(nil, "codex forwards environment variables by name only; write each reference as \"$NAME\" of its own name") : (let refs = sort(map(filter(toPairs(s.env), hasPrefix(#[1], "$")), #[0])); len(refs) == 0 ? nil : refs),
+  http_headers: s.headers == nil ? nil : (let literal = filter(toPairs(s.headers), !(#[1] contains "$")); len(literal) == 0 ? nil : fromPairs(literal)),
+  env_http_headers: s.headers == nil ? nil : (let refs = filter(toPairs(s.headers), hasPrefix(#[1], "$")); len(refs) == 0 ? nil : fromPairs(map(refs, [#[0], trimPrefix(#[1], "$")]))),
+  bearer_token_env_var: s.headers == nil ? nil : (let bearer = filter(toPairs(s.headers), lower(#[0]) == "authorization" && hasPrefix(#[1], "Bearer $")); len(bearer) == 0 ? nil : trimPrefix(bearer[0][1], "Bearer $"))
 }]))}
 '''

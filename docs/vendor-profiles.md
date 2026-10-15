@@ -323,16 +323,23 @@ Secrets stay out of `[shared]`: `"$GITHUB_TOKEN"` names an environment
 variable, and each profile maps the reference to its harness's spelling. Henia
 never reads the variable.
 
-The bundled profiles read `[shared.mcp.<server>]` with `command`, `args`, `env`
-and `url`. An `env` value starting with `$` references a variable; any other
-value is literal.
+The bundled profiles read `[shared.mcp.<server>]` with `command`, `args`, `env`,
+`url` and `headers`. An `env` value starting with `$` references a variable;
+any other value is literal. A `headers` value, for a `url` server, is a
+literal, a whole `$NAME`, or `Bearer $NAME` on `Authorization`:
+
+```toml
+[shared.mcp.docs]
+url = "https://docs.example.com/mcp"
+headers = { Authorization = "Bearer $DOCS_TOKEN", X-Team = "$TEAM_ID" }
+```
 
 | Harness | Files | Mapping |
 |---|---|---|
 | claude | `settings.json` (id `main`), `.mcp.json` (id `mcp`) | references become `${NAME}`; a `url` server gets `type = "http"` |
-| codex | `config.toml` (id `main`) | references become `env_vars`, literals `env`; a reference must name its own variable |
+| codex | `config.toml` (id `main`) | references become `env_vars`, literals `env`; a reference must name its own variable. Header literals become `http_headers`, `$NAME` `env_http_headers`, `Bearer $NAME` `bearer_token_env_var` |
 | pi | `settings.json` (id `main`), `mcp.json` (id `mcp`) | references become `${NAME}` |
-| omp | `config.yml` (id `main`), `mcp.json` (id `mcp`) | references become the bare variable name, which omp resolves; a `url` server gets `type = "http"`, others `stdio` |
+| omp | `config.yml` (id `main`), `mcp.json` (id `mcp`) | references become the bare variable name, which omp resolves; `Bearer $NAME` becomes `!printf 'Bearer %s' "$NAME"`; a `url` server gets `type = "http"`, others `stdio` |
 
 pi and omp keep both files in the harness directory (`~/.pi/agent`, `.pi`,
 `~/.omp/agent`, `.omp`). Both are merged on install, MCP servers by name. A
