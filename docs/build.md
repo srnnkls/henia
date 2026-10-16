@@ -183,9 +183,9 @@ covers both tables.
 `[harness.<name>.files]` copies support documents into a harness tree, as
 with `AGENTS.md` above. The source resolves inside the input directory, or
 inside the skill package whose harness lists the file, and the destination
-inside the harness root. A file the user henia.toml lists resolves in that
-file's directory, `~/.config/henia/`, unless the project lists the same
-destination. Markdown sources render their references
+inside the harness root. A file only the user henia.toml lists belongs to the
+user's harness homes: `henia install --global` resolves it in
+`~/.config/henia/`, and project builds leave it out. Markdown sources render their references
 in the harness's syntax and resolve their directives first; `replace` then
 applies literal replacements, all at once. Other sources copy verbatim apart
 from `replace`.

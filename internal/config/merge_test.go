@@ -224,10 +224,27 @@ func TestHarnessTablesResolveStatusLineAgainstTheirFile(t *testing.T) {
 	}
 }
 
-func TestUserFilesResolveInTheUserLayer(t *testing.T) {
+func TestUserFilesStayOutOfProjectBuilds(t *testing.T) {
 	project, user := t.TempDir(), t.TempDir()
 	userData := []byte("[harness.claude.files]\n\"a.sh\" = { source = \"claude/a.sh\" }\n\"b.sh\" = { source = \"claude/b.sh\" }\n")
 	cfg, err := decodeLayers(project, user, userData, []byte("[harness.claude.files]\n\"b.sh\" = { source = \"own/b.sh\" }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := cfg.Harness["claude"].Files
+	if _, ok := files["a.sh"]; ok {
+		t.Fatalf("user file in a project build: %+v", files["a.sh"])
+	}
+	if files["b.sh"].Root != "" || files["b.sh"].Source != "own/b.sh" {
+		t.Fatalf("project file %+v", files["b.sh"])
+	}
+}
+
+func TestUserFilesResolveInTheUserLayerForHomeInstalls(t *testing.T) {
+	pkg, user := t.TempDir(), t.TempDir()
+	pkgData := []byte("[harness.claude.files]\n\"b.sh\" = { source = \"own/b.sh\" }\n")
+	userData := []byte("[harness.claude.files]\n\"a.sh\" = { source = \"claude/a.sh\" }\n")
+	cfg, err := decode(pkg, user, []layer{{pkgData, pkg, false}, {userData, user, true}}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,6 +253,6 @@ func TestUserFilesResolveInTheUserLayer(t *testing.T) {
 		t.Fatalf("user file root %q", files["a.sh"].Root)
 	}
 	if files["b.sh"].Root != "" || files["b.sh"].Source != "own/b.sh" {
-		t.Fatalf("project file %+v", files["b.sh"])
+		t.Fatalf("package file %+v", files["b.sh"])
 	}
 }

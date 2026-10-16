@@ -157,8 +157,9 @@ func InstallTables(path string) (map[string]InstallTarget, error) {
 
 // LoadPackage loads a skill package's henia.toml with the user layer merged
 // over it, then the given harness tables over the harnesses the package
-// configures itself.
-func LoadPackage(path string, harnesses map[string]any) (*Config, error) {
+// configures itself. home keeps the supporting files only the user layer
+// lists, for an install into the user's harness homes.
+func LoadPackage(path string, harnesses map[string]any, home bool) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
@@ -190,7 +191,7 @@ func LoadPackage(path string, harnesses map[string]any) (*Config, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	cfg, err := decode(root, userRoot, []layer{{data, root, false}, {userData, userRoot, true}, {overrideData, root, false}})
+	cfg, err := decode(root, userRoot, []layer{{data, root, false}, {userData, userRoot, true}, {overrideData, root, false}}, home)
 	if err != nil {
 		return nil, err
 	}
@@ -278,8 +279,9 @@ func resolveHarnessFiles(harnesses map[string]any, root string) error {
 }
 
 // userFileRoots resolves the supporting files the user layer declares, and no
-// later layer redeclares, in the user layer's directory.
-func userFileRoots(cfg *Config, user, project map[string]any, root string) {
+// later layer redeclares, in the user layer's directory for a harness home
+// install, and drops them from any other build.
+func userFileRoots(cfg *Config, user, project map[string]any, root string, home bool) {
 	for name, value := range user {
 		harness, _ := value.(map[string]any)
 		files, _ := harness["files"].(map[string]any)
@@ -291,6 +293,10 @@ func userFileRoots(cfg *Config, user, project map[string]any, root string) {
 			}
 			file, ok := cfg.Harness[name].Files[path]
 			if !ok {
+				continue
+			}
+			if !home {
+				delete(cfg.Harness[name].Files, path)
 				continue
 			}
 			file.Root = root
@@ -450,11 +456,11 @@ type layer struct {
 }
 
 func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*Config, error) {
-	return decode(projectRoot, userRoot, []layer{{userData, userRoot, true}, {projectData, projectRoot, false}})
+	return decode(projectRoot, userRoot, []layer{{userData, userRoot, true}, {projectData, projectRoot, false}}, false)
 }
 
 // decode merges the layers in order over the bundled defaults.
-func decode(projectRoot, userRoot string, layers []layer) (*Config, error) {
+func decode(projectRoot, userRoot string, layers []layer, home bool) (*Config, error) {
 	var base map[string]any
 	if err := toml.Unmarshal([]byte(defaults.ConfigTOML), &base); err != nil {
 		return nil, err
@@ -532,7 +538,7 @@ func decode(projectRoot, userRoot string, layers []layer) (*Config, error) {
 		return nil, err
 	}
 	cfg.Selected = explicit
-	userFileRoots(&cfg, userHarnesses, later, userRoot)
+	userFileRoots(&cfg, userHarnesses, later, userRoot, home)
 	if cfg.Build.Output == "" {
 		cfg.Build.Output = ".henia/build"
 	}
