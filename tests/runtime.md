@@ -7,7 +7,7 @@ and projections for two harnesses.
 
 ```scrut
 $ T=$(cd "$(mktemp -d)" && pwd -P); L="$T/data/henia/packages/global"; P="$T/repo"
-> henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia "$@"; }
+> henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_STATE_HOME="$T/state" henia "$@"; }
 > mk() { mkdir -p "$(dirname "$1")"; printf -- "$2" > "$1"; }
 > mk "$L/tropos/skills/code/SKILL.md" '---\nname: code\ndescription: Code workflows.\nhenia:\n  slots:\n    code.style:\n    code.check: keyed(list(command))\n---\n\n# Code\n\nFollow `$style-guide` and `$checks`.\n\n:slot[code.style code.check]\n'
 > mk "$L/tropos/skills/style-guide/SKILL.md" '---\nname: style-guide\ndescription: House style by language.\nhenia:\n  provides:\n    code.style.go:\n---\n\n# Style guide\n\nShared rules.\n\n## Go\n\nRun gofmt. Canary: CANARY-GO.\n\n### Errors\n\nWrap with %%w.\n\n## Python\n\nUse ruff.\n'
@@ -137,7 +137,7 @@ See `/skill:style-guide` and `/skill:code`. Flavor: pi.
 ```
 
 ```scrut
-$ env HENIA_HARNESS=pi XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia show checks | tail -n 1
+$ env HENIA_HARNESS=pi XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_STATE_HOME="$T/state" henia show checks | tail -n 1
 See `/skill:style-guide` and `/skill:code`. Flavor: pi.
 ```
 
@@ -306,9 +306,9 @@ wins.
 
 ```scrut
 $ mkdir -p "$T/config/henia"; printf '[resources]\ndisclosure = false\n' > "$T/config/henia/henia.toml"
-> env XDG_CONFIG_HOME="$T/config" HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia show res | grep -c '## Resources'
+> env XDG_CONFIG_HOME="$T/config" HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_STATE_HOME="$T/state" henia show res | grep -c '## Resources'
 > printf -- '---\nname: res\ndescription: Resources.\nhenia:\n  resources:\n    disclosure: true\n---\n\n# Res\n' > "$R/SKILL.md"
-> env XDG_CONFIG_HOME="$T/config" HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" henia show res | grep -c '## Resources'
+> env XDG_CONFIG_HOME="$T/config" HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_STATE_HOME="$T/state" henia show res | grep -c '## Resources'
 > printf -- '---\nname: res\ndescription: Resources.\nhenia:\n  resources:\n    disclosure: false\n---\n\n# Res\n' > "$R/SKILL.md"
 > henia show res | grep -c '## Resources'; rm "$T/config/henia/henia.toml"
 0
@@ -327,7 +327,7 @@ $ B="$T/bin"; S="$L/tropos/skills/pre"; mkdir -p "$B" "$S" "$T/config/henia"
 > printf '#!/bin/sh\necho "gh $*"\n' > "$B/gh"
 > printf '#!/bin/sh\necho "curl $*"\n' > "$B/curl"
 > chmod +x "$B/gh" "$B/curl"
-> hn() { env PATH="$B:$PATH" HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_CONFIG_HOME="$T/config" henia "$@"; }
+> hn() { env PATH="$B:$PATH" HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" henia "$@"; }
 > pre() { printf -- '---\nname: pre\ndescription: Preloads.\n---\n\n```!\n%s\n```\n' "$1" > "$S/SKILL.md"; hn show pre; }
 > printf -- '---\nname: pre\ndescription: Preloads.\n---\n\n# Pre\n\n- Branch: !`git --no-optional-locks branch --show-current`\n\n```!\necho one\necho two\n```\n\nExamples stay text: `` !`date` `` and\n\n```markdown\nStatus: !`git status`\n```\n' > "$S/SKILL.md"
 > git -C "$P" checkout -q -b main 2>/dev/null; hn show pre

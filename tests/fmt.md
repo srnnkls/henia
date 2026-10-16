@@ -87,7 +87,7 @@ inside emphasis, renders and formats as written.
 
 ```scrut
 $ L="$T/data/henia/packages/global/pkg"
-> henia() { HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" command henia "$@"; }
+> henia() { HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_STATE_HOME="$T/state" command henia "$@"; }
 > mk "$L/skills/links/SKILL.md" '---\nname: links\ndescription: Code span labels.\n---\n\n# Links\n\nSee [`peer path`](../peer/SKILL.md#x), [a `b`](y.md), [`c` d](z.md), [``e`f``](v.md) and [*`g` h*](w.md).\n'
 > printf '[harness.claude]\nartifacts = ["skills"]\n' > "$L/henia.toml"
 > cp "$L/skills/links/SKILL.md" links.orig
