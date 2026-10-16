@@ -22,7 +22,7 @@ func TestBuildConfigArtifact(t *testing.T) {
 		Artifacts:   []string{"skills", "config"},
 		ProjectRoot: source,
 		Shared:      map[string]any{"mcp": map[string]any{"docs": map[string]any{"url": "https://docs.example.com/mcp"}}},
-		Config:      henia.HarnessConfig{Native: map[string]any{"approval_policy": "never"}},
+		Config:      map[string]any{"approval_policy": "never"},
 	}
 	skillsOnly := codex
 	skillsOnly.Artifacts = []string{"skills"}
@@ -45,17 +45,17 @@ func TestBuildConfigArtifact(t *testing.T) {
 	}
 
 	codex.Files, codex.Strict = nil, true
-	codex.Config.Native = map[string]any{"approval_policy": "sometimes"}
+	codex.Config = map[string]any{"approval_policy": "sometimes"}
 	result, err = Run(t.Context(), []string{source}, t.TempDir(), map[string]henia.Harness{"codex": codex})
 	if err != nil || len(result.Errors) == 0 || !strings.Contains(result.Errors[0].Error(), "invalid config") {
 		t.Fatalf("strict accepted a schema violation: %v %v", err, result.Errors)
 	}
 
-	codex.Strict, codex.Config.Native = false, nil
+	codex.Strict, codex.Config = false, nil
 	claude := codex
 	claude.Profile = "claude"
 	script := filepath.Join(source, "line.sh")
-	claude.Config.StatusLine = map[string]any{"file": script}
+	claude.StatusLine = map[string]any{"file": script}
 	result, err = Run(t.Context(), []string{source}, t.TempDir(), map[string]henia.Harness{"claude": claude})
 	if err != nil || len(result.Errors) == 0 || !strings.Contains(result.Errors[0].Error(), "statusline") {
 		t.Fatalf("accepted a missing status line script: %v %v", err, result.Errors)
@@ -78,7 +78,7 @@ func TestBuildConfigArtifact(t *testing.T) {
 	if strings.Contains(string(settings), source) {
 		t.Fatalf("settings reference the source path: %s", settings)
 	}
-	codex.Config.StatusLine = map[string]any{"command": "echo hi"}
+	codex.StatusLine = map[string]any{"command": "echo hi"}
 	result, err = Run(t.Context(), []string{source}, t.TempDir(), map[string]henia.Harness{"codex": codex})
 	if err != nil || len(result.Errors) > 0 || len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0], "no status line") {
 		t.Fatalf("codex took a status line silently: %v %v %v", err, result.Errors, result.Warnings)

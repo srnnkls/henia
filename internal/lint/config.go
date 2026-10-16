@@ -59,7 +59,7 @@ func (p *Plan) configDiagnostics() ([]Diagnostic, error) {
 			found = append(found, at("harness."+name, components.LevelWarning, ConfigSchema, warning))
 		}
 		for _, input := range result.Omitted {
-			found = append(found, at("harness."+name+".config."+input, components.LevelWarning, ConfigUnused, "profile "+h.Profile+" reads no config."+input))
+			found = append(found, at("harness."+name+"."+input, components.LevelWarning, ConfigUnused, "profile "+h.Profile+" reads no "+input))
 		}
 		specific.add(name, found)
 	}

@@ -35,9 +35,9 @@ func TestProjectInstallConfig(t *testing.T) {
 	fixture(t, filepath.Join(project, "henia.toml"), `artifacts = ["skills", "config"]
 [shared.mcp.github]
 command = "gh-mcp"
-[harness.claude.config.statusline]
+[harness.claude.statusline]
 file = "line.sh"
-[harness.claude.config.native]
+[harness.claude.config]
 permissions = { allow = ["Read"] }
 `)
 	settings := filepath.Join(project, ".claude", "settings.json")
@@ -112,7 +112,7 @@ func TestGlobalInstallConfig(t *testing.T) {
 	fixture(t, filepath.Join(global, "tropos", "henia.toml"), `artifacts = ["skills", "config"]
 [shared.mcp.github]
 command = "gh-mcp"
-[harness.claude.config.statusline]
+[harness.claude.statusline]
 command = "starship statusline"
 `)
 	fixture(t, filepath.Join(global, "tropos", "skills", "pinned", "SKILL.md"), "---\nname: pinned\ndescription: Pinned skill.\n---\n\n# Pinned\n")
@@ -149,10 +149,10 @@ func hookCommands(t *testing.T, settings map[string]any, event string) []string 
 	return commands
 }
 
-const packageHooks = `[harness.claude.config.native]
+const packageHooks = `[harness.claude.config]
 model = "sonnet"
 effortLevel = "high"
-[harness.claude.config.native.hooks]
+[harness.claude.config.hooks]
 SessionStart = [{ hooks = [{ type = "command", command = "fas" }] }]
 PreToolUse = [
   { hooks = [{ type = "command", command = "fas" }] },
@@ -160,9 +160,9 @@ PreToolUse = [
 ]
 `
 
-const userHooks = `[harness.claude.config.native]
+const userHooks = `[harness.claude.config]
 model = "opus"
-[harness.claude.config.native.hooks]
+[harness.claude.config.hooks]
 SessionStart = [{ hooks = [{ type = "command", command = "limen" }] }]
 PreToolUse = [
   { hooks = [{ type = "command", command = "fas" }] },

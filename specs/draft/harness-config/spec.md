@@ -45,10 +45,10 @@ the default.
 ### henia.toml
 
 - `[shared]`: free-form tables, read by every harness's profile.
-- `[harness.<n>.config.native]`: native data. A key naming a config file id
+- `[harness.<n>.config]`: the harness's own config, taken as is. A key naming a config file id
   addresses that file; the remaining keys address file `main` and fail when the
   profile has no `main`.
-- `[harness.<n>.config.statusline]`: see [status line](#status-line).
+- `[harness.<n>.statusline]`: see [status line](#status-line).
 - Arrays under `artifacts` (top level and per harness), `[shared]` and
   `[harness.<n>.config]` replace earlier layers.
 - `artifacts` accepts `config`. The empty-list default (all document types)
@@ -64,7 +64,7 @@ the default.
   `ctx.install_dir` the harness directory relative to the project root.
 - `value` sees `shared`, `harness` (this harness's typed inputs), `ctx`
   (`name`, `profile`, `path`, `variables`, `tools`, `keys`), `merge` and
-  `require`. Native data merges over the result once.
+  `require`. `[harness.<n>.config]` merges over the result once.
 - Nil table entries and array items drop out; an empty result writes no file.
 - Keys are sorted in every format. A `schema` adds `$schema` (json),
   `#:schema` (toml) or a `yaml-language-server` comment (yaml).
@@ -96,7 +96,7 @@ A `headers` value is a literal, a whole `$NAME`, or `Bearer $NAME` on
 
 ### Status line
 
-`[harness.claude.config.statusline]` takes exactly one of `command` (used as
+`[harness.claude.statusline]` takes exactly one of `command` (used as
 is), `script` (inline, run by the shell) or `file`, plus `padding`,
 `refresh_interval` and `hide_vim_mode`.
 

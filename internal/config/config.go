@@ -264,12 +264,11 @@ func layerRoot(path string) (string, error) {
 func resolveHarnessFiles(harnesses map[string]any, root string) error {
 	for name, value := range harnesses {
 		harness, _ := value.(map[string]any)
-		config, _ := harness["config"].(map[string]any)
-		statusline, _ := config["statusline"].(map[string]any)
+		statusline, _ := harness["statusline"].(map[string]any)
 		if path, ok := statusline["file"].(string); ok {
 			resolved, err := layerFile(root, path)
 			if err != nil {
-				return fmt.Errorf("harness.%s.config.statusline.file: %w", name, err)
+				return fmt.Errorf("harness.%s.statusline.file: %w", name, err)
 			}
 			statusline["file"] = resolved
 		}
@@ -314,12 +313,12 @@ func layerFile(root, path string) (string, error) {
 	return filepath.Join(root, path), nil
 }
 
-// extender returns the native paths of a harness whose arrays later layers
+// extender returns the config paths of a harness whose arrays later layers
 // extend, given the harness's merged table.
 type extender func(harness string, table map[string]any) []string
 
 // layerExtensions resolves each harness's profile, the preset's when the
-// layers name none, for the native paths its config files extend.
+// layers name none, for the config paths its config files extend.
 func layerExtensions(projectRoot, userRoot string) extender {
 	return func(harness string, table map[string]any) []string {
 		name, _ := table["profile"].(string)
@@ -352,7 +351,7 @@ var presetProfiles = sync.OnceValue(func() map[string]string {
 })
 
 // mergeLayer merges a later henia.toml layer. Arrays under artifacts,
-// [shared] and harness config replace earlier ones, except the native arrays
+// [shared] and harness config replace earlier ones, except the config arrays
 // the harness's profile extends, which keep the earlier items and add the later
 // ones not already present; a harness status line replaces the earlier one
 // whole.
@@ -388,18 +387,15 @@ func mergeLayer(base, override map[string]any, extend extender) map[string]any {
 		if config, ok := right["config"].(map[string]any); ok {
 			before, _ := left["config"].(map[string]any)
 			replaced := profile.Replace(before, config)
-			if statusline, ok := config["statusline"]; ok {
-				replaced["statusline"] = statusline
-			}
 			if extend != nil {
-				left, _ := before["native"].(map[string]any)
-				right, _ := config["native"].(map[string]any)
-				merged, _ := replaced["native"].(map[string]any)
 				for _, path := range extend(name, target) {
-					extendArrays(merged, left, right, strings.Split(path, "."))
+					extendArrays(replaced, before, config, strings.Split(path, "."))
 				}
 			}
 			target["config"] = replaced
+		}
+		if statusline, ok := right["statusline"]; ok {
+			target["statusline"] = statusline
 		}
 	}
 	return merged

@@ -68,13 +68,14 @@ func TestConfigRulesCanBeDisabled(t *testing.T) {
 }
 
 func TestConfigSchemaAndUnusedInputsArePerHarness(t *testing.T) {
-	toml := "[harness.codex.config.statusline]\ncommand = \"echo hi\"\n\n[harness.codex.config.native.main]\napproval_policy = \"sometimes\"\n"
+	toml := "[harness.codex.statusline]\ncommand = \"echo hi\"\n\n[harness.codex.config.main]\napproval_policy = \"sometimes\"\n"
 	found := configProject(t, toml, map[string]henia.Harness{
 		"claude": {Profile: "claude"},
-		"codex": {Profile: "codex", Config: henia.HarnessConfig{
+		"codex": {
+			Profile:    "codex",
 			StatusLine: map[string]any{"command": "echo hi"},
-			Native:     map[string]any{"main": map[string]any{"approval_policy": "sometimes"}},
-		}},
+			Config:     map[string]any{"main": map[string]any{"approval_policy": "sometimes"}},
+		},
 	})
 	lines := map[string]int{}
 	for _, d := range found {
