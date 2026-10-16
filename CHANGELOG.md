@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.24](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.23...v0.1.0-alpha.24) (2026-10-16)
+
+
+### Bug Fixes
+
+* **config:** resolve a status line file against its own henia.toml in dependency harness tables ([785d59a](https://github.com/srnnkls/henia/commit/785d59ad9ccbaa1e20ddc181c8adfb4d792eca81))
+* **config:** resolve a status line file against its own henia.toml in dependency harness tables ([1ff3ab9](https://github.com/srnnkls/henia/commit/1ff3ab93b9123985c96ee7c8af95034b0cd77bef))
+
 ## [0.1.0-alpha.23](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.22...v0.1.0-alpha.23) (2026-10-16)
 
 
