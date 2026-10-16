@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.0-alpha.28](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.27...v0.1.0-alpha.28) (2026-10-16)
+
+
+### Bug Fixes
+
+* scope head staleness notices and dedupe inlined slot providers ([ac59e47](https://github.com/srnnkls/henia/commit/ac59e47a0691cc879528c5edba403e9879e648f4))
+* **show:** compare a shown skill with its own scope's install record and report staleness on stderr ([5aaf77f](https://github.com/srnnkls/henia/commit/5aaf77f71b6e7c4e817e0c8247c4cec36dea01c3))
+* **slots:** inline each distinct provider content once ([23a76df](https://github.com/srnnkls/henia/commit/23a76df1deec5864f24a63137ad9e22406fa7abf))
+
 ## [0.1.0-alpha.27](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.26...v0.1.0-alpha.27) (2026-10-16)
 
 
