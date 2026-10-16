@@ -255,6 +255,28 @@ func resolveHarnessFiles(harnesses map[string]any, root string) error {
 	return nil
 }
 
+// userFileRoots resolves the supporting files the user layer declares, and the
+// project does not redeclare, in the user layer's directory.
+func userFileRoots(cfg *Config, user, project map[string]any, root string) {
+	for name, value := range user {
+		harness, _ := value.(map[string]any)
+		files, _ := harness["files"].(map[string]any)
+		projectHarness, _ := project[name].(map[string]any)
+		projectFiles, _ := projectHarness["files"].(map[string]any)
+		for path := range files {
+			if _, ok := projectFiles[path]; ok {
+				continue
+			}
+			file, ok := cfg.Harness[name].Files[path]
+			if !ok {
+				continue
+			}
+			file.Root = root
+			cfg.Harness[name].Files[path] = file
+		}
+	}
+}
+
 // layerFile resolves a file a layer points to against that layer's root.
 func layerFile(root, path string) (string, error) {
 	if rest, ok := strings.CutPrefix(path, "~/"); ok {
@@ -394,6 +416,7 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		return nil, err
 	}
 	cfg.Selected = explicit
+	userFileRoots(&cfg, userHarnesses, projectHarnesses, userRoot)
 	if cfg.Build.Output == "" {
 		cfg.Build.Output = ".henia/build"
 	}

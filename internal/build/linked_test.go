@@ -173,3 +173,22 @@ func TestLinkedSourceTreeBuildsLikeRealTree(t *testing.T) {
 		t.Errorf("linked build files: %d, want %d", len(got), len(want))
 	}
 }
+
+func TestSupportFileReadsFromItsRoot(t *testing.T) {
+	root := t.TempDir()
+	source, user := filepath.Join(root, "source"), filepath.Join(root, "user")
+	put(t, filepath.Join(source, "skills/code/SKILL.md"), "Skill.\n")
+	put(t, filepath.Join(user, "claude/keys.json"), "{}\n")
+	output := filepath.Join(root, "output")
+	harnesses := map[string]henia.Harness{"claude": {Files: map[string]henia.File{"keys.json": {Source: "claude/keys.json", Root: user}}}}
+	result, err := RunClean(t.Context(), []string{source}, output, harnesses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Errors) != 0 {
+		t.Fatal(result.Errors)
+	}
+	if data, _ := os.ReadFile(filepath.Join(output, "claude/keys.json")); string(data) != "{}\n" {
+		t.Fatalf("support file: %q", data)
+	}
+}

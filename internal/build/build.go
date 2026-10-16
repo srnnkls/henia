@@ -421,7 +421,11 @@ func supportFiles(sources []string, harness string, files map[string]henia.File,
 		if !filepath.IsLocal(file.Source) {
 			return nil, fmt.Errorf("invalid supporting file source %q", file.Source)
 		}
-		for _, source := range sources {
+		roots := sources
+		if file.Root != "" {
+			roots = []string{file.Root}
+		}
+		for _, source := range roots {
 			data, err := os.ReadFile(filepath.Join(source, file.Source))
 			if os.IsNotExist(err) {
 				continue
