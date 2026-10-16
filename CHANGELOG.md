@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.26](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.25...v0.1.0-alpha.26) (2026-10-16)
+
+
+### Bug Fixes
+
+* **config:** layer the user henia.toml over a configuring package and extend Claude hooks per event ([ac3e184](https://github.com/srnnkls/henia/commit/ac3e18466e257cc9658a21cdf1d7fa3aad6bd3b9))
+* **config:** layer the user henia.toml over a configuring package and extend Claude hooks per event ([88f30df](https://github.com/srnnkls/henia/commit/88f30dfa2ff84dbc4d4fc2e580f1404c13a5aadf))
+
 ## [0.1.0-alpha.25](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.24...v0.1.0-alpha.25) (2026-10-16)
 
 
