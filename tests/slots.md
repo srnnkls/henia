@@ -7,7 +7,7 @@ skills in `.henia/skills`.
 
 ```scrut
 $ T=$(cd "$(mktemp -d)" && pwd -P); G="$T/data/henia/packages/global"; P="$T/my repo"
-> henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_CONFIG_HOME="$T/config" henia "$@"; }
+> henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" henia "$@"; }
 > mk() { mkdir -p "$(dirname "$1")"; printf -- "$2" > "$1"; }
 > skill() { mk "$1/SKILL.md" "---\nname: $(basename "$1")\ndescription: Skill $(basename "$1") for tests.\n$2---\n\n# $(basename "$1")\n$3"; }
 > slots() { dir=$1; shift; (cd "$dir" && henia slots "$@"; echo "exit $?") 2>&1 | sed "s|$T/||g" | tr '\t' ' '; }

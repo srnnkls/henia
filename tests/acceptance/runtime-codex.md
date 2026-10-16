@@ -10,7 +10,7 @@ Skipped without `codex` or Codex credentials.
 ```scrut
 $ command -v codex > /dev/null && [ -f "${CODEX_AUTH:-$HOME/.codex/auth.json}" ] || exit 80
 > W=$("$TESTDIR/setup-runtime") && ln -s "${CODEX_AUTH:-$HOME/.codex/auth.json}" "$W/home/codex/auth.json"
-> codex_run() { (cd "$W/project" && env XDG_DATA_HOME="$W/data" XDG_CACHE_HOME="$W/cache" MISE_DATA_DIR="$HOME/.local/share/mise" ZDOTDIR="$W/zdotdir" CODEX_HOME="$W/home/codex" codex exec --skip-git-repo-check --sandbox read-only -o "$W/$1.txt" "$2" < /dev/null > "$W/$1.log" 2>&1); }
+> codex_run() { (cd "$W/project" && env XDG_DATA_HOME="$W/data" XDG_CACHE_HOME="$W/cache" XDG_STATE_HOME="$W/state" MISE_DATA_DIR="$HOME/.local/share/mise" ZDOTDIR="$W/zdotdir" CODEX_HOME="$W/home/codex" codex exec --skip-git-repo-check --sandbox read-only -o "$W/$1.txt" "$2" < /dev/null > "$W/$1.log" 2>&1); }
 > ls "$W/home/codex/skills"
 entry
 henia

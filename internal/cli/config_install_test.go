@@ -201,3 +201,48 @@ func TestGlobalInstallLayersUserConfigOverTheConfiguringPackage(t *testing.T) {
 		}
 	}
 }
+
+func TestGlobalInstallIntoAnotherTargetKeepsTheFirst(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	claude := filepath.Join(home, ".claude")
+	scratch := filepath.Join(t.TempDir(), "claude")
+	global := library.PackagesDir("global")
+	fixture(t, filepath.Join(global, "tropos", "henia.toml"), `artifacts = ["skills", "config"]
+[harness.claude.config.statusline]
+command = "starship statusline"
+`)
+	fixture(t, filepath.Join(global, "tropos", "skills", "pinned", "SKILL.md"), "---\nname: pinned\ndescription: Pinned skill.\n---\n\n# Pinned\n")
+	userConfig := filepath.Join(config, "henia", "henia.toml")
+	settings := filepath.Join(claude, "settings.json")
+	fixture(t, settings, `{"theme": "dark"}`)
+	install := func(target string) {
+		t.Helper()
+		fixture(t, userConfig, "install_henia_skill = false\n[install.claude]\npath = '"+target+"'\n[harness.claude.config.native]\nmodel = 'opus'\n")
+		cmd, out := installCommand(t, "install", "--global", "--harness", "claude")
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("install into %s: %v\n%s", target, err, out)
+		}
+	}
+	install(claude)
+	install(scratch)
+	doc := readJSON(t, settings)
+	if doc["theme"] != "dark" || doc["model"] != "opus" || doc["statusLine"] == nil {
+		t.Fatalf("an install into another target stripped the first: %v", doc)
+	}
+	if _, err := os.Stat(filepath.Join(claude, "skills", "pinned", "SKILL.md")); err != nil {
+		t.Fatalf("an install into another target removed the first's skill: %v", err)
+	}
+	if doc := readJSON(t, filepath.Join(scratch, "settings.json")); doc["model"] != "opus" {
+		t.Fatalf("scratch settings: %v", doc)
+	}
+	install(claude)
+	if doc := readJSON(t, settings); doc["theme"] != "dark" || doc["model"] != "opus" {
+		t.Fatalf("settings after returning: %v", doc)
+	}
+}

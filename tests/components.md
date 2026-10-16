@@ -9,7 +9,7 @@ prints one skill as built for one harness, or the build error.
 
 ```scrut
 $ T=$(cd "$(mktemp -d)" && pwd -P); F="$TESTDIR/fixtures/components"
-> henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_CONFIG_HOME="$T/config" henia "$@"; }
+> henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" henia "$@"; }
 > mk() { mkdir -p "$(dirname "$1")"; printf -- "$2" > "$1"; }
 > proj() { P="$T/$1"; mkdir -p "$P" && git -C "$P" init -q && cd "$P" && printf 'artifacts = ["skills"]\n\n[harness.claude]\nartifacts = ["skills"]\n\n[harness.codex]\nartifacts = ["skills"]\n' > henia.toml; }
 > skill() { mk "skills/$1/SKILL.md" "---\nname: $1\ndescription: The $1 skill.\n$2---\n$3"; }
