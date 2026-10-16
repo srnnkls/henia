@@ -190,3 +190,19 @@ func TestHarnessTablesResolveStatusLineAgainstTheirFile(t *testing.T) {
 		t.Fatalf("status line file resolved to %v", got)
 	}
 }
+
+func TestUserFilesResolveInTheUserLayer(t *testing.T) {
+	project, user := t.TempDir(), t.TempDir()
+	userData := []byte("[harness.claude.files]\n\"a.sh\" = { source = \"claude/a.sh\" }\n\"b.sh\" = { source = \"claude/b.sh\" }\n")
+	cfg, err := decodeLayers(project, user, userData, []byte("[harness.claude.files]\n\"b.sh\" = { source = \"own/b.sh\" }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := cfg.Harness["claude"].Files
+	if files["a.sh"].Root != user {
+		t.Fatalf("user file root %q", files["a.sh"].Root)
+	}
+	if files["b.sh"].Root != "" || files["b.sh"].Source != "own/b.sh" {
+		t.Fatalf("project file %+v", files["b.sh"])
+	}
+}
