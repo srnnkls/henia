@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.25](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.24...v0.1.0-alpha.25) (2026-10-16)
+
+
+### Bug Fixes
+
+* **config:** resolve user-layer supporting files in the user henia.toml's directory ([518e02f](https://github.com/srnnkls/henia/commit/518e02f68e24e463b4ca6916faa7794ca5012a40))
+* **config:** resolve user-layer supporting files in the user henia.toml's directory ([8b65d68](https://github.com/srnnkls/henia/commit/8b65d6807a6c38cb1e2325373ba69f2f4ed78295))
+
 ## [0.1.0-alpha.24](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.23...v0.1.0-alpha.24) (2026-10-16)
 
 
