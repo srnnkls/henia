@@ -253,8 +253,8 @@ A harness that a dependency configures renders as `henia install --global`
 renders it: with that dependency's harness configuration, skill modes, agents
 and `files`, its profiles resolved from its `.henia/harnesses/` and its file
 sources from its own tree. The other packages, the project's included, render as its
-dependencies. The project's `[harness.<name>]` table merges over the
-dependency's key by key, so a project with Tropos as a dependency and only
+dependencies. The user henia.toml merges over the dependency's configuration,
+then the project's `[harness.<name>]` table over both key by key, so a project with Tropos as a dependency and only
 `[harness.claude.variables]` builds Tropos's Claude harness with those
 variables. When several dependencies configure one harness, their outputs
 merge, and a file two of them write differently fails the build.
@@ -279,10 +279,15 @@ sets `strict`; otherwise their unsupported frontmatter stays a warning.
 ## Configuration
 
 Henia merges the bundled defaults, `~/.config/henia/henia.toml`, then the
-project's `henia.toml`. Tables merge recursively, scalars override (`false`
-included), and arrays concatenate, except under `artifacts`, `[shared]` and
-`[harness.<name>.config]`, where a later array replaces an earlier one. Unknown
-keys are errors.
+project's `henia.toml`. A package that configures a harness merges between the
+defaults and the user henia.toml, so the user's personal settings override the
+package's in `henia install --global`, and a project's harness table overrides
+both. Tables merge recursively, scalars override (`false` included), and arrays
+concatenate, except under `artifacts`, `[shared]` and
+`[harness.<name>.config]`, where a later array replaces an earlier one. The
+native arrays a profile's config file lists in `extend`, such as each event
+under Claude's `hooks`, keep the earlier items and add the later ones not
+already present. Unknown keys are errors.
 
 `henia build` without a source builds `.henia/` when it holds `skills`,
 `commands` or `agents` and the current directory does not, else the current

@@ -555,3 +555,36 @@ func TestBuildAppliesProjectStrictnessToDependencies(t *testing.T) {
 		t.Fatalf("unsupported frontmatter passed the project's strict table: %v", err)
 	}
 }
+
+func TestBuildLayersUserAndProjectConfigOverADependencyHarness(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	dep := filepath.Join(library.PackagesDir(library.ProjectKey(project)), "tropos")
+	fixture(t, filepath.Join(dep, "henia.toml"), "[harness.claude]\nartifacts = ['skills', 'config']\n"+packageHooks)
+	fixture(t, filepath.Join(dep, "skills", "pinned", "SKILL.md"), "---\nname: pinned\ndescription: Pinned skill.\n---\n\n# Pinned\n")
+	fixture(t, filepath.Join(config, "henia", "henia.toml"), userHooks)
+	fixture(t, filepath.Join(project, "henia.toml"), `[harness.claude.config.native]
+effortLevel = "low"
+[harness.claude.config.native.hooks]
+Stop = [{ hooks = [{ type = "command", command = "project" }] }]
+`)
+	output := filepath.Join(t.TempDir(), "out")
+	if err := executeBuild(t, "--output", output); err != nil {
+		t.Fatal(err)
+	}
+	settings := readJSON(t, filepath.Join(output, "claude", "settings.json"))
+	if settings["model"] != "opus" || settings["effortLevel"] != "low" {
+		t.Fatalf("scalars: %v", settings)
+	}
+	for event, want := range map[string][]string{
+		"PreToolUse": {"fas", "peer", "limen"},
+		"Stop":       {"limen", "project"},
+	} {
+		if got := hookCommands(t, settings, event); strings.Join(got, " ") != strings.Join(want, " ") {
+			t.Errorf("%s hooks = %v, want %v", event, got, want)
+		}
+	}
+}

@@ -7,8 +7,10 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
+	"sync"
 
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/srnnkls/henia"
@@ -153,8 +155,9 @@ func InstallTables(path string) (map[string]InstallTarget, error) {
 	return raw.Install, nil
 }
 
-// LoadPackage loads a skill package's henia.toml with the given harness tables
-// merged over the harnesses the package configures itself.
+// LoadPackage loads a skill package's henia.toml with the user layer merged
+// over it, then the given harness tables over the harnesses the package
+// configures itself.
 func LoadPackage(path string, harnesses map[string]any) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
@@ -174,10 +177,25 @@ func LoadPackage(path string, harnesses map[string]any) (*Config, error) {
 			overrides[name] = table
 		}
 	}
-	if data, err = toml.Marshal(mergeLayer(raw, map[string]any{"harness": overrides})); err != nil {
+	overrideData, err := toml.Marshal(map[string]any{"harness": overrides})
+	if err != nil {
 		return nil, err
 	}
-	return decodeFile(path, data)
+	root, err := layerRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	userRoot := library.ConfigDir()
+	userData, err := os.ReadFile(filepath.Join(userRoot, "henia.toml"))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	cfg, err := decode(root, userRoot, []layer{{data, root, false}, {userData, userRoot, true}, {overrideData, root, false}})
+	if err != nil {
+		return nil, err
+	}
+	cfg.Path = path
+	return cfg, nil
 }
 
 func loadLayers(path string, projectData []byte) (*Config, error) {
@@ -221,7 +239,11 @@ func withLocal(path string, projectData []byte) ([]byte, error) {
 	if err := toml.Unmarshal(localData, &local); err != nil {
 		return nil, fmt.Errorf("%s: %w", deps.Local(path), err)
 	}
-	return toml.Marshal(mergeLayer(project, local))
+	root, err := layerRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	return toml.Marshal(mergeLayer(project, local, layerExtensions(root, library.ConfigDir())))
 }
 
 // layerRoot is the directory a henia.toml's relative paths resolve against:
@@ -255,8 +277,8 @@ func resolveHarnessFiles(harnesses map[string]any, root string) error {
 	return nil
 }
 
-// userFileRoots resolves the supporting files the user layer declares, and the
-// project does not redeclare, in the user layer's directory.
+// userFileRoots resolves the supporting files the user layer declares, and no
+// later layer redeclares, in the user layer's directory.
 func userFileRoots(cfg *Config, user, project map[string]any, root string) {
 	for name, value := range user {
 		harness, _ := value.(map[string]any)
@@ -292,10 +314,49 @@ func layerFile(root, path string) (string, error) {
 	return filepath.Join(root, path), nil
 }
 
+// extender returns the native paths of a harness whose arrays later layers
+// extend, given the harness's merged table.
+type extender func(harness string, table map[string]any) []string
+
+// layerExtensions resolves each harness's profile, the preset's when the
+// layers name none, for the native paths its config files extend.
+func layerExtensions(projectRoot, userRoot string) extender {
+	return func(harness string, table map[string]any) []string {
+		name, _ := table["profile"].(string)
+		if name == "" {
+			name = presetProfiles()[harness]
+		}
+		if name == "" {
+			return nil
+		}
+		loaded, err := profile.Load(name, projectRoot, userRoot)
+		if err != nil {
+			return nil
+		}
+		return loaded.Config.Extensions()
+	}
+}
+
+var presetProfiles = sync.OnceValue(func() map[string]string {
+	var presets struct {
+		Harness map[string]struct {
+			Profile string `toml:"profile"`
+		} `toml:"harness"`
+	}
+	_ = toml.Unmarshal([]byte(defaults.ConfigTOML), &presets)
+	profiles := map[string]string{}
+	for name, h := range presets.Harness {
+		profiles[name] = h.Profile
+	}
+	return profiles
+})
+
 // mergeLayer merges a later henia.toml layer. Arrays under artifacts,
-// [shared] and harness config replace earlier ones; a harness status line
-// replaces the earlier one whole.
-func mergeLayer(base, override map[string]any) map[string]any {
+// [shared] and harness config replace earlier ones, except the native arrays
+// the harness's profile extends, which keep the earlier items and add the later
+// ones not already present; a harness status line replaces the earlier one
+// whole.
+func mergeLayer(base, override map[string]any, extend extender) map[string]any {
 	merged := profile.Merge(base, override)
 	if artifacts, ok := override["artifacts"]; ok {
 		merged["artifacts"] = artifacts
@@ -330,75 +391,130 @@ func mergeLayer(base, override map[string]any) map[string]any {
 			if statusline, ok := config["statusline"]; ok {
 				replaced["statusline"] = statusline
 			}
+			if extend != nil {
+				left, _ := before["native"].(map[string]any)
+				right, _ := config["native"].(map[string]any)
+				merged, _ := replaced["native"].(map[string]any)
+				for _, path := range extend(name, target) {
+					extendArrays(merged, left, right, strings.Split(path, "."))
+				}
+			}
 			target["config"] = replaced
 		}
 	}
 	return merged
 }
 
+// extendArrays sets the array at path in merged, or each array of the table
+// at path, to the left items followed by the right items not among them.
+// merged holds fresh tables wherever both sides do.
+func extendArrays(merged, left, right map[string]any, path []string) {
+	for _, key := range path[:len(path)-1] {
+		merged, _ = merged[key].(map[string]any)
+		left, _ = left[key].(map[string]any)
+		right, _ = right[key].(map[string]any)
+	}
+	key := path[len(path)-1]
+	if merged == nil {
+		return
+	}
+	if l, ok := left[key].(map[string]any); ok {
+		if r, ok := right[key].(map[string]any); ok {
+			table, _ := merged[key].(map[string]any)
+			for name := range r {
+				extendArrays(table, l, r, []string{name})
+			}
+		}
+		return
+	}
+	l, lok := left[key].([]any)
+	r, rok := right[key].([]any)
+	if !lok || !rok {
+		return
+	}
+	items := slices.Clone(l)
+	for _, item := range r {
+		if !slices.ContainsFunc(items, func(have any) bool { return reflect.DeepEqual(have, item) }) {
+			items = append(items, item)
+		}
+	}
+	merged[key] = items
+}
+
+// layer is one henia.toml above the bundled defaults, with the directory its
+// relative paths resolve against.
+type layer struct {
+	data []byte
+	root string
+	user bool
+}
+
 func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*Config, error) {
-	var base, user, project map[string]any
-	for _, layer := range []struct {
-		data []byte
-		out  *map[string]any
-	}{
-		{[]byte(defaults.ConfigTOML), &base}, {userData, &user}, {projectData, &project},
-	} {
-		if err := toml.Unmarshal(layer.data, layer.out); err != nil {
+	return decode(projectRoot, userRoot, []layer{{userData, userRoot, true}, {projectData, projectRoot, false}})
+}
+
+// decode merges the layers in order over the bundled defaults.
+func decode(projectRoot, userRoot string, layers []layer) (*Config, error) {
+	var base map[string]any
+	if err := toml.Unmarshal([]byte(defaults.ConfigTOML), &base); err != nil {
+		return nil, err
+	}
+	values := make([]map[string]any, len(layers))
+	for i, l := range layers {
+		if err := toml.Unmarshal(l.data, &values[i]); err != nil {
 			return nil, err
 		}
 	}
 	// Explicit configurations select their harnesses. Merge each selected harness
 	// with its preset when harnesses are explicitly selected.
-	userHarnesses, _ := user["harness"].(map[string]any)
-	projectHarnesses, _ := project["harness"].(map[string]any)
 	var explicit []string
-	for name := range userHarnesses {
-		explicit = append(explicit, name)
-	}
-	for name := range projectHarnesses {
-		if _, ok := userHarnesses[name]; !ok {
-			explicit = append(explicit, name)
+	var userHarnesses map[string]any
+	later := map[string]any{}
+	for i, l := range layers {
+		harnesses, _ := values[i]["harness"].(map[string]any)
+		for name := range harnesses {
+			if !slices.Contains(explicit, name) {
+				explicit = append(explicit, name)
+			}
+		}
+		if l.user {
+			userHarnesses, later = harnesses, map[string]any{}
+		} else if userHarnesses != nil {
+			later = profile.Merge(later, harnesses)
 		}
 	}
 	slices.Sort(explicit)
-	if len(userHarnesses) > 0 || len(projectHarnesses) > 0 {
+	if len(explicit) > 0 {
 		selected := map[string]any{}
-		for _, layer := range []map[string]any{user, project} {
-			if harnesses, ok := layer["harness"].(map[string]any); ok {
-				for name := range harnesses {
-					if value, ok := base["harness"].(map[string]any)[name]; ok {
-						selected[name] = value
-					}
-				}
+		for _, name := range explicit {
+			if value, ok := base["harness"].(map[string]any)[name]; ok {
+				selected[name] = maps.Clone(value.(map[string]any))
 			}
 		}
 		base["harness"] = selected
-		for name, value := range selected {
-			selected[name] = maps.Clone(value.(map[string]any))
-		}
 	}
 	// Resolve filesystem settings in the layer that declares them, so defaults do
 	// not change meaning with the project or invocation working directory.
-	for _, layer := range []struct {
-		values map[string]any
-		root   string
-	}{{user, userRoot}, {project, projectRoot}} {
-		lintConfig, _ := layer.values["lint"].(map[string]any)
-		buildConfig, _ := layer.values["build"].(map[string]any)
+	for i, l := range layers {
+		lintConfig, _ := values[i]["lint"].(map[string]any)
+		buildConfig, _ := values[i]["build"].(map[string]any)
 		if path, ok := buildConfig["output"].(string); ok && path != "" && !filepath.IsAbs(path) {
-			buildConfig["output"] = filepath.Join(layer.root, path)
+			buildConfig["output"] = filepath.Join(l.root, path)
 		}
 		semantic, _ := lintConfig["semantic"].(map[string]any)
 		if path, ok := semantic["model_path"].(string); ok && path != "" && !filepath.IsAbs(path) {
-			semantic["model_path"] = filepath.Join(layer.root, path)
+			semantic["model_path"] = filepath.Join(l.root, path)
 		}
-		harnesses, _ := layer.values["harness"].(map[string]any)
-		if err := resolveHarnessFiles(harnesses, layer.root); err != nil {
+		harnesses, _ := values[i]["harness"].(map[string]any)
+		if err := resolveHarnessFiles(harnesses, l.root); err != nil {
 			return nil, err
 		}
 	}
-	merged := mergeLayer(mergeLayer(base, user), project)
+	extend := layerExtensions(projectRoot, userRoot)
+	merged := base
+	for _, value := range values {
+		merged = mergeLayer(merged, value, extend)
+	}
 	data, err := toml.Marshal(merged)
 	if err != nil {
 		return nil, err
@@ -416,7 +532,7 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 		return nil, err
 	}
 	cfg.Selected = explicit
-	userFileRoots(&cfg, userHarnesses, projectHarnesses, userRoot)
+	userFileRoots(&cfg, userHarnesses, later, userRoot)
 	if cfg.Build.Output == "" {
 		cfg.Build.Output = ".henia/build"
 	}

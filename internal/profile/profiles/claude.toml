@@ -29,6 +29,7 @@ format = "json"
 schema = "https://www.schemastore.org/claude-code-settings.json"
 merge = true
 entries = ["permissions.allow", "permissions.deny", "permissions.ask"]
+extend = ["hooks"]
 value = '''
 {statusLine: harness?.statusline == nil ? nil : (let s = harness.statusline;
   len(filter([s.command, s.script, s.file], # != nil)) != 1 ? require(nil, "statusline takes exactly one of command, script or file") : {

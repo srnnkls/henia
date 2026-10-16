@@ -135,3 +135,69 @@ command = "starship statusline"
 		t.Fatal("a global install wrote a project MCP file")
 	}
 }
+
+func hookCommands(t *testing.T, settings map[string]any, event string) []string {
+	t.Helper()
+	hooks, _ := settings["hooks"].(map[string]any)
+	groups, _ := hooks[event].([]any)
+	var commands []string
+	for _, group := range groups {
+		for _, hook := range group.(map[string]any)["hooks"].([]any) {
+			commands = append(commands, hook.(map[string]any)["command"].(string))
+		}
+	}
+	return commands
+}
+
+const packageHooks = `[harness.claude.config.native]
+model = "sonnet"
+effortLevel = "high"
+[harness.claude.config.native.hooks]
+SessionStart = [{ hooks = [{ type = "command", command = "fas" }] }]
+PreToolUse = [
+  { hooks = [{ type = "command", command = "fas" }] },
+  { matcher = "Task", hooks = [{ type = "command", command = "peer" }] },
+]
+`
+
+const userHooks = `[harness.claude.config.native]
+model = "opus"
+[harness.claude.config.native.hooks]
+SessionStart = [{ hooks = [{ type = "command", command = "limen" }] }]
+PreToolUse = [
+  { hooks = [{ type = "command", command = "fas" }] },
+  { matcher = "Ask", hooks = [{ type = "command", command = "limen" }] },
+]
+Stop = [{ hooks = [{ type = "command", command = "limen" }] }]
+`
+
+func TestGlobalInstallLayersUserConfigOverTheConfiguringPackage(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	claude := filepath.Join(home, ".claude")
+	fixture(t, filepath.Join(library.PackagesDir("global"), "tropos", "henia.toml"), "artifacts = [\"skills\", \"config\"]\n"+packageHooks)
+	fixture(t, filepath.Join(library.PackagesDir("global"), "tropos", "skills", "pinned", "SKILL.md"), "---\nname: pinned\ndescription: Pinned skill.\n---\n\n# Pinned\n")
+	fixture(t, filepath.Join(config, "henia", "henia.toml"), "install_henia_skill = false\n[install.claude]\npath = '"+claude+"'\n"+userHooks)
+	cmd, out := installCommand(t, "install", "--global", "--harness", "claude")
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	settings := readJSON(t, filepath.Join(claude, "settings.json"))
+	if settings["model"] != "opus" || settings["effortLevel"] != "high" {
+		t.Fatalf("scalars: %v", settings)
+	}
+	for event, want := range map[string][]string{
+		"SessionStart": {"fas", "limen"},
+		"PreToolUse":   {"fas", "peer", "limen"},
+		"Stop":         {"limen"},
+	} {
+		if got := hookCommands(t, settings, event); strings.Join(got, " ") != strings.Join(want, " ") {
+			t.Errorf("%s hooks = %v, want %v", event, got, want)
+		}
+	}
+}

@@ -200,8 +200,8 @@ func holdsArtifacts(dir string) bool {
 }
 
 // dependencyHarnesses maps each harness that a dependency configures to the
-// configurations of the dependencies that configure it, the project's own
-// table of that harness merged over each.
+// configurations of the dependencies that configure it, the user henia.toml
+// and then the project's own table of that harness merged over each.
 func dependencyHarnesses(dependencies []library.Package, cfg *config.Config) (map[string]map[string]*config.Config, error) {
 	project, err := config.HarnessTables(cfg.Path)
 	if err != nil {

@@ -275,6 +275,8 @@ func TestApplyRefusesSymlinkedDirectories(t *testing.T) {
 func TestGlobalInstallKeepsHarnessStrictnessToItsOwner(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	config := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", config)
 	home := filepath.Join(t.TempDir(), "claude")

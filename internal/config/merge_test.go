@@ -107,6 +107,39 @@ notify = ["project"]
 	}
 }
 
+func TestProfileExtendedArraysKeepEveryLayersItemsOnce(t *testing.T) {
+	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), []byte(`[harness.claude.config.native]
+model = "sonnet"
+[harness.claude.config.native.hooks]
+PreToolUse = [{ hooks = [{ command = "fas" }] }, { hooks = [{ command = "peer" }] }]
+Stop = [{ hooks = [{ command = "fas" }] }]
+[harness.claude.config.native.permissions]
+allow = ["Read"]
+`), []byte(`[harness.claude.config.native]
+model = "opus"
+[harness.claude.config.native.hooks]
+PreToolUse = [{ hooks = [{ command = "peer" }] }, { hooks = [{ command = "limen" }] }]
+[harness.claude.config.native.permissions]
+allow = ["Bash"]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := cfg.Harness["claude"].Config.Native
+	hooks := native["hooks"].(map[string]any)
+	command := func(item any) any { return item.(map[string]any)["hooks"].([]any)[0].(map[string]any)["command"] }
+	var pre []any
+	for _, item := range hooks["PreToolUse"].([]any) {
+		pre = append(pre, command(item))
+	}
+	if !reflect.DeepEqual(pre, []any{"fas", "peer", "limen"}) || len(hooks["Stop"].([]any)) != 1 {
+		t.Fatalf("hooks: %v", hooks)
+	}
+	if native["model"] != "opus" || !reflect.DeepEqual(native["permissions"].(map[string]any)["allow"], []any{"Bash"}) {
+		t.Fatalf("native: %v", native)
+	}
+}
+
 func TestPerTypeProfilesValidateAtLoad(t *testing.T) {
 	if _, err := decodeLayers(t.TempDir(), t.TempDir(), nil, []byte(`[harness.claude.agents]
 profile = "missing-profile"
@@ -152,7 +185,7 @@ func TestStatusLineResolvesAndReplacesPerLayer(t *testing.T) {
 }
 
 func TestLocalHarnessOverProjectWithoutHarness(t *testing.T) {
-	merged := mergeLayer(map[string]any{"artifacts": []any{"skills"}}, map[string]any{"harness": map[string]any{"claude": map[string]any{"strict": true}}})
+	merged := mergeLayer(map[string]any{"artifacts": []any{"skills"}}, map[string]any{"harness": map[string]any{"claude": map[string]any{"strict": true}}}, nil)
 	if merged["harness"].(map[string]any)["claude"].(map[string]any)["strict"] != true {
 		t.Fatalf("%v", merged)
 	}
