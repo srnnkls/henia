@@ -317,3 +317,19 @@ func TestExpandNestedApplication(t *testing.T) {
 		t.Fatalf("Expand = %q", got)
 	}
 }
+
+func TestInlineDedupesProviders(t *testing.T) {
+	r := Evaluate([]Skill{
+		{Path: "/lib/code/SKILL.md", Ref: "tropos:code", Tier: Global, Metadata: Metadata{Declared: []Declaration{{Slot: "code.style", Type: Type{Keyed: true}}}}},
+		provider("loqui:loqui", Dependency,
+			Offer{Slot: "code.style.go", Priority: Dependency.priority()},
+			Offer{Slot: "code.style.python", Priority: Dependency.priority()},
+			Offer{Slot: "code.style.rust", Priority: Dependency.priority()}),
+		provider("project:effect", Project, Offer{Slot: "code.style.typescript", Priority: Project.priority()}),
+	}, nil)
+	got := r.Inline([]string{"code.style"}, func(p *Provider, _ Value) string { return "# " + p.Ref + "\n" })
+	want := "# project:effect\n\n`code.style.go`, `code.style.python`, `code.style.rust`:\n\n# loqui:loqui\n"
+	if got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
