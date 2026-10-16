@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,10 +39,73 @@ func sibling(manifest, suffix string) string {
 	return strings.TrimSuffix(manifest, ".json") + "." + suffix + ".json"
 }
 
+// recordSet lists manifest and the records kept beside it for one install.
+func recordSet(manifest string) []string {
+	return []string{manifest, sibling(manifest, "units"), sibling(manifest, "project"), sibling(manifest, "home")}
+}
+
+// parked names where the records of an install into target wait while
+// manifest holds another target's.
+func parked(manifest, target string) string {
+	sum := sha256.Sum256([]byte(target))
+	return strings.TrimSuffix(manifest, ".json") + "@" + hex.EncodeToString(sum[:6]) + ".json"
+}
+
+// moveRecords moves the record set at from onto to, leaving no record at to
+// that from did not hold.
+func moveRecords(from, to string) error {
+	destinations := recordSet(to)
+	for i, source := range recordSet(from) {
+		err := os.Rename(source, destinations[i])
+		if errors.Is(err, os.ErrNotExist) {
+			err = os.Remove(destinations[i])
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+// switchRecords makes manifest hold the records of the install into target.
+// The records of an install into another target are parked under their own
+// target rather than taken as this install's previous state, so nothing that
+// install wrote is pruned or stripped, and installing into it again resumes
+// them.
+func switchRecords(manifest, target string) error {
+	data, err := os.ReadFile(manifest)
+	if errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(parked(manifest, target)); err != nil {
+			return nil
+		}
+		return moveRecords(parked(manifest, target), manifest)
+	}
+	if err != nil {
+		return err
+	}
+	var record installRecord
+	if err := json.Unmarshal(data, &record); err != nil {
+		return fmt.Errorf("%s: %w", manifest, err)
+	}
+	if record.Target == "" || record.Target == target {
+		return nil
+	}
+	if err := moveRecords(manifest, parked(manifest, record.Target)); err != nil {
+		return err
+	}
+	if _, err := os.Stat(parked(manifest, target)); err != nil {
+		return nil
+	}
+	return moveRecords(parked(manifest, target), manifest)
+}
+
 // installTree installs one harness's files: whole files into target or the
 // project or home root their profile names, and merged config files unit by
 // unit.
 func installTree(cmd *cobra.Command, harness, target, project string, files map[string]string, manifest string, force, strict bool, revisions map[string]string, where map[string]profile.Placement) error {
+	if err := switchRecords(manifest, target); err != nil {
+		return err
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
