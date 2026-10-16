@@ -357,7 +357,7 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 		if pkg.Config == "" {
 			continue
 		}
-		pkgCfg, err := config.LoadPackage(pkg.Config, nil)
+		pkgCfg, err := config.LoadPackage(pkg.Config, nil, true)
 		if err != nil {
 			return fmt.Errorf("package %s: %w", pkg.Name, err)
 		}

@@ -7,7 +7,8 @@ type File struct {
 	Source  string            `toml:"source"`
 	Replace map[string]string `toml:"replace,omitempty"`
 	// Root is the directory Source resolves in instead of the build's sources:
-	// the user henia.toml's directory for a file that layer declares.
+	// the user henia.toml's directory for a file that layer declares, in a
+	// harness home install.
 	Root string `toml:"-"`
 }
 

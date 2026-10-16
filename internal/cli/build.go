@@ -219,7 +219,7 @@ func dependencyHarnesses(dependencies []library.Package, cfg *config.Config) (ma
 		if len(own) == 0 {
 			continue
 		}
-		pkgCfg, err := config.LoadPackage(dependency.Config, withoutModes(project))
+		pkgCfg, err := config.LoadPackage(dependency.Config, withoutModes(project), false)
 		if err != nil {
 			return nil, fmt.Errorf("package %s: %w", dependency.Name, err)
 		}
