@@ -252,11 +252,11 @@ args = ["serve"]
 env = { GITHUB_TOKEN = "$GITHUB_TOKEN" }
 
 [harness.claude]
-[harness.claude.config.native]
+[harness.claude.config]
 permissions = { allow = ["Read"] }
 
 [harness.codex]
-[harness.codex.config.native]
+[harness.codex.config]
 approval_policy = "on-request"
 ```
 
@@ -310,9 +310,9 @@ too, since Henia cannot rewrite it without dropping them.
 ### Input
 
 `[shared]` holds free-form tables that every harness profile may read.
-`[harness.<name>.config.native]` holds data that
-one harness takes as is. A native key naming a config file id addresses that
-file; the remaining keys address the file with id `main`. In henia.toml layers,
+`[harness.<name>.config]` holds the harness's own config, taken as is. A key
+naming a config file id addresses that file; the remaining keys address the
+file with id `main`. In henia.toml layers,
 arrays under `artifacts`, `[shared]` and `[harness.<name>.config]` replace
 earlier ones, except the native arrays the file contract's `extend` names: a
 later layer adds its items not already present after the earlier ones. The
@@ -347,7 +347,7 @@ YAML `config.yml` with comments conflicts like a commented TOML file.
 
 ### Claude Code status line
 
-`[harness.claude.config.statusline]` sets Claude Code's `statusLine` from
+`[harness.claude.statusline]` sets Claude Code's `statusLine` from
 exactly one of:
 
 - `command`: a command line or path, used as is;
@@ -365,7 +365,7 @@ the home directory; building config fails when it is missing. `padding`,
 whole.
 
 ```toml
-[harness.claude.config.statusline]
+[harness.claude.statusline]
 script = """
 input=$(cat)
 printf '%s' "$(echo "$input" | jq -r .model.display_name)"
@@ -375,7 +375,7 @@ refresh_interval = 5
 
 Config expressions read this table as `harness.statusline`. A harness whose
 profile has no status line warns and omits it. Codex's status line is set
-natively: `[harness.codex.config.native.tui] status_line = ["model-with-reasoning"]`.
+natively: `[harness.codex.config.tui] status_line = ["model-with-reasoning"]`.
 
 ### File contract
 
@@ -383,7 +383,7 @@ natively: `[harness.codex.config.native.tui] status_line = ["model-with-reasonin
 |---|---|
 | `path` | output path relative to the harness root |
 | `format` | `json`, `yaml`, `toml` or `text` |
-| `value` | Expr expression for the generated data; optional when native data fills the file |
+| `value` | Expr expression for the generated data; optional when `[harness.<name>.config]` fills the file |
 | `schema` | JSON Schema URL the result is validated against |
 | `arrays` | how native arrays combine with generated ones: `replace` (default) or `concat` |
 | `mode` | octal file permissions, `0644` by default |
@@ -394,7 +394,7 @@ natively: `[harness.codex.config.native.tui] status_line = ["model-with-reasonin
 
 `value` sees `shared`, `harness` (the harness's typed config inputs, such as
 `statusline`), `ctx` and the `merge` and `require` helpers, but no skill input.
-Native data merges over the generated value last. Nil table entries and array
+`[harness.<name>.config]` merges over the generated value last. Nil table entries and array
 items drop out, and a file whose result is empty is not written. Output keys
 are sorted. With a `schema`, `json` gains a `$schema`
 key, `toml` a `#:schema` comment and `yaml` a `yaml-language-server` comment.

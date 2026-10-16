@@ -76,7 +76,7 @@ command = "gh-mcp"
 args = ["user"]
 [harness.codex]
 artifacts = ["skills"]
-[harness.codex.config.native]
+[harness.codex.config]
 notify = ["user"]
 [harness.codex.variables]
 keep = "user"
@@ -85,7 +85,7 @@ keep = "user"
 args = ["project"]
 [harness.codex]
 artifacts = ["config"]
-[harness.codex.config.native]
+[harness.codex.config]
 notify = ["project"]
 `))
 	if err != nil {
@@ -99,7 +99,7 @@ notify = ["project"]
 	if !reflect.DeepEqual(github["args"], []any{"project"}) || github["command"] != "gh-mcp" {
 		t.Fatalf("shared: %v", github)
 	}
-	if !reflect.DeepEqual(h.Config.Native["notify"], []any{"project"}) || h.Variables["keep"] != "user" {
+	if !reflect.DeepEqual(h.Config["notify"], []any{"project"}) || h.Variables["keep"] != "user" {
 		t.Fatalf("harness: %+v", h)
 	}
 	if !reflect.DeepEqual(h.Shared, cfg.Shared) {
@@ -108,24 +108,24 @@ notify = ["project"]
 }
 
 func TestProfileExtendedArraysKeepEveryLayersItemsOnce(t *testing.T) {
-	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), []byte(`[harness.claude.config.native]
+	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), []byte(`[harness.claude.config]
 model = "sonnet"
-[harness.claude.config.native.hooks]
+[harness.claude.config.hooks]
 PreToolUse = [{ hooks = [{ command = "fas" }] }, { hooks = [{ command = "peer" }] }]
 Stop = [{ hooks = [{ command = "fas" }] }]
-[harness.claude.config.native.permissions]
+[harness.claude.config.permissions]
 allow = ["Read"]
-`), []byte(`[harness.claude.config.native]
+`), []byte(`[harness.claude.config]
 model = "opus"
-[harness.claude.config.native.hooks]
+[harness.claude.config.hooks]
 PreToolUse = [{ hooks = [{ command = "peer" }] }, { hooks = [{ command = "limen" }] }]
-[harness.claude.config.native.permissions]
+[harness.claude.config.permissions]
 allow = ["Bash"]
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	native := cfg.Harness["claude"].Config.Native
+	native := cfg.Harness["claude"].Config
 	hooks := native["hooks"].(map[string]any)
 	command := func(item any) any { return item.(map[string]any)["hooks"].([]any)[0].(map[string]any)["command"] }
 	var pre []any
@@ -168,18 +168,18 @@ layout = "flat"
 
 func TestStatusLineResolvesAndReplacesPerLayer(t *testing.T) {
 	project, user := t.TempDir(), t.TempDir()
-	cfg, err := decodeLayers(project, user, []byte("[harness.claude.config.statusline]\nfile = \"line.sh\"\n"), nil)
+	cfg, err := decodeLayers(project, user, []byte("[harness.claude.statusline]\nfile = \"line.sh\"\n"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := cfg.Harness["claude"].Config.StatusLine["file"]; got != filepath.Join(user, "line.sh") {
+	if got := cfg.Harness["claude"].StatusLine["file"]; got != filepath.Join(user, "line.sh") {
 		t.Fatalf("user file resolved to %v", got)
 	}
-	cfg, err = decodeLayers(project, user, []byte("[harness.claude.config.statusline]\nfile = \"line.sh\"\npadding = 1\n"), []byte("[harness.claude.config.statusline]\ncommand = \"echo hi\"\n"))
+	cfg, err = decodeLayers(project, user, []byte("[harness.claude.statusline]\nfile = \"line.sh\"\npadding = 1\n"), []byte("[harness.claude.statusline]\ncommand = \"echo hi\"\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := cfg.Harness["claude"].Config.StatusLine; !reflect.DeepEqual(got, map[string]any{"command": "echo hi"}) {
+	if got := cfg.Harness["claude"].StatusLine; !reflect.DeepEqual(got, map[string]any{"command": "echo hi"}) {
 		t.Fatalf("project status line merged with the user's: %v", got)
 	}
 }
@@ -211,14 +211,14 @@ func TestPresetDirectivesSurviveACustomProfile(t *testing.T) {
 func TestHarnessTablesResolveStatusLineAgainstTheirFile(t *testing.T) {
 	project := t.TempDir()
 	path := filepath.Join(project, "henia.toml")
-	if err := os.WriteFile(path, []byte("[harness.claude.config.statusline]\nfile = \"line.sh\"\n"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("[harness.claude.statusline]\nfile = \"line.sh\"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	tables, err := HarnessTables(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	statusline := tables["claude"].(map[string]any)["config"].(map[string]any)["statusline"].(map[string]any)
+	statusline := tables["claude"].(map[string]any)["statusline"].(map[string]any)
 	if got := statusline["file"]; got != filepath.Join(project, "line.sh") {
 		t.Fatalf("status line file resolved to %v", got)
 	}

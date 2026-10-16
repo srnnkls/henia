@@ -9,8 +9,8 @@ env = { GITHUB_TOKEN = "$GITHUB_TOKEN" }
 url = "https://docs.example.com/mcp"
 headers = { Authorization = "Bearer $DOCS_TOKEN", X-Client = "henia" }
 
-[harness.claude.config.native]
+[harness.claude.config]
 permissions = { allow = ["Read"] }
 
-[harness.codex.config.native]
+[harness.codex.config]
 approval_policy = "on-request"
