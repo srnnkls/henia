@@ -45,10 +45,10 @@ the default.
 ### henia.toml
 
 - `[shared]`: free-form tables, read by every harness's profile.
-- `[harness.<n>.config.native]`: native data. A key naming a config file id
+- `[harness.<n>.config]`: the harness's own config, taken as is. A key naming a config file id
   addresses that file; the remaining keys address file `main` and fail when the
   profile has no `main`.
-- `[harness.<n>.config.statusline]`: see [status line](#status-line).
+- `[harness.<n>.statusline]`: see [status line](#status-line).
 - Arrays under `artifacts` (top level and per harness), `[shared]` and
   `[harness.<n>.config]` replace earlier layers.
 - `artifacts` accepts `config`. The empty-list default (all document types)
@@ -64,7 +64,7 @@ the default.
   `ctx.install_dir` the harness directory relative to the project root.
 - `value` sees `shared`, `harness` (this harness's typed inputs), `ctx`
   (`name`, `profile`, `path`, `variables`, `tools`, `keys`), `merge` and
-  `require`. Native data merges over the result once.
+  `require`. `[harness.<n>.config]` merges over the result once.
 - Nil table entries and array items drop out; an empty result writes no file.
 - Keys are sorted in every format. A `schema` adds `$schema` (json),
   `#:schema` (toml) or a `yaml-language-server` comment (yaml).
@@ -85,12 +85,18 @@ the default.
 
 | Harness | Files | Inputs |
 |---|---|---|
-| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`), `statusline.sh` (`statusline`, `0755`) | `shared.mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`; `harness.statusline` → `statusLine` |
-| codex | `config.toml` (`main`, schema) | `shared.mcp.<server>`: `command`, `args`, `url`, `env` (`$NAME` → `env_vars`, literals → `env`); a reference must name its own variable |
+| claude | `settings.json` (`main`, schema), `.mcp.json` (`mcp`), `statusline.sh` (`statusline`, `0755`) | `shared.mcp.<server>`: `command`, `args`, `env` (`$NAME` → `${NAME}`, literals as is), `url` → `type = "http"`, `headers` (`$NAME` → `${NAME}`); `harness.statusline` → `statusLine` |
+| codex | `config.toml` (`main`, schema) | `shared.mcp.<server>`: `command`, `args`, `url`, `env` (`$NAME` → `env_vars`, literals → `env`), `headers` (literals → `http_headers`, `$NAME` → `env_http_headers`, `Bearer $NAME` → `bearer_token_env_var`); a reference must name its own variable |
+| pi | `settings.json` (`main`, schema), `mcp.json` (`mcp`) | `shared.mcp.<server>`: as claude, without `type` |
+| omp | `config.yml` (`main`), `mcp.json` (`mcp`, schema) | `shared.mcp.<server>`: `$NAME` → `NAME`, which omp resolves; `Bearer $NAME` → `!printf 'Bearer %s' "$NAME"`; `type` is `http` or `stdio` |
+
+A `headers` value is a literal, a whole `$NAME`, or `Bearer $NAME` on
+`Authorization`: the forms every bundled harness can carry. Headers need a
+`url` server.
 
 ### Status line
 
-`[harness.claude.config.statusline]` takes exactly one of `command` (used as
+`[harness.claude.statusline]` takes exactly one of `command` (used as
 is), `script` (inline, run by the shell) or `file`, plus `padding`,
 `refresh_interval` and `hide_vim_mode`.
 
@@ -151,7 +157,8 @@ where `<dir>` is the harness directory relative to the project root.
 - `henia lint` checks config at its own `config` stage, in Go rather than as
   query rules, for every harness whose `artifacts` include `config`.
 - Rules: `mcp-transport` (a shared server without exactly one of `command`
-  and `url`), `config-invalid` (a failing profile expression), `config-schema`
+  and `url`), `mcp-header` (headers on a server without `url`, or a value in
+  a form not every harness carries), `config-invalid` (a failing profile expression), `config-schema`
   (a schema violation, warning) and `config-unused` (an input the profile
   never reads, warning).
 - A finding points at the `henia.toml` key it concerns, in the
@@ -159,5 +166,4 @@ where `<dir>` is the harness directory relative to the project root.
 
 ## Open
 
-1. Header values in the shared MCP vocabulary.
-2. pi prompt templates (`prompts/`) and omp built-in command names.
+1. pi prompt templates (`prompts/`) and omp built-in command names.

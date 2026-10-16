@@ -125,11 +125,12 @@ highest-precedence layer that sets it: `henia.local.toml`, the project's
 | Id | Reports |
 |---|---|
 | `mcp-transport` | a `[shared.mcp.<server>]` that sets neither or both of `command` and `url` |
+| `mcp-header` | `headers` on a server without `url`, or a header value other than a literal, `$NAME`, or `Bearer $NAME` on `Authorization` |
 | `config-invalid` | a profile config expression that fails, such as a codex env reference naming another variable |
 | `config-schema` | a warning: a rendered config file its harness schema rejects |
-| `config-unused` | a warning: a harness input, such as `config.statusline`, its profile never reads |
+| `config-unused` | a warning: a harness input, such as `statusline`, its profile never reads |
 
-`mcp-transport` holds for all harnesses; the others name the harness they
+`mcp-transport` and `mcp-header` hold for all harnesses; the others name the harness they
 concern.
 
 ## Standard library
