@@ -174,3 +174,19 @@ func TestPresetDirectivesSurviveACustomProfile(t *testing.T) {
 		t.Fatalf("%q %q", cfg.Harness["claude"].Directives, cfg.Harness["custom"].Directives)
 	}
 }
+
+func TestHarnessTablesResolveStatusLineAgainstTheirFile(t *testing.T) {
+	project := t.TempDir()
+	path := filepath.Join(project, "henia.toml")
+	if err := os.WriteFile(path, []byte("[harness.claude.config.statusline]\nfile = \"line.sh\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	tables, err := HarnessTables(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusline := tables["claude"].(map[string]any)["config"].(map[string]any)["statusline"].(map[string]any)
+	if got := statusline["file"]; got != filepath.Join(project, "line.sh") {
+		t.Fatalf("status line file resolved to %v", got)
+	}
+}
