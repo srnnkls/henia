@@ -94,8 +94,8 @@ the list of its resources, addressed like modules: <skill>.<dir>.<file> reads
 <dir>/<file>.md and <skill>.<dir> lists <dir>/. Other files are read by path,
 <skill>/<path>. --head prints what a hybrid skill carries upfront: its :::head
 blocks, its contents and the contents of the skills it references; --toc
-prints only its contents, and both report a harness copy that henia install
-wrote from an older revision of the skill. Problems print as text;
+prints only its contents, and both report on stderr a harness copy that henia
+install wrote from an older revision of the skill. Problems print as text;
 the command always exits successfully so a skill preload never aborts.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -111,7 +111,12 @@ the command always exits successfully so a skill preload never aborts.`,
 				return settings.runner.Expand(cmd.Context(), text, preload.Context{Dir: flags.project, SkillDir: filepath.Dir(e.Path), Skill: e.Name, Package: e.Package, Tier: e.Tier, Caller: harness, Resolve: resolve})
 			}
 			disclose := func(e library.Entry) bool { return discloses(settings.disclosure, e) }
-			show(cmd.OutOrStdout(), lib, r, args[0], mode, expand, disclose)
+			notice := func(e library.Entry) {
+				if stale(r.harness, installManifest(flags.project, e), e) {
+					fmt.Fprintf(cmd.ErrOrStderr(), "henia: the %s copy of %s was installed from an older revision of the skill; run henia install to update it\n", r.harness, lib.Reference(e))
+				}
+			}
+			show(cmd.OutOrStdout(), lib, r, args[0], mode, expand, disclose, notice)
 			return nil
 		},
 	}
@@ -121,7 +126,7 @@ the command always exits successfully so a skill preload never aborts.`,
 	return cmd
 }
 
-func show(out io.Writer, lib *library.Library, r *renderer, target string, mode showMode, expand func(library.Entry, string) string, disclose func(library.Entry) bool) {
+func show(out io.Writer, lib *library.Library, r *renderer, target string, mode showMode, expand func(library.Entry, string) string, disclose func(library.Entry) bool, notice func(library.Entry)) {
 	ref, anchor, sectioned := strings.Cut(target, "#")
 	ref, modules, resource, isResource, err := library.SplitAddress(ref)
 	if err != nil {
@@ -155,9 +160,7 @@ func show(out io.Writer, lib *library.Library, r *renderer, target string, mode 
 		return
 	}
 	if mode.head || mode.toc {
-		if stale(r.harness, entry) {
-			fmt.Fprintf(out, "henia: the %s copy of %s was installed from an older revision of the skill; run henia install to update it\n\n", r.harness, name)
-		}
+		notice(entry)
 		placedContents, placedRelated := false, false
 		if mode.head {
 			static = strings.TrimSpace(static)
@@ -404,11 +407,20 @@ func showResource(out io.Writer, name, skillDir, path, anchor string, sectioned,
 	fmt.Fprint(out, text)
 }
 
-func stale(harness string, entry library.Entry) bool {
+// installManifest is the install record of the scope that installs entry: the
+// project's for its own and its dependencies' skills, the global one otherwise.
+func installManifest(project string, entry library.Entry) func(harness string) string {
+	if entry.Tier == library.Global {
+		return library.InstallManifest
+	}
+	return projectManifest(project)
+}
+
+func stale(harness string, manifest func(harness string) string, entry library.Entry) bool {
 	if harness == "" {
 		return false
 	}
-	data, err := os.ReadFile(library.InstallManifest(harness))
+	data, err := os.ReadFile(manifest(harness))
 	if err != nil {
 		return false
 	}

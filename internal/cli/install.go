@@ -118,8 +118,7 @@ func installProject(cmd *cobra.Command, root string, selected []string, force, e
 	if err != nil {
 		return err
 	}
-	state := filepath.Join(root, library.ProjectDir, "state", "install")
-	manifest := func(harness string) string { return filepath.Join(state, harness+".json") }
+	manifest := projectManifest(root)
 	if err := uninstallDisabled(cmd, tables, manifest); err != nil {
 		return err
 	}
@@ -163,7 +162,7 @@ func installProject(cmd *cobra.Command, root string, selected []string, force, e
 			where, err = placements(cfg.Harness[t.harness])
 		}
 		if err == nil {
-			err = installTree(cmd, t.harness, t.path, root, tree.files, manifest(t.harness), force, cfg.Harness[t.harness].Strict, nil, where)
+			err = installTree(cmd, t.harness, t.path, root, tree.files, manifest(t.harness), force, cfg.Harness[t.harness].Strict, installedRevisions(library.Open(root, nil), tree.files), where)
 		}
 		if err == nil {
 			err = library.EnsureGitignore(filepath.Join(root, library.ProjectDir))
@@ -394,14 +393,7 @@ func installHarness(cmd *cobra.Command, cfg *config.Config, harness, target stri
 			return err
 		}
 	}
-	revisions := map[string]string{}
-	for _, e := range library.Open("", nil).Entries {
-		if _, installed := files[filepath.Join("skills", e.Name, "SKILL.md")]; installed && e.Tier == library.Global {
-			if canonical, err := os.ReadFile(e.Path); err == nil {
-				revisions[e.Name] = build.Digest(canonical)
-			}
-		}
-	}
+	revisions := installedRevisions(library.Open("", nil), files)
 	var configured []henia.Harness
 	for _, name := range slices.Sorted(maps.Keys(owners)) {
 		configured = append(configured, owners[name].Harness[harness])
@@ -515,6 +507,30 @@ func heniaSkill(cmd *cobra.Command, harness string, h henia.Harness, ok bool, st
 		return err
 	}
 	return collect("henia", filepath.Join(out, harness))
+}
+
+// projectManifest is the install record of each harness installed into root.
+func projectManifest(root string) func(harness string) string {
+	return func(harness string) string {
+		return filepath.Join(root, library.ProjectDir, "state", "install", harness+".json")
+	}
+}
+
+// installedRevisions records the digest of the library skill each installed
+// SKILL.md resolves to, the comparison stale makes when the skill is shown.
+func installedRevisions(lib *library.Library, files map[string]string) map[string]string {
+	revisions := map[string]string{}
+	for _, name := range slices.Sorted(maps.Keys(lib.Names())) {
+		if _, installed := files[filepath.Join("skills", name, "SKILL.md")]; !installed {
+			continue
+		}
+		if e, err := lib.Resolve(name); err == nil {
+			if canonical, err := os.ReadFile(e.Path); err == nil {
+				revisions[name] = build.Digest(canonical)
+			}
+		}
+	}
+	return revisions
 }
 
 func sameFile(a, b string) bool {

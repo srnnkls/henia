@@ -98,17 +98,17 @@ func TestStaleHead(t *testing.T) {
 	skill := filepath.Join(t.TempDir(), "SKILL.md")
 	fixture(t, skill, "# Route\n")
 	entry := library.Entry{Name: "route", Path: skill}
-	if stale("claude", entry) {
+	if stale("claude", library.InstallManifest, entry) {
 		t.Fatal("stale without an install record")
 	}
 	manifest := library.InstallManifest("claude")
 	data, _ := json.Marshal(installRecord{Revisions: map[string]string{"route": build.Digest([]byte("# Route\n"))}})
 	fixture(t, manifest, string(data))
-	if stale("claude", entry) || stale("", entry) {
+	if stale("claude", library.InstallManifest, entry) || stale("", library.InstallManifest, entry) {
 		t.Fatal("fresh install reported stale")
 	}
 	fixture(t, skill, "# Route\n\nEdited.\n")
-	if !stale("claude", entry) {
+	if !stale("claude", library.InstallManifest, entry) {
 		t.Fatal("edited library skill not reported stale")
 	}
 }
@@ -304,5 +304,43 @@ func TestGlobalInstallKeepsHarnessStrictnessToItsOwner(t *testing.T) {
 	fixture(t, user, "install_henia_skill = false\n[install.claude]\npath = '"+home+"'\n[harness.claude]\nstrict = true\n")
 	if err := install(); err == nil || !strings.Contains(err.Error(), "version") {
 		t.Fatalf("unsupported frontmatter passed the user's strict table: %v", err)
+	}
+}
+
+func showHead(t *testing.T, project, skill string) (string, string) {
+	t.Helper()
+	cmd := newShowCommand()
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(errOut)
+	cmd.SetArgs([]string{skill, "--head", "--harness", "codex", "--project", project})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("show %s --head: %v", skill, err)
+	}
+	return out.String(), errOut.String()
+}
+
+func TestProjectInstallHeadNotStale(t *testing.T) {
+	project := projectFixture(t, "")
+	data, _ := json.Marshal(installRecord{Revisions: map[string]string{"library": build.Digest([]byte("another revision\n"))}})
+	fixture(t, library.InstallManifest("codex"), string(data))
+	cmd, out := installCommand(t, "install")
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("install: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(project, ".codex", "skills", "library", "SKILL.md")); err != nil {
+		t.Fatalf("dependency skill not installed: %v", err)
+	}
+	head, diagnostics := showHead(t, project, "library")
+	if strings.Contains(head, "henia:") || diagnostics != "" {
+		t.Fatalf("fresh project install reported a notice:\nstdout:\n%s\nstderr:\n%s", head, diagnostics)
+	}
+	fixture(t, filepath.Join(library.PackagesDir(library.ProjectKey(project)), "tropos", "skills", "library", "SKILL.md"), "---\nname: library\ndescription: Library skill.\n---\n\n# Library\n\nEdited.\n")
+	edited, diagnostics := showHead(t, project, "library")
+	if strings.Contains(edited, "older revision") {
+		t.Fatalf("stale notice on stdout:\n%s", edited)
+	}
+	if !strings.Contains(diagnostics, "the codex copy of library was installed from an older revision") {
+		t.Fatalf("stale project copy not reported on stderr: %q", diagnostics)
 	}
 }
