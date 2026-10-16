@@ -34,6 +34,7 @@ type ConfigFile struct {
 	Root    string   `toml:"root"`    // harness (default), project or home.
 	Merge   bool     `toml:"merge"`   // Install owns units of the file, not the whole file.
 	Entries []string `toml:"entries"` // Dotted paths whose members are units of their own.
+	Extend  []string `toml:"extend"`  // Dotted paths of native arrays, or tables of arrays, that later henia.toml layers extend.
 }
 
 type Placement struct {
@@ -42,6 +43,22 @@ type Placement struct {
 	Format  string
 	Schema  string
 	Entries []string
+}
+
+// Extensions returns the native paths whose arrays later henia.toml layers
+// extend instead of replace, each path as a native key addresses it.
+func (c Config) Extensions() []string {
+	var paths []string
+	for id, file := range c.Files {
+		for _, path := range file.Extend {
+			paths = append(paths, id+"."+path)
+			if id == MainFile {
+				paths = append(paths, path)
+			}
+		}
+	}
+	slices.Sort(paths)
+	return paths
 }
 
 // Placements maps each config file's build path to where and how install writes it.
@@ -94,6 +111,11 @@ func NewConfigCompiler(config Config) (*ConfigCompiler, error) {
 		}
 		if file.Merge && file.Format == "text" {
 			return nil, fmt.Errorf("config file %s: merge needs the json, toml or yaml format", id)
+		}
+		for _, path := range file.Extend {
+			if path == "" || slices.Contains(strings.Split(path, "."), "") {
+				return nil, fmt.Errorf("config file %s: extend path %q is not a dotted path", id, path)
+			}
 		}
 		if len(file.Entries) > 0 && !file.Merge {
 			return nil, fmt.Errorf("config file %s: entries need merge", id)

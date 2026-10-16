@@ -88,6 +88,16 @@ func TestConfigFormatsAreDeterministic(t *testing.T) {
 	}
 }
 
+func TestConfigExtensionsAddressNativeKeys(t *testing.T) {
+	config := Config{Files: map[string]ConfigFile{
+		MainFile: {Path: "c.json", Format: "json", Extend: []string{"hooks"}},
+		"mcp":    {Path: "m.json", Format: "json", Extend: []string{"servers.list"}},
+	}}
+	if got := strings.Join(config.Extensions(), " "); got != "hooks main.hooks mcp.servers.list" {
+		t.Fatalf("extensions %s", got)
+	}
+}
+
 func TestConfigRejectsInvalidDefinitions(t *testing.T) {
 	for _, files := range []map[string]ConfigFile{
 		{"a": {Path: "c.ini", Format: "ini"}},
@@ -95,6 +105,7 @@ func TestConfigRejectsInvalidDefinitions(t *testing.T) {
 		{"a": {Path: "../c.json", Format: "json"}},
 		{"a": {Path: "c.json", Format: "json"}, "b": {Path: "c.json", Format: "json"}},
 		{"a": {Path: "c.json", Format: "json", Value: "input.name"}},
+		{"a": {Path: "c.json", Format: "json", Extend: []string{"hooks."}}},
 	} {
 		if _, err := NewConfigCompiler(Config{Files: files}); err == nil {
 			t.Errorf("accepted %v", files)

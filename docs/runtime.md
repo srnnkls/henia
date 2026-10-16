@@ -111,8 +111,8 @@ its own Tropos reads only that one.
 `henia build` compiles the project's skills, from `.henia/skills/`, together
 with its dependencies'. A harness a dependency configures builds as
 `henia install --global` writes it, with the project's skills added and the
-project's harness table of the same name merged over the dependency's key by
-key; see [Building](build.md#dependencies). `henia lint` lints the project's own
+user henia.toml, then the project's harness table of the same name, merged over
+the dependency's key by key; see [Building](build.md#dependencies). `henia lint` lints the project's own
 files and resolves references against its dependencies, whose `.henia/lint/`
 modules join the rule set.
 

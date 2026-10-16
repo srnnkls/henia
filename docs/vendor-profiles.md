@@ -314,7 +314,10 @@ too, since Henia cannot rewrite it without dropping them.
 one harness takes as is. A native key naming a config file id addresses that
 file; the remaining keys address the file with id `main`. In henia.toml layers,
 arrays under `artifacts`, `[shared]` and `[harness.<name>.config]` replace
-earlier ones.
+earlier ones, except the native arrays the file contract's `extend` names: a
+later layer adds its items not already present after the earlier ones. The
+Claude profile extends `hooks`, so a package's hooks and the user's hooks for
+one event both install, each entry once.
 
 Secrets stay out of `[shared]`: `"$GITHUB_TOKEN"` names an environment
 variable, and each profile maps the reference to its harness's spelling. Henia
@@ -380,6 +383,7 @@ natively: `[harness.codex.config.native.tui] status_line = ["model-with-reasonin
 | `root` | where install writes the file: `harness` (default), `project` (project root, project installs) or `home` (home directory, global installs) |
 | `merge` | install owns the file's values instead of the whole file; `json` or `toml` |
 | `entries` | dotted paths of tables or arrays whose members install owns one by one |
+| `extend` | dotted native paths of arrays, or of tables of arrays, that later henia.toml layers extend instead of replace |
 
 `value` sees `shared`, `harness` (the harness's typed config inputs, such as
 `statusline`), `ctx` and the `merge` and `require` helpers, but no skill input.
