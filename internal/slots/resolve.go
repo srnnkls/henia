@@ -389,22 +389,44 @@ func (r Row) Problem() bool {
 	return r.Kind != None && !slices.Contains(tiers, Tier(r.Kind))
 }
 
+// Inline prints each distinct provider content once; content that fills
+// several slots is headed by them.
 func (r *Resolution) Inline(requested []string, content func(p *Provider, kind Value) string) string {
-	var parts []string
+	type block struct {
+		slots []string
+		text  string
+	}
+	var blocks []*block
+	seen := map[string]*block{}
 	for _, row := range r.ordered(requested) {
 		switch {
 		case row.Kind == None:
 		case row.Problem():
-			parts = append(parts, "henia: slot `"+row.Slot+"`: "+r.pointer(row))
+			blocks = append(blocks, &block{text: "henia: slot `" + row.Slot + "`: " + r.pointer(row)})
 		default:
 			owner, _ := r.Owner(row.provider.Slot)
-			if text := strings.TrimSpace(content(row.provider, owner.Type.Value)); text != "" {
-				parts = append(parts, text)
+			text := strings.TrimSpace(content(row.provider, owner.Type.Value))
+			if text == "" {
+				continue
 			}
+			if b, ok := seen[text]; ok {
+				b.slots = append(b.slots, "`"+row.Slot+"`")
+				continue
+			}
+			b := &block{slots: []string{"`" + row.Slot + "`"}, text: text}
+			seen[text] = b
+			blocks = append(blocks, b)
 		}
 	}
-	if len(parts) == 0 {
+	if len(blocks) == 0 {
 		return ""
+	}
+	parts := make([]string, len(blocks))
+	for i, b := range blocks {
+		parts[i] = b.text
+		if len(b.slots) > 1 {
+			parts[i] = strings.Join(b.slots, ", ") + ":\n\n" + b.text
+		}
 	}
 	return strings.Join(parts, "\n\n") + "\n"
 }

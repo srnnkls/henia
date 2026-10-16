@@ -18,7 +18,7 @@ func benchmarkShow(b *testing.B, cold bool) {
 	disclose := func(library.Entry) bool { return true }
 	run := func() {
 		lib := library.Open(root, nil)
-		show(io.Discard, lib, newRenderer("claude", lib), "scope", showMode{}, identity, disclose)
+		show(io.Discard, lib, newRenderer("claude", lib), "scope", showMode{}, identity, disclose, func(library.Entry) {})
 	}
 	run()
 	b.ReportAllocs()
