@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.29](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.28...v0.1.0-alpha.29) (2026-10-16)
+
+
+### Bug Fixes
+
+* **config:** keep user-layer supporting files out of project builds ([355504e](https://github.com/srnnkls/henia/commit/355504ec17269f71cc9401ae12cfeb23b368e984))
+* **config:** keep user-layer supporting files out of project builds ([b1ad19b](https://github.com/srnnkls/henia/commit/b1ad19b7603db6ef8f08c1a9b74400b8b2c07ed9))
+
 ## [0.1.0-alpha.28](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.27...v0.1.0-alpha.28) (2026-10-16)
 
 
