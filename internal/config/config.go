@@ -124,6 +124,13 @@ func HarnessTables(path string) (map[string]any, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	tables, _ := raw["harness"].(map[string]any)
+	root, err := layerRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := resolveHarnessFiles(tables, root); err != nil {
+		return nil, err
+	}
 	return tables, nil
 }
 
@@ -182,12 +189,9 @@ func loadLayers(path string, projectData []byte) (*Config, error) {
 }
 
 func decodeFile(path string, projectData []byte) (*Config, error) {
-	projectRoot, err := filepath.Abs(filepath.Dir(path))
+	projectRoot, err := layerRoot(path)
 	if err != nil {
 		return nil, err
-	}
-	if filepath.Base(projectRoot) == ".henia" {
-		projectRoot = filepath.Dir(projectRoot)
 	}
 	userRoot := library.ConfigDir()
 	userData, err := os.ReadFile(filepath.Join(userRoot, "henia.toml"))
@@ -218,6 +222,37 @@ func withLocal(path string, projectData []byte) ([]byte, error) {
 		return nil, fmt.Errorf("%s: %w", deps.Local(path), err)
 	}
 	return toml.Marshal(mergeLayer(project, local))
+}
+
+// layerRoot is the directory a henia.toml's relative paths resolve against:
+// its own, or the project's for one inside .henia.
+func layerRoot(path string) (string, error) {
+	root, err := filepath.Abs(filepath.Dir(path))
+	if err != nil {
+		return "", err
+	}
+	if filepath.Base(root) == ".henia" {
+		root = filepath.Dir(root)
+	}
+	return root, nil
+}
+
+// resolveHarnessFiles resolves the files the harness tables of one layer point
+// to against that layer's root.
+func resolveHarnessFiles(harnesses map[string]any, root string) error {
+	for name, value := range harnesses {
+		harness, _ := value.(map[string]any)
+		config, _ := harness["config"].(map[string]any)
+		statusline, _ := config["statusline"].(map[string]any)
+		if path, ok := statusline["file"].(string); ok {
+			resolved, err := layerFile(root, path)
+			if err != nil {
+				return fmt.Errorf("harness.%s.config.statusline.file: %w", name, err)
+			}
+			statusline["file"] = resolved
+		}
+	}
+	return nil
 }
 
 // layerFile resolves a file a layer points to against that layer's root.
@@ -337,17 +372,8 @@ func decodeLayers(projectRoot, userRoot string, userData, projectData []byte) (*
 			semantic["model_path"] = filepath.Join(layer.root, path)
 		}
 		harnesses, _ := layer.values["harness"].(map[string]any)
-		for name, value := range harnesses {
-			harness, _ := value.(map[string]any)
-			config, _ := harness["config"].(map[string]any)
-			statusline, _ := config["statusline"].(map[string]any)
-			if path, ok := statusline["file"].(string); ok {
-				resolved, err := layerFile(layer.root, path)
-				if err != nil {
-					return nil, fmt.Errorf("harness.%s.config.statusline.file: %w", name, err)
-				}
-				statusline["file"] = resolved
-			}
+		if err := resolveHarnessFiles(harnesses, layer.root); err != nil {
+			return nil, err
 		}
 	}
 	merged := mergeLayer(mergeLayer(base, user), project)
