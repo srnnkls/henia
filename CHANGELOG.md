@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.27](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.26...v0.1.0-alpha.27) (2026-10-16)
+
+
+### Bug Fixes
+
+* **install:** park an install's records when another target installs ([19b9863](https://github.com/srnnkls/henia/commit/19b9863a3275ac1d852139b7eee09eb4bd23a0e6))
+* **install:** park an install's records when another target installs ([70f1979](https://github.com/srnnkls/henia/commit/70f1979bf6474fbd66e9139a86215680a9d4183a))
+
 ## [0.1.0-alpha.26](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.25...v0.1.0-alpha.26) (2026-10-16)
 
 
