@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.0-alpha.23](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.22...v0.1.0-alpha.23) (2026-10-16)
+
+
+### Features
+
+* **config:** deploy the Claude Code status line script ([223df08](https://github.com/srnnkls/henia/commit/223df08dec37028bfe9d9c4a97b2dfbb997cd939))
+* **config:** refresh schemas after 24 hours ([5299880](https://github.com/srnnkls/henia/commit/52998803a49eaf56bbd6cc4ee4a0d4718badad9f))
+* **install:** install harness config, owning only what Henia renders ([07f39ef](https://github.com/srnnkls/henia/commit/07f39efb62b1b7033564a6897309c852b43f8e4a))
+* **lint:** config stage over harness config ([f562143](https://github.com/srnnkls/henia/commit/f5621435ad89efaab3e161c3d4099e8cbde7f8d0))
+* **lint:** config stage over harness config ([40f818b](https://github.com/srnnkls/henia/commit/40f818b17464a5bb2f477afe0d99734de0ef7235))
+* **profile:** pi and omp profiles ([002a388](https://github.com/srnnkls/henia/commit/002a38837d75f80c6772f35b9ea9f1829bf3faf2))
+* **profile:** pi and omp profiles ([dfb4b1a](https://github.com/srnnkls/henia/commit/dfb4b1ac5a24610b9e3ac2e75506d2c6cd01db1e))
+* **profile:** unified harness profiles and the config artifact ([cb9328e](https://github.com/srnnkls/henia/commit/cb9328e4d4b3b4827581c727cb723c8fd4a99ac0))
+* unified harness profiles and installable harness config ([486508d](https://github.com/srnnkls/henia/commit/486508d3e2e1666cef321f6a8a2d41e28e384739))
+
 ## [0.1.0-alpha.22](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.21...v0.1.0-alpha.22) (2026-10-13)
 
 
