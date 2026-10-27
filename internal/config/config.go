@@ -187,8 +187,8 @@ func LoadPackage(path string, harnesses map[string]any, home bool) (*Config, err
 		return nil, err
 	}
 	userRoot := library.ConfigDir()
-	userData, err := os.ReadFile(filepath.Join(userRoot, "henia.toml"))
-	if err != nil && !os.IsNotExist(err) {
+	userData, err := userLayer(userRoot)
+	if err != nil {
 		return nil, err
 	}
 	cfg, err := decode(root, userRoot, []layer{{data, root, false}, {userData, userRoot, true}, {overrideData, root, false}}, home)
@@ -213,8 +213,8 @@ func decodeFile(path string, projectData []byte) (*Config, error) {
 		return nil, err
 	}
 	userRoot := library.ConfigDir()
-	userData, err := os.ReadFile(filepath.Join(userRoot, "henia.toml"))
-	if err != nil && !os.IsNotExist(err) {
+	userData, err := userLayer(userRoot)
+	if err != nil {
 		return nil, err
 	}
 	cfg, err := decodeLayers(projectRoot, userRoot, userData, projectData)
@@ -223,6 +223,16 @@ func decodeFile(path string, projectData []byte) (*Config, error) {
 	}
 	cfg.Path = path
 	return cfg, nil
+}
+
+// userLayer is the user henia.toml with its henia.local.toml layered over it.
+func userLayer(userRoot string) ([]byte, error) {
+	path := filepath.Join(userRoot, "henia.toml")
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	return withLocal(path, data)
 }
 
 func withLocal(path string, projectData []byte) ([]byte, error) {
