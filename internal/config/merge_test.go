@@ -256,3 +256,37 @@ func TestUserFilesResolveInTheUserLayerForHomeInstalls(t *testing.T) {
 		t.Fatalf("package file %+v", files["b.sh"])
 	}
 }
+
+func TestUserLocalLayersOverTheUserConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", home)
+	user := filepath.Join(home, "henia")
+	if err := os.MkdirAll(user, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string]string{
+		"henia.toml":       "[harness.claude.variables]\nshared = \"user\"\nkept = \"user\"\n",
+		"henia.local.toml": "[harness.claude.variables]\nshared = \"local\"\n",
+	} {
+		if err := os.WriteFile(filepath.Join(user, name), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	project := filepath.Join(t.TempDir(), "henia.toml")
+	if err := os.WriteFile(project, []byte("[harness.claude]\nprofile = \"claude\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	load := map[string]func() (*Config, error){
+		"project": func() (*Config, error) { return Load(project) },
+		"package": func() (*Config, error) { return LoadPackage(project, nil, true) },
+	}
+	for name, load := range load {
+		cfg, err := load()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := cfg.Harness["claude"].Variables; got["shared"] != "local" || got["kept"] != "user" {
+			t.Fatalf("%s variables: %v", name, got)
+		}
+	}
+}
