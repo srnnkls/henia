@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.1.0-alpha.30](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.29...v0.1.0-alpha.30) (2026-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **config:** harness config is the harness's own config
+* **config:** [harness.<n>.config.native] becomes [harness.<n>.config] and [harness.<n>.config.statusline] becomes [harness.<n>.statusline].
+* **config:** harness config is the harness's own config
+* **config:** [harness.<n>.config.native] becomes [harness.<n>.config] and [harness.<n>.config.statusline] becomes [harness.<n>.statusline].
+* **config:** harness config is the harness's own config
+* **config:** [harness.<n>.config.native] becomes [harness.<n>.config] and [harness.<n>.config.statusline] becomes [harness.<n>.statusline].
+
+### Features
+
+* **config:** MCP header values in [shared.mcp] ([cdbdd93](https://github.com/srnnkls/henia/commit/cdbdd931c6ef9a745264822f32d029ffb73a48cc))
+* **config:** MCP header values in [shared.mcp] ([cd9d93f](https://github.com/srnnkls/henia/commit/cd9d93f28b096f5d82d72334490b66531fca3999))
+* **config:** MCP header values in [shared.mcp] ([d46e1f1](https://github.com/srnnkls/henia/commit/d46e1f1f423608c359dd9860980cc1e1f8e41bb0))
+
+
+### Bug Fixes
+
+* **config:** layer the user henia.local.toml over the user henia.toml ([4aa220f](https://github.com/srnnkls/henia/commit/4aa220f526cc5523b1d570ce1b48c14c102ceb4a))
+* **config:** layer the user henia.local.toml over the user henia.toml ([5fa0c4b](https://github.com/srnnkls/henia/commit/5fa0c4bdbacd896d8774de28f5bbb52a173413e2))
+
+
+### Code Refactoring
+
+* **config:** harness config is the harness's own config ([cdbdd93](https://github.com/srnnkls/henia/commit/cdbdd931c6ef9a745264822f32d029ffb73a48cc))
+* **config:** harness config is the harness's own config ([cd9d93f](https://github.com/srnnkls/henia/commit/cd9d93f28b096f5d82d72334490b66531fca3999))
+* **config:** harness config is the harness's own config ([d46e1f1](https://github.com/srnnkls/henia/commit/d46e1f1f423608c359dd9860980cc1e1f8e41bb0))
+
 ## [0.1.0-alpha.29](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.28...v0.1.0-alpha.29) (2026-10-16)
 
 
