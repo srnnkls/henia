@@ -231,7 +231,7 @@ func (c *ConfigCompiler) natives(native map[string]any) (map[string]map[string]a
 		}
 		table, ok := value.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("config.native.%s must be a table", key)
+			return nil, fmt.Errorf("config.%s must be a table", key)
 		}
 		result[key] = table
 	}
@@ -241,7 +241,7 @@ func (c *ConfigCompiler) natives(native map[string]any) (map[string]map[string]a
 	}
 	if len(rest) > 0 {
 		if _, ok := c.config.Files[MainFile]; !ok {
-			return nil, fmt.Errorf("config.native keys %v name no config file", slices.Sorted(maps.Keys(rest)))
+			return nil, fmt.Errorf("config keys %v name no config file", slices.Sorted(maps.Keys(rest)))
 		}
 		result[MainFile] = rest
 	}

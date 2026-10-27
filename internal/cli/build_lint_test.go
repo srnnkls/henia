@@ -566,9 +566,9 @@ func TestBuildLayersUserAndProjectConfigOverADependencyHarness(t *testing.T) {
 	fixture(t, filepath.Join(dep, "henia.toml"), "[harness.claude]\nartifacts = ['skills', 'config']\n"+packageHooks)
 	fixture(t, filepath.Join(dep, "skills", "pinned", "SKILL.md"), "---\nname: pinned\ndescription: Pinned skill.\n---\n\n# Pinned\n")
 	fixture(t, filepath.Join(config, "henia", "henia.toml"), userHooks)
-	fixture(t, filepath.Join(project, "henia.toml"), `[harness.claude.config.native]
+	fixture(t, filepath.Join(project, "henia.toml"), `[harness.claude.config]
 effortLevel = "low"
-[harness.claude.config.native.hooks]
+[harness.claude.config.hooks]
 Stop = [{ hooks = [{ type = "command", command = "project" }] }]
 `)
 	output := filepath.Join(t.TempDir(), "out")
