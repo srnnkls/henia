@@ -56,11 +56,14 @@ type Harness struct {
 	Agents      Artifacts         `toml:"agents,omitempty"`
 	Commands    Artifacts         `toml:"commands,omitempty"`
 	Config      map[string]any    `toml:"config,omitempty"`
-	StatusLine  map[string]any    `toml:"statusline,omitempty"`
-	Shared      map[string]any    `toml:"-"`
-	Install     Install           `toml:"-"`
-	ProjectRoot string            `toml:"-"`
-	UserRoot    string            `toml:"-"`
+	// DefaultConfig fills the keys a merged config file lacks; install never
+	// owns them, so the harness's own changes to them stay.
+	DefaultConfig map[string]any `toml:"default_config,omitempty"`
+	StatusLine    map[string]any `toml:"statusline,omitempty"`
+	Shared        map[string]any `toml:"-"`
+	Install       Install        `toml:"-"`
+	ProjectRoot   string         `toml:"-"`
+	UserRoot      string         `toml:"-"`
 }
 
 func (h Harness) Type(dir string) Artifacts {

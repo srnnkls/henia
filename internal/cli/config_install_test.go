@@ -246,3 +246,76 @@ command = "starship statusline"
 		t.Fatalf("settings after returning: %v", doc)
 	}
 }
+
+func TestProjectInstallDefaultConfig(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	fixture(t, filepath.Join(project, ".henia", "skills", "own", "SKILL.md"), "---\nname: own\ndescription: Own skill.\n---\n\n# Own\n")
+	fixture(t, filepath.Join(project, "henia.toml"), `artifacts = ["skills", "config"]
+[harness.claude.config]
+env = { A = "1" }
+[harness.claude.default_config]
+theme = "auto"
+model = "opus"
+env = { A = "2" }
+modelSettings = { opus = { effortLevel = "medium" }, fable = { effortLevel = "low" } }
+`)
+	settings := filepath.Join(project, ".claude", "settings.json")
+	fixture(t, settings, `{"theme": "dark", "modelSettings": {"opus": {"effortLevel": "high"}}}`)
+	install := func(args ...string) error {
+		cmd, out := installCommand(t, append([]string{"install", "--harness", "claude"}, args...)...)
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("%s", out)
+		}
+		return err
+	}
+	if err := install(); err != nil {
+		t.Fatal(err)
+	}
+	doc := readJSON(t, settings)
+	models := doc["modelSettings"].(map[string]any)
+	if doc["theme"] != "dark" || doc["model"] != "opus" || doc["env"].(map[string]any)["A"] != "1" ||
+		models["opus"].(map[string]any)["effortLevel"] != "high" || models["fable"].(map[string]any)["effortLevel"] != "low" {
+		t.Fatalf("defaults: %v", doc)
+	}
+
+	doc["model"] = "sonnet"
+	data, _ := json.Marshal(doc)
+	os.WriteFile(settings, data, 0o644)
+	if err := install(); err != nil {
+		t.Fatalf("an edited default conflicted: %v", err)
+	}
+	if readJSON(t, settings)["model"] != "sonnet" {
+		t.Fatal("an install overwrote an edited default")
+	}
+	if err := install("--force"); err != nil {
+		t.Fatal(err)
+	}
+	doc = readJSON(t, settings)
+	if doc["model"] != "opus" || doc["theme"] != "auto" || doc["env"].(map[string]any)["A"] != "1" {
+		t.Fatalf("--force: %v", doc)
+	}
+}
+
+func TestDefaultConfigNeedsMergedFile(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	fixture(t, filepath.Join(project, ".henia", "skills", "own", "SKILL.md"), "---\nname: own\ndescription: Own skill.\n---\n\n# Own\n")
+	fixture(t, filepath.Join(project, "henia.toml"), `artifacts = ["skills", "config"]
+[harness.claude.default_config.statusline]
+x = 1
+`)
+	cmd, _ := installCommand(t, "install", "--harness", "claude")
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "default_config.statusline") || !strings.Contains(err.Error(), "merge") {
+		t.Fatalf("default_config for an unmerged file installed: %v", err)
+	}
+}

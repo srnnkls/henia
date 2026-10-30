@@ -202,3 +202,87 @@ func TestYamlMerge(t *testing.T) {
 		t.Fatalf("yaml comments not protected: %v", err)
 	}
 }
+
+func TestDefaultsFillOnlyMissingLeaves(t *testing.T) {
+	path := setup(t, "settings.json", `{"effortLevel": "high", "modelSettings": {"opus": {"effortLevel": "high"}}}`)
+	defaults := value(t, "json", `{"effortLevel": "medium", "theme": "auto", "modelSettings": {"opus": {"effortLevel": "medium"}, "fable": {"effortLevel": "low"}}}`)
+	file := File{Path: path, Format: "json", Defaults: defaults}
+	record, _, err := Apply([]File{file}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(record) != 0 {
+		t.Fatalf("defaults were recorded: %v", record)
+	}
+	doc := value(t, "json", contents(t, path))
+	if doc["effortLevel"] != "high" || doc["theme"] != "auto" {
+		t.Fatalf("top-level defaults misapplied: %v", doc)
+	}
+	models := doc["modelSettings"].(map[string]any)
+	if models["opus"].(map[string]any)["effortLevel"] != "high" || models["fable"].(map[string]any)["effortLevel"] != "low" {
+		t.Fatalf("nested defaults misapplied: %v", models)
+	}
+	os.WriteFile(path, []byte(`{"theme": "dark"}`), 0o644)
+	if _, _, err := Apply([]File{file}, record, false); err != nil {
+		t.Fatalf("an edited default conflicted: %v", err)
+	}
+	if value(t, "json", contents(t, path))["theme"] != "dark" {
+		t.Fatal("an edited default was overwritten")
+	}
+}
+
+func TestForceOverwritesDefaults(t *testing.T) {
+	path := setup(t, "settings.json", `{"theme": "dark", "modelSettings": {"opus": {"effortLevel": "high"}}, "verbose": true}`)
+	file := File{Path: path, Format: "json", Defaults: value(t, "json", `{"theme": "auto", "modelSettings": {"opus": {"effortLevel": "medium"}}}`)}
+	if _, _, err := Apply([]File{file}, nil, true); err != nil {
+		t.Fatal(err)
+	}
+	doc := value(t, "json", contents(t, path))
+	if doc["theme"] != "auto" || doc["modelSettings"].(map[string]any)["opus"].(map[string]any)["effortLevel"] != "medium" || doc["verbose"] != true {
+		t.Fatalf("force did not reset defaults alone: %v", doc)
+	}
+}
+
+func TestOwnedConfigWinsOverDefaults(t *testing.T) {
+	path := setup(t, "settings.json", "")
+	file := File{Path: path, Format: "json", Value: value(t, "json", `{"env": {"A": "1"}}`), Defaults: value(t, "json", `{"env": {"A": "2", "B": "2"}}`)}
+	for _, force := range []bool{false, true} {
+		if _, _, err := Apply([]File{file}, nil, force); err != nil {
+			t.Fatal(err)
+		}
+		if got := value(t, "json", contents(t, path))["env"]; got.(map[string]any)["A"] != "1" {
+			t.Fatalf("force=%v: default replaced an owned value: %v", force, got)
+		}
+	}
+}
+
+func TestUnitMovedToDefaultsIsReleased(t *testing.T) {
+	path := setup(t, "settings.json", "")
+	owned := File{Path: path, Format: "json", Value: value(t, "json", `{"model": "opus", "env": {"A": "1"}}`)}
+	record, _, err := Apply([]File{owned}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(path, []byte(`{"model": "sonnet", "env": {"A": "1"}}`), 0o644)
+	moved := File{Path: path, Format: "json", Value: value(t, "json", `{"env": {"A": "1"}}`), Defaults: value(t, "json", `{"model": "opus"}`)}
+	record, _, err = Apply([]File{moved}, record, false)
+	if err != nil {
+		t.Fatalf("a unit moved to defaults conflicted: %v", err)
+	}
+	if value(t, "json", contents(t, path))["model"] != "sonnet" {
+		t.Fatal("a released unit was changed")
+	}
+	if _, ok := record[path][`{"path":["model"]}`]; ok {
+		t.Fatal("a released unit stayed recorded")
+	}
+}
+
+func TestDefaultsCreateMissingFile(t *testing.T) {
+	path := setup(t, "settings.json", "")
+	if _, _, err := Apply([]File{{Path: path, Format: "json", Defaults: map[string]any{"theme": "auto"}}}, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	if value(t, "json", contents(t, path))["theme"] != "auto" {
+		t.Fatal("defaults did not create the file")
+	}
+}

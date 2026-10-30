@@ -38,11 +38,12 @@ type ConfigFile struct {
 }
 
 type Placement struct {
-	Root    string
-	Merge   bool
-	Format  string
-	Schema  string
-	Entries []string
+	Root     string
+	Merge    bool
+	Format   string
+	Schema   string
+	Entries  []string
+	Defaults map[string]any
 }
 
 // Extensions returns the native paths whose arrays later henia.toml layers
@@ -65,9 +66,27 @@ func (c Config) Extensions() []string {
 func (c Config) Placements() map[string]Placement {
 	placements := map[string]Placement{}
 	for _, file := range c.Files {
-		placements[file.Path] = Placement{cmp.Or(file.Root, "harness"), file.Merge, file.Format, file.Schema, file.Entries}
+		placements[file.Path] = Placement{Root: cmp.Or(file.Root, "harness"), Merge: file.Merge, Format: file.Format, Schema: file.Schema, Entries: file.Entries}
 	}
 	return placements
+}
+
+// Defaults splits native default data by file as Render splits native data,
+// keyed by each file's path. Only merged files take defaults.
+func (c *ConfigCompiler) Defaults(native map[string]any) (map[string]map[string]any, error) {
+	natives, err := c.natives(native)
+	if err != nil {
+		return nil, fmt.Errorf("default_config: %w", err)
+	}
+	result := map[string]map[string]any{}
+	for id, value := range natives {
+		file := c.config.Files[id]
+		if !file.Merge {
+			return nil, fmt.Errorf("default_config.%s: %s is not a merged config file", id, file.Path)
+		}
+		result[file.Path] = value
+	}
+	return result, nil
 }
 
 type configEnvironment struct {

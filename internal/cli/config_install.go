@@ -19,7 +19,7 @@ import (
 )
 
 // placements collects the config file placements of every profile the
-// harnesses name.
+// harnesses name, with the default config each harness gives them.
 func placements(harnesses ...henia.Harness) (map[string]profile.Placement, error) {
 	result := map[string]profile.Placement{}
 	for _, h := range harnesses {
@@ -30,7 +30,26 @@ func placements(harnesses ...henia.Harness) (map[string]profile.Placement, error
 		if err != nil {
 			return nil, err
 		}
-		maps.Copy(result, loaded.Config.Placements())
+		for path, p := range loaded.Config.Placements() {
+			p.Defaults = result[path].Defaults
+			result[path] = p
+		}
+		if len(h.DefaultConfig) == 0 {
+			continue
+		}
+		compiler, err := profile.NewConfigCompiler(loaded.Config)
+		if err != nil {
+			return nil, err
+		}
+		defaults, err := compiler.Defaults(h.DefaultConfig)
+		if err != nil {
+			return nil, err
+		}
+		for path, value := range defaults {
+			p := result[path]
+			p.Defaults = profile.Merge(p.Defaults, value)
+			result[path] = p
+		}
 	}
 	return result, nil
 }
@@ -135,7 +154,7 @@ func installTree(cmd *cobra.Command, harness, target, project string, files map[
 			if err != nil {
 				return fmt.Errorf("%s: %w", rel, err)
 			}
-			file := units.File{Path: filepath.Join(dir, rel), Format: p.Format, Entries: p.Entries, Value: value, Strict: strict}
+			file := units.File{Path: filepath.Join(dir, rel), Format: p.Format, Entries: p.Entries, Value: value, Defaults: p.Defaults, Strict: strict}
 			if schema := p.Schema; schema != "" {
 				file.Validate = func(doc map[string]any) error { return schemas.Validate(schema, doc) }
 			}
@@ -143,6 +162,20 @@ func installTree(cmd *cobra.Command, harness, target, project string, files map[
 		default:
 			rooted[p.Root][rel] = files[rel]
 		}
+	}
+	for _, rel := range slices.Sorted(maps.Keys(where)) {
+		p := where[rel]
+		if _, staged := files[rel]; staged || len(p.Defaults) == 0 {
+			continue
+		}
+		dir := target
+		if p.Root != "harness" {
+			dir = roots[p.Root]
+		}
+		if dir == "" {
+			continue
+		}
+		merged = append(merged, units.File{Path: filepath.Join(dir, rel), Format: p.Format, Entries: p.Entries, Defaults: p.Defaults, Strict: strict})
 	}
 	if !force {
 		if err := installConflicts(harness, target, whole, manifest, roots, rooted, merged, sibling(manifest, "units")); err != nil {
