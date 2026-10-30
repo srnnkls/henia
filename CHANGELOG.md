@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.31](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.30...v0.1.0-alpha.31) (2026-10-30)
+
+
+### Features
+
+* **config:** default_config fills merged config keys the harness owns ([b9cc3d9](https://github.com/srnnkls/henia/commit/b9cc3d9536b8cfd6ef6cfa9f8f3d4f75fbf5743b))
+* **config:** default_config fills merged config keys the harness owns ([ee998b3](https://github.com/srnnkls/henia/commit/ee998b3f9eb27b339c3f3a829c1a615d6a112dd1))
+
 ## [0.1.0-alpha.30](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.29...v0.1.0-alpha.30) (2026-10-27)
 
 
