@@ -1,6 +1,7 @@
 // Package units installs config files that the harness also writes. Henia
 // owns units of such a file: top-level values, or the members of declared
-// entry paths. Values it does not own are never read or changed.
+// entry paths. Values it does not own are never read or changed, except that
+// defaults fill the leaves the file lacks.
 package units
 
 import (
@@ -22,12 +23,14 @@ import (
 )
 
 // File is one destination. A nil Value removes every unit a previous install
-// recorded for it.
+// recorded for it. Defaults fill the leaves the destination lacks, or every
+// leaf under force, and are never recorded; owned units win over them.
 type File struct {
 	Path     string
 	Format   string // json, toml or yaml
 	Entries  []string
 	Value    map[string]any
+	Defaults map[string]any
 	Validate func(map[string]any) error
 	Strict   bool // A validation error fails the apply instead of warning.
 }
@@ -191,6 +194,7 @@ func merge(file File, original []byte, previous map[string]string, force bool) (
 			}
 		}
 	}
+	defaults := leaves(file.Defaults, nil)
 	for _, id := range slices.Sorted(maps.Keys(previous)) {
 		if _, kept := units[id]; kept {
 			continue
@@ -198,6 +202,9 @@ func merge(file File, original []byte, previous map[string]string, force bool) (
 		u, err := parseID(id)
 		if err != nil {
 			return nil, nil, nil, err
+		}
+		if overlaps(u.path, defaults) {
+			continue
 		}
 		if u.elem {
 			if items, exists, ok := array(doc, u.path); exists && ok {
@@ -214,10 +221,29 @@ func merge(file File, original []byte, previous map[string]string, force bool) (
 			conflicted = append(conflicted, u.name())
 		}
 	}
+	owned := make([][]string, len(wanted))
+	for i, u := range wanted {
+		owned[i] = u.path
+	}
+	filled := false
+	for _, path := range defaults {
+		if overlaps(path, owned) {
+			continue
+		}
+		if _, exists := get(doc, path); exists && !force {
+			continue
+		}
+		if value, _ := get(file.Defaults, path); set(doc, path, value) == nil {
+			filled = true
+		}
+	}
+	if filled && file.Format != "json" && file.Value == nil && hasComments(original) {
+		conflicted = append(conflicted, "comments")
+	}
 	if len(conflicted) > 0 && !force {
 		return nil, nil, &Conflict{file.Path, conflicted}, nil
 	}
-	if file.Value == nil && len(original) == 0 {
+	if file.Value == nil && !filled && len(original) == 0 {
 		return nil, units, nil, nil
 	}
 	data, err := encode(file.Format, doc)
@@ -397,6 +423,29 @@ func flatten(value map[string]any, entries []string) []unit {
 	}
 	walk(value, nil)
 	return units
+}
+
+// leaves lists the paths of the non-table values under value, and of its
+// empty tables.
+func leaves(value map[string]any, path []string) [][]string {
+	var paths [][]string
+	for _, key := range slices.Sorted(maps.Keys(value)) {
+		child := append(slices.Clone(path), key)
+		if table, ok := value[key].(map[string]any); ok && len(table) > 0 {
+			paths = append(paths, leaves(table, child)...)
+			continue
+		}
+		paths = append(paths, child)
+	}
+	return paths
+}
+
+// overlaps reports whether path lies on, above or below any of the others.
+func overlaps(path []string, others [][]string) bool {
+	return slices.ContainsFunc(others, func(other []string) bool {
+		n := min(len(path), len(other))
+		return slices.Equal(path[:n], other[:n])
+	})
 }
 
 func hash(value any) string {

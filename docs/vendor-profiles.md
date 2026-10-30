@@ -307,10 +307,22 @@ did not write or that changed since its last install, naming each file or
 value; `--force` replaces them. A Codex `config.toml` with comments conflicts
 too, since Henia cannot rewrite it without dropping them.
 
+`[harness.<name>.default_config]` gives a merged file values the harness then
+owns, such as the model and effort level Claude Code's `/model` and `/effort`
+save. Install writes each leaf value the destination lacks and never records
+it, so a later edit by the harness or by hand stays and never conflicts.
+Nested tables fill leaf by leaf: a default for one model under
+`modelSettings` leaves the others alone. `--force` resets every default, and a
+value `[harness.<name>.config]` owns wins over a default for the same key.
+Moving a key from `config` to `default_config` hands it to the harness with its
+current value. Its keys address config files as `config`'s do, and only merged
+files take defaults.
+
 ### Input
 
 `[shared]` holds free-form tables that every harness profile may read.
-`[harness.<name>.config]` holds the harness's own config, taken as is. A key
+`[harness.<name>.config]` holds the harness's own config, taken as is, and
+`[harness.<name>.default_config]` its defaults. A key
 naming a config file id addresses that file; the remaining keys address the
 file with id `main`. In henia.toml layers,
 arrays under `artifacts`, `[shared]` and `[harness.<name>.config]` replace

@@ -174,7 +174,8 @@ The `claude-agent` profile lives at `.henia/harnesses/claude-agent/transform.tom
 
 `config` renders the harness's configuration files, such as Codex's
 `config.toml` or Claude Code's `settings.json` and `.mcp.json`, from `[shared]`
-and `[harness.<name>.config]`. Unrelated to `[lint.config]`, which
+and `[harness.<name>.config]`, with defaults the harness may change from
+`[harness.<name>.default_config]`. Unrelated to `[lint.config]`, which
 configures lint rules. [Harness configuration](vendor-profiles.md#harness-configuration)
 covers both tables.
 
