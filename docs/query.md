@@ -56,6 +56,7 @@ henia query '(skill :id ?s) @t (skill :id (not ?s) (link :target ?s) @l)? (group
 henia query '(skill (code)? @c) @s (group @s (count @c @n (>= 3)) (sum :lines @c @l))' --sort '-@n'
 henia query '(skill :id ?s @s (code) @c) (group ?s (count @c @n))'
 henia query '(code :lang "bash" @l :words ?w @w) @c' --sort '-@w'
+henia query '(section :title "Invariants" (table (row (cell :column "Check" :text "")) @r))'
 ```
 
 ## Types
@@ -67,6 +68,8 @@ henia query '(code :lang "bash" @l :words ?w @w) @c' --sort '-@w'
 | `section` | `:id` (heading anchor, as in `henia show skill#id`), `:title`, `:level` |
 | `heading` | `:level` |
 | `paragraph`, `item`, `quote`, `table` | |
+| `row` | in a `table`: `:index` (`0` for the header) and `:header` (`true` for the header); in lint data: `:table`, `:key` or `:index`, and `:value` |
+| `cell` | `:index` and `:column`, the text of its column's header cell |
 | `list` | `:ordered` |
 | `code` | `:lang`; `:inline` (`true` for a code span, `false` for a block) and, on a span, `:ticks` (its backtick count) |
 | `link` | `:url`; for links into a skill also `:target` (skill name), `:path` (file in it) and `:anchor` (section id), from `` `$name` ``, `` `henia show name/path#anchor` ``, relative paths and `#anchor`; a rendered `:slot` links to each skill selected to provide it, with `:ref "slot"` and `:slot` |
@@ -77,6 +80,12 @@ henia query '(code :lang "bash" @l :words ?w @w) @c' --sort '-@w'
 A section holds its heading and everything up to the next heading of the same
 or a higher level. Files other than Markdown hold paragraphs separated by blank
 lines.
+
+A table holds a row per line, the header first, and a row holds a cell per
+column. A row's text is its line from pipe to pipe, and a cell's text its
+trimmed content. The rows of lint `data` are `row` nodes too, outside any
+table and with a `:table` key: `:table` selects them, while `(table (row ...))`,
+`:header` or a nested `(cell ...)` selects table rows.
 
 Every type also takes these keys:
 
@@ -208,6 +217,11 @@ print their captures.
 - A top-level `(not P)` drops the rows for which P matches with the same
   variables. It must share a variable bound by a required pattern. Inside
   `(not P)`, a variable bound outside joins; one bound only inside stays local.
+- A top-level `(not P)` connects the patterns whose variables it mentions
+  outside an optional pattern or a nested `(not ...)`. They pair up, and the
+  negation keeps the pairs P misses:
+  `(skill :id ?a) @a (skill :id ?b) @b (not (skill :id ?a (link :target ?b)))`
+  pairs each skill with every skill it does not link to.
 - A variable bound in an optional pattern may recur only after a required
   binder has matched, and there the optional mention compares. The required
   binder is one of these:
@@ -259,9 +273,9 @@ The reader rejects:
 - a variable that appears once, since it would match anything;
 - a variable that is compared but never bound, or bound only in an optional
   pattern and used again without an earlier required binder;
-- top-level patterns that share no variable, since every combination would
-  match, and a top-level `(not P)` that shares none, since it would drop every
-  row or none;
+- top-level patterns that share no variable, directly or through a top-level
+  `(not P)`, since every combination would match, and a top-level `(not P)`
+  that shares none, since it would drop every row or none;
 - alternatives that bind different variables, and captures inside `(not ...)`;
 - a capture that follows no pattern or value, and two captures of one name
   where either is a value;

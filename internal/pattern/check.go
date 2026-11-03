@@ -181,6 +181,22 @@ func (q *Query) check() error {
 			}
 		}
 	}
+	for i := range q.Absent {
+		via := -1
+		for _, a := range mentions {
+			if a.scope != scopes[i] || a.optional {
+				continue
+			}
+			for _, b := range mentions {
+				if b.name == a.name && b.member >= 0 && !b.negated {
+					if via >= 0 {
+						component[find(b.member)] = find(via)
+					}
+					via = b.member
+				}
+			}
+		}
+	}
 	for i := 1; i < len(q.Members); i++ {
 		if find(i) != find(0) {
 			return &Error{Offset: q.Members[i].Pos, Message: "this pattern shares no variable with the first, so every combination would match: a cartesian product between disconnected patterns", Hint: "share a ?variable between the patterns, or list alternatives in [ ]"}

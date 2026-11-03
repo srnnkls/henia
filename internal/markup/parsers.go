@@ -28,6 +28,8 @@ var (
 			return p.Value == parser.NewHTMLBlockParser()
 		})...),
 		parser.WithInlineParsers(parser.DefaultInlineParsers()...),
+		parser.WithParagraphTransformers(util.Prioritized(extension.NewTableParagraphTransformer(), 200)),
+		parser.WithASTTransformers(util.Prioritized(extension.NewTableASTTransformer(), 0)),
 	)
 )
 
