@@ -217,6 +217,11 @@ print their captures.
 - A top-level `(not P)` drops the rows for which P matches with the same
   variables. It must share a variable bound by a required pattern. Inside
   `(not P)`, a variable bound outside joins; one bound only inside stays local.
+- A top-level `(not P)` connects the patterns whose variables it mentions
+  outside an optional pattern or a nested `(not ...)`. They pair up, and the
+  negation keeps the pairs P misses:
+  `(skill :id ?a) @a (skill :id ?b) @b (not (skill :id ?a (link :target ?b)))`
+  pairs each skill with every skill it does not link to.
 - A variable bound in an optional pattern may recur only after a required
   binder has matched, and there the optional mention compares. The required
   binder is one of these:
@@ -268,9 +273,9 @@ The reader rejects:
 - a variable that appears once, since it would match anything;
 - a variable that is compared but never bound, or bound only in an optional
   pattern and used again without an earlier required binder;
-- top-level patterns that share no variable, since every combination would
-  match, and a top-level `(not P)` that shares none, since it would drop every
-  row or none;
+- top-level patterns that share no variable, directly or through a top-level
+  `(not P)`, since every combination would match, and a top-level `(not P)`
+  that shares none, since it would drop every row or none;
 - alternatives that bind different variables, and captures inside `(not ...)`;
 - a capture that follows no pattern or value, and two captures of one name
   where either is a value;

@@ -343,6 +343,51 @@ Error: lint found 5 diagnostic(s)
 Grouped rows feed `:at`, `:related`, `{@n}` and `{?var}` unchanged, and a collected
 capture such as `@l` locates at its first node.
 
+### Table rules
+
+A rule can pair each `data` row with each document and keep the pairs that a
+top-level [`(not ...)`](query.md#joins) misses. Saved as
+`.henia/lint/team/axes.md`, this one reports each axis a Conventions table
+leaves out:
+
+````md
+---
+stage: source
+data:
+  axes: [Errors, Effects]
+---
+
+## missing-axis
+
+A Conventions table has a row per axis.
+
+```hq
+(rule missing-axis
+  :message "Conventions has no {?axis} row"
+  :at @s
+  (row :table axes :value ?axis)
+  (file :path ?p (section :title "Conventions") @s)
+  (not (file :path ?p (section :title "Conventions"
+    (table (row (cell :column "Axis" :text ?axis)))))))
+```
+````
+
+```bash
+mkdir -p notes
+cat > notes/errors.md <<'EOF'
+## Conventions
+
+| Axis | Rule |
+| --- | --- |
+| Errors | Wrap them with context. |
+EOF
+```
+
+```console
+$ henia lint notes/errors.md
+notes/errors.md:1:1: warning [missing-axis] Conventions has no Effects row
+```
+
 ### Facts lint adds
 
 Lint rules see the document tree that queries see, plus these facts:
@@ -350,6 +395,8 @@ Lint rules see the document tree that queries see, plus these facts:
 - `file`:
   - `:kind` is `skill`, `command`, `agent`, `resource` or `document`;
   - typed artifacts also carry `:name` and `:artifact` (`kind:name`);
+  - `:path` is relative to the skill, or outside any skill the path lint was
+    given;
   - `:file` is the path on disk.
 - `problem` nodes under a file, with `:kind` `frontmatter` or `markup` and a
   `:message`.
