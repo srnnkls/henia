@@ -296,3 +296,73 @@ func TestTreeLinkSpansCodeSpanLabels(t *testing.T) {
 		})
 	}
 }
+
+func TestTreeTableRowsAndCells(t *testing.T) {
+	source := "# Conventions\n\n| Axis | Rule |\n| --- | --- |\n| Errors | Wrap with [context](u). |\n| Effects |   |\n| Panics |\n||\n\n> | Quoted | Too |\n> | --- | --- |\n> | a | b |\n"
+	root, err := markup.Tree([]byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	root.Walk(func(e *markup.Element) bool {
+		switch e.Type {
+		case "table", "row", "cell", "link":
+			attrs := ""
+			for _, key := range []string{"index", "header", "column"} {
+				if value, ok := e.Attrs[key]; ok {
+					attrs += " " + key + "=" + value
+				}
+			}
+			got = append(got, fmt.Sprintf("%s%s L%d:%d-%d %q", e.Type, attrs, e.Line, e.Column, e.EndLine, e.Text))
+		}
+		return true
+	})
+	want := []string{
+		`table L3:1-8 "| Axis | Rule |\n| --- | --- |\n| Errors | Wrap with [context](u). |\n| Effects |   |\n| Panics |\n||"`,
+		`row index=0 header=true L3:1-3 "| Axis | Rule |"`,
+		`cell index=0 column=Axis L3:3-3 "Axis"`,
+		`cell index=1 column=Rule L3:10-3 "Rule"`,
+		`row index=1 header=false L5:1-5 "| Errors | Wrap with [context](u). |"`,
+		`cell index=0 column=Axis L5:3-5 "Errors"`,
+		`cell index=1 column=Rule L5:12-5 "Wrap with [context](u)."`,
+		`link L5:23-5 "context"`,
+		`row index=2 header=false L6:1-6 "| Effects |   |"`,
+		`cell index=0 column=Axis L6:3-6 "Effects"`,
+		`cell index=1 column=Rule L6:15-6 ""`,
+		`row index=3 header=false L7:1-7 "| Panics |"`,
+		`cell index=0 column=Axis L7:3-7 "Panics"`,
+		`cell index=1 column=Rule L7:11-7 ""`,
+		`row index=4 header=false L8:1-8 "||"`,
+		`cell index=0 column=Axis L8:3-8 ""`,
+		`cell index=1 column=Rule L8:3-8 ""`,
+		`table L10:3-12 "| Quoted | Too |\n> | --- | --- |\n> | a | b |"`,
+		`row index=0 header=true L10:3-10 "| Quoted | Too |"`,
+		`cell index=0 column=Quoted L10:5-10 "Quoted"`,
+		`cell index=1 column=Too L10:14-10 "Too"`,
+		`row index=1 header=false L12:3-12 "| a | b |"`,
+		`cell index=0 column=Quoted L12:5-12 "a"`,
+		`cell index=1 column=Too L12:9-12 "b"`,
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestParseKeepsTablesWhole(t *testing.T) {
+	source := "| a | b |\n| --- | --- |\n| `x` | [y](u) |\n"
+	doc, err := markup.Parse("t.md", []byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	table := doc.Children[0]
+	var kinds []string
+	for _, c := range table.Children {
+		kinds = append(kinds, c.Kind)
+	}
+	if table.Kind != "table" || !slices.Equal(kinds, []string{"code", "link"}) {
+		t.Errorf("table %s children %q, want code and link", table.Kind, kinds)
+	}
+	if got := string(markup.Write(doc)); got != source {
+		t.Errorf("write = %q, want %q", got, source)
+	}
+}

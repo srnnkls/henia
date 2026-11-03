@@ -36,6 +36,7 @@ func Tree(source []byte, extra ...*Element) (*Element, error) {
 	pc := parser.NewContext()
 	doc, err := runContext(documentParser, source, pc)
 	b := newBuilder(source, pc, err)
+	b.cells = true
 	root := b.file()
 	b.blocks(root, doc, true)
 	b.finish(root)
@@ -123,6 +124,7 @@ type builder struct {
 	references []parser.Reference
 	rules      map[ast.Node]text.Segment
 	at         int
+	cells      bool
 }
 
 func newBuilder(source []byte, pc parser.Context, err error) *builder {
@@ -203,7 +205,14 @@ func (b *builder) block(node ast.Node) *Element {
 		b.blocks(e, v, false)
 	case *east.Table:
 		e.Type = "table"
-		b.inlines(e, v)
+		if !b.cells {
+			b.inlines(e, v)
+			break
+		}
+		b.rows(e, v)
+		e.Start, e.End = e.Children[0].Start, e.Children[len(e.Children)-1].End
+		b.at = max(b.at, e.End)
+		return e
 	case *blockNode:
 		e.Type, e.Attrs["name"], e.Start, e.End = "directive", v.name, v.open.start, max(v.open.stop, v.close.stop)
 		for _, a := range v.attrs {
@@ -233,6 +242,67 @@ func (b *builder) block(node ast.Node) *Element {
 	}
 	b.at = max(b.at, e.End)
 	return e
+}
+
+// rows gives a table a row per line, the header first, and each row a cell per
+// column. A row spans its line from pipe to pipe; a cell spans its trimmed text.
+func (b *builder) rows(table *Element, node *east.Table) {
+	var columns []string
+	next := 0
+	for i, row := 0, node.FirstChild(); row != nil; i, row = i+1, row.NextSibling() {
+		r := &Element{Type: "row", Attrs: map[string]string{"index": strconv.Itoa(i), "header": strconv.FormatBool(i == 0)}, Start: -1}
+		for j, cell := 0, row.FirstChild(); cell != nil; j, cell = j+1, cell.NextSibling() {
+			c := &Element{Type: "cell", Attrs: map[string]string{"index": strconv.Itoa(j)}}
+			if c.Start, c.End = b.extent(cell); c.Start >= 0 {
+				c.Text = b.body[c.Start:c.End]
+				if r.Start < 0 {
+					r.Start = c.Start
+				}
+				r.End = c.End
+			}
+			if i == 0 {
+				columns = append(columns, c.Text)
+			}
+			if j < len(columns) {
+				c.Attrs["column"] = columns[j]
+			}
+			b.inlines(c, cell)
+			r.add(c)
+		}
+		if r.Start < 0 {
+			r.Start, r.End = next, b.lineEnd(next)
+		} else {
+			r.Start, r.End = b.pipes(r.Start, r.End)
+		}
+		for _, c := range r.Children {
+			if c.Start < 0 {
+				c.Start, c.End = r.End, r.End
+			}
+		}
+		next = min(b.lineEnd(r.End)+1, len(b.source))
+		if i == 0 {
+			next = min(b.lineEnd(next)+1, len(b.source))
+		}
+		table.add(r)
+	}
+}
+
+// pipes widens a row's span over the blanks to its outer pipes.
+func (b *builder) pipes(start, end int) (int, int) {
+	if before := bytes.TrimRight(b.source[:start], " \t"); bytes.HasSuffix(before, []byte("|")) {
+		start = len(before) - 1
+	}
+	if after := bytes.TrimLeft(b.source[end:], " \t"); bytes.HasPrefix(after, []byte("|")) {
+		end = len(b.source) - len(after) + 1
+	}
+	return start, end
+}
+
+func (b *builder) lineEnd(at int) int {
+	if end := bytes.IndexByte(b.source[at:], '\n'); end >= 0 {
+		return at + end
+	}
+	return len(b.source)
 }
 
 func (b *builder) fence(code *ast.FencedCodeBlock) (int, int) {

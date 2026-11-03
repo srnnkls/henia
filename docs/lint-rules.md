@@ -282,6 +282,8 @@ replacement.
 
 Frontmatter `params` scalars become `$name` values. `data` maps and lists become
 `row` nodes under a `data` root, with `:table`, `:key` or `:index`, and `:value`.
+A Markdown table's rows are `row` nodes as well, inside their `table`, with
+`:header` and a `cell` per column; see [henia query](query.md#types).
 
 `std/references` defines how a code span names an artifact.
 `(reference @r ?kind ?name)` matches a single-backtick span whose sigil, looked
