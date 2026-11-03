@@ -399,6 +399,9 @@ func (q *Query) row(b binding) (Row, string) {
 			key.WriteByte('-')
 		}
 	}
+	for _, name := range q.printed {
+		key.WriteString(strconv.Quote(b.vars[name]) + ";")
+	}
 	return row, key.String()
 }
 
