@@ -314,3 +314,14 @@ func TestParse_HashNeedsAPath(t *testing.T) {
 		t.Fatalf("refs = %s", got)
 	}
 }
+
+func TestParse_TableCellBoundsCodeSpans(t *testing.T) {
+	refs := Parse("| a | b |\n|---|---|\n| x `y | z |\n| `/cmd` | w |\n")
+
+	if len(refs) != 1 {
+		t.Fatalf("Parse() returned %d refs, want 1: a stray backtick in one cell must not pair across rows", len(refs))
+	}
+	if refs[0].Raw != "/cmd" {
+		t.Errorf("refs[0].Raw = %q, want %q", refs[0].Raw, "/cmd")
+	}
+}
