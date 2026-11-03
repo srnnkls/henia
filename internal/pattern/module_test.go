@@ -3,6 +3,7 @@ package pattern
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -65,5 +66,35 @@ func TestReadModuleErrors(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), tc.message) {
 			t.Errorf("%s: err = %v, want %q", tc.src, err, tc.message)
 		}
+	}
+}
+
+func TestRuleRowsDifferByPrintedVariables(t *testing.T) {
+	src := `(rule missing-axis :message "no {?axis} row" :at @s
+  (row :table "axes" :value ?axis)
+  (file :path ?p (section :title "Conventions") @s)
+  (not (file :path ?p (section :title "Conventions" (table (row (cell :column "Axis" :text ?axis)))))))`
+	m, err := ReadModule(src, nil)
+	if err != nil {
+		var pe *Error
+		if errors.As(err, &pe) {
+			t.Fatal(pe.Explain(src))
+		}
+		t.Fatal(err)
+	}
+	c := newCorpus(t, map[string]map[string]string{
+		"a": {"SKILL.md": "# A\n\n## Conventions\n\n| Axis | Rule |\n| --- | --- |\n| Naming | Say it. |\n"},
+	}, nil)
+	rows, err := m.Rules[0].Query.Run(c.root, Environment{Resolve: c, Data: axes()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, row := range rows {
+		got = append(got, row.Vars["axis"])
+	}
+	slices.Sort(got)
+	if want := "Effects Errors"; strings.Join(got, " ") != want {
+		t.Errorf("rows = %q, want one per missing axis: %s", got, want)
 	}
 }

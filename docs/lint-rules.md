@@ -295,7 +295,7 @@ up in the `sigils` table, gives the kind: `skill`, `command`, `agent`, `file` or
 | Key | Meaning |
 |---|---|
 | `:severity` | `warning` (default) or `error` |
-| `:message` | text with `{@c}` (path:line), `{@c.line}`, `{@c.text}`, `{@c.KEY}`, a value capture `{@n}`, `{@n.percent}` or `{@n.3}`, `{?var}`, `{$param}` and `{shared}`; a `{?var}` counts as a use of the variable |
+| `:message` | text with `{@c}` (path:line), `{@c.line}`, `{@c.text}`, `{@c.KEY}`, a value capture `{@n}`, `{@n.percent}` or `{@n.3}`, `{?var}`, `{$param}` and `{shared}`; a `{?var}` counts as a use of the variable, and rows that print different values stay separate diagnostics |
 | `:at @a @b` | location: the first of these captures that matched; else the first capture |
 | `:related @c ...` | related location, chosen the same way |
 | `:focus ?var` | moves the location to the variable's first occurrence in the node |
