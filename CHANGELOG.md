@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.0-alpha.32](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.31...v0.1.0-alpha.32) (2026-11-03)
+
+
+### Features
+
+* **query:** a top-level (not P) connects the patterns it mentions ([9ed68c6](https://github.com/srnnkls/henia/commit/9ed68c641e78751e522ac2325b46952e48f9b252))
+* **query:** table rows and cells ([54b15eb](https://github.com/srnnkls/henia/commit/54b15ebf8fe99e690bb8578c9a2a60fbee6b3e24))
+* **query:** table rows and cells; a top-level (not P) connects patterns ([a655441](https://github.com/srnnkls/henia/commit/a6554417369044146bd381b2c2465b2f3fc510f7))
+
+
+### Bug Fixes
+
+* **reference:** bound code spans by table cells ([daeec2c](https://github.com/srnnkls/henia/commit/daeec2c8758fe2eace48c31e10fe01c480597084))
+
 ## [0.1.0-alpha.31](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.30...v0.1.0-alpha.31) (2026-10-30)
 
 
