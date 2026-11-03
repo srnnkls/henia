@@ -1,5 +1,15 @@
 # Henia Build Tests
 
+## Isolation
+
+Every case runs against empty user directories, so the user's `henia.toml` and
+package store stay out of the builds.
+
+```scrut
+$ T=$(cd "$(mktemp -d)" && pwd -P)
+> henia() { env HENIA_HARNESS=none XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" henia "$@"; }
+```
+
 ## Help
 
 ```scrut
