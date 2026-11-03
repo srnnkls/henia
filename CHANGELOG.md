@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.33](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.32...v0.1.0-alpha.33) (2026-11-03)
+
+
+### Bug Fixes
+
+* **lint:** keep rule rows apart by the variables their message prints ([3cd364c](https://github.com/srnnkls/henia/commit/3cd364ca7204f93ebae7c115bea80357a2e4734a))
+* **lint:** keep rule rows apart by the variables their message prints ([e69fb3b](https://github.com/srnnkls/henia/commit/e69fb3b545c1e8b8c13c735ad2fc4f15f456bc0d))
+
 ## [0.1.0-alpha.32](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.31...v0.1.0-alpha.32) (2026-11-03)
 
 
