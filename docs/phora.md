@@ -43,7 +43,7 @@ directory:
 
 ```toml
 [hooks]
-post_sync = "henia --config ../../../.henia/canonical/henia.toml build ../../../.henia/canonical --output ../../../.henia/build --clean && (cd ../deploy && phora sync --prune --fast-forward)"
+post_sync = "henia --config ../../../.henia/canonical/henia.toml build ../../../.henia/canonical --output ../../../.henia/build --clean && (cd ../deploy && phora sync --prune)"
 ```
 
 The `&&` means a compiler error stops the deployment. The hook is a global
