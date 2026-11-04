@@ -28,7 +28,7 @@ var pinnedSums string
 
 var phoraVersion = strings.TrimSpace(pinnedVersion)
 
-var phoraMinimum = [3]int{0, 4, 1}
+var phoraMinimum = [3]int{0, 5, 0}
 
 var phoraReleases = "https://github.com/srnnkls/phora/releases/download"
 
