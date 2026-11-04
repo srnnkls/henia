@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/srnnkls/henia/internal/config"
@@ -31,7 +34,7 @@ func projectScope(project string) (deps.Scope, error) {
 	if err != nil {
 		return deps.Scope{}, err
 	}
-	key := library.ProjectKey(project)
+	key := library.StoreKey(project, manifest)
 	return deps.Scope{Manifest: manifest, Lock: filepath.Join(filepath.Dir(manifest), library.LockFile), State: library.StateDir(key), Store: library.PackagesDir(key), Tools: filepath.Join(library.CacheDir(), "tools")}, nil
 }
 
@@ -47,7 +50,7 @@ func ensurePackages(cmd *cobra.Command, project string) error {
 	}
 	for name := range declared {
 		if _, err := os.Stat(filepath.Join(scope.Store, name)); err != nil {
-			report, err := deps.Sync(cmd.Context(), scope, false)
+			report, _, err := syncProject(cmd.Context(), project, cmd.ErrOrStderr(), false)
 			if err != nil {
 				return err
 			}
@@ -59,7 +62,7 @@ func ensurePackages(cmd *cobra.Command, project string) error {
 }
 
 func syncThenInstall(cmd *cobra.Command, scope deps.Scope, update, global, noInstall bool) error {
-	if err := syncPackages(cmd, scope, update); err != nil || noInstall {
+	if err := syncPackages(cmd, scope, update, global); err != nil || noInstall {
 		return err
 	}
 	if global {
@@ -68,8 +71,14 @@ func syncThenInstall(cmd *cobra.Command, scope deps.Scope, update, global, noIns
 	return installProject(cmd, projectRoot(cmd), nil, false, false)
 }
 
-func syncPackages(cmd *cobra.Command, scope deps.Scope, update bool) error {
-	report, err := deps.Sync(cmd.Context(), scope, update)
+func syncPackages(cmd *cobra.Command, scope deps.Scope, update, global bool) error {
+	var report deps.Report
+	var err error
+	if global {
+		report, err = deps.Sync(cmd.Context(), scope, update)
+	} else {
+		report, scope, err = syncProject(cmd.Context(), projectRoot(cmd), cmd.ErrOrStderr(), update)
+	}
 	if err != nil {
 		return err
 	}
@@ -183,4 +192,44 @@ func newUpdateCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&global, "global", false, "Use the user henia.toml and the shared package store")
 	cmd.Flags().BoolVar(&noInstall, "no-install", false, "Do not install afterwards")
 	return cmd
+}
+
+// storeRetention is how long a project store nothing uses survives.
+const storeRetention = 30 * 24 * time.Hour
+
+// syncProject syncs a project into the store its lock keys. Checkouts on one
+// lock share that store, so an update resolves the new lock in a store of its
+// own, discarded afterwards; a sync that moves the lock, as a first sync or an
+// update does, syncs once more into the store the moved lock keys.
+func syncProject(ctx context.Context, project string, log io.Writer, update bool) (deps.Report, deps.Scope, error) {
+	scope, err := projectScope(project)
+	if err != nil {
+		return deps.Report{}, scope, err
+	}
+	scope.Log = log
+	run := scope
+	if update {
+		staging := "update-" + library.ProjectKey(project)
+		run.State, run.Store = library.StateDir(staging), library.PackagesDir(staging)
+		for _, dir := range []string{run.State, run.Store} {
+			if err := os.RemoveAll(dir); err != nil {
+				return deps.Report{}, scope, err
+			}
+			defer os.RemoveAll(dir)
+		}
+	}
+	report, err := deps.Sync(ctx, run, update)
+	if err != nil {
+		return report, scope, err
+	}
+	if moved, err := projectScope(project); err == nil && (update || moved.Store != scope.Store) {
+		moved.Log = log
+		scope = moved
+		if report, err = deps.Sync(ctx, scope, false); err != nil {
+			return report, scope, err
+		}
+	}
+	key := filepath.Base(scope.Store)
+	library.Touch(key)
+	return report, scope, library.PruneStores(key, storeRetention)
 }

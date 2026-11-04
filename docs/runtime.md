@@ -143,7 +143,7 @@ packages they declare. `update` moves them to the latest commits. `build` and
 `lint` sync first when a declared package is missing.
 
 [Phora](https://github.com/srnnkls/phora) does the fetching, from a
-`phora.toml` that Henia generates under `$XDG_STATE_HOME/henia/packages/<project>/`.
+`phora.toml` that Henia generates under `$XDG_STATE_HOME/henia/packages/<store>/`.
 Henia runs `HENIA_PHORA` when it is set, else a `phora` 0.4.1 or newer on PATH,
 else the Phora release it pins. That release downloads once into
 `$XDG_CACHE_HOME/henia/tools/` and is checked against a SHA-256 built into
@@ -167,9 +167,14 @@ While a local entry is active, its lock goes to `henia.local.lock` and
 `henia.lock` keeps the declared revision for everyone else. Ignore both local
 files in Git.
 
-Packages live in a store under
-`$XDG_DATA_HOME/henia/packages/<project>/<name>/`, where `<project>` is the
-project directory's name plus a hash of its path. `--global` uses the user
+Packages live in a store under `$XDG_DATA_HOME/henia/packages/<store>/<name>/`.
+`<store>` is `lock-<digest>`, a hash of the declared dependencies and both
+locks, so every checkout on one lock shares a store, and a checkout that
+switches locks syncs into another store instead of rewriting the shared one.
+An `update` resolves the new lock in a store of its own, discarded afterwards.
+A project without dependencies, or with a `path` dependency, keeps a store of
+its own named after the project directory plus a hash of its path. Henia
+removes the stores nothing has read or synced for 30 days. `--global` uses the user
 `henia.toml` in `$XDG_CONFIG_HOME/henia/` and installs into
 `$XDG_DATA_HOME/henia/packages/global/`, which every project reads. Unset
 `XDG_*` variables fall back to the platform's directories: `~/.config`,

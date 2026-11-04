@@ -4,15 +4,19 @@ package library
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/srnnkls/henia/internal/artifact"
+	"github.com/srnnkls/henia/internal/deps"
 	"github.com/srnnkls/henia/internal/markup"
 )
 
@@ -118,7 +122,7 @@ func Open(project string, extra []string) *Library {
 			}
 		}
 		l.add(Package{Name: Project, Tier: Project, Root: root, Config: config})
-		l.dependencies(project)
+		l.dependencies(project, config)
 	}
 	for _, root := range extra {
 		l.add(readPackage(root, Global))
@@ -172,17 +176,95 @@ func ProjectKey(project string) string {
 	return filepath.Base(absolute) + "-" + hex.EncodeToString(sum[:])[:12]
 }
 
-func (l *Library) dependencies(project string) {
-	dir := PackagesDir(ProjectKey(project))
+func (l *Library) dependencies(project, manifest string) {
+	key := ProjectKey(project)
+	if manifest != "" {
+		key = StoreKey(project, manifest)
+	}
+	dir := PackagesDir(key)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
+	Touch(key)
 	for _, entry := range entries {
 		if root := filepath.Join(dir, entry.Name()); entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
 			l.add(readPackage(root, Dependency))
 		}
 	}
+}
+
+// StoreKey names a project's package store and state. Checkouts whose
+// declared dependencies and locks agree share one store, lock-<digest>, so a
+// checkout that switches locks deploys a fresh store instead of rewriting one
+// in place. A path dependency deploys a working copy that no lock records, so
+// its store stays with the checkout.
+func StoreKey(project, manifest string) string {
+	digest := sha256.New()
+	declares := false
+	for _, file := range []string{manifest, deps.Local(manifest)} {
+		declared, err := deps.Read(file)
+		if err != nil {
+			return ProjectKey(project)
+		}
+		declares = declares || len(declared) > 0
+		for _, name := range slices.Sorted(maps.Keys(declared)) {
+			if declared[name].Path != "" {
+				return ProjectKey(project)
+			}
+			fmt.Fprintf(digest, "%s %+v\n", name, declared[name])
+		}
+	}
+	if !declares {
+		return ProjectKey(project)
+	}
+	lock := filepath.Join(filepath.Dir(manifest), LockFile)
+	for _, file := range []string{lock, deps.Local(lock)} {
+		data, err := os.ReadFile(file)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return ProjectKey(project)
+		}
+		fmt.Fprintf(digest, "%d\n", len(data))
+		digest.Write(data)
+	}
+	return "lock-" + hex.EncodeToString(digest.Sum(nil))[:16]
+}
+
+// Touch marks the store and state of key as in use, which keeps PruneStores
+// from removing them.
+func Touch(key string) {
+	now := time.Now()
+	for _, dir := range []string{PackagesDir(key), StateDir(key)} {
+		_ = os.Chtimes(dir, now, now)
+	}
+}
+
+// PruneStores removes every project store and state untouched for longer
+// than unused, keeping keep and the global store.
+func PruneStores(keep string, unused time.Duration) error {
+	cutoff := time.Now().Add(-unused)
+	for _, root := range []string{filepath.Dir(PackagesDir(keep)), filepath.Dir(StateDir(keep))} {
+		entries, err := os.ReadDir(root)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() || entry.Name() == keep || entry.Name() == "global" {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil || info.ModTime().After(cutoff) {
+				continue
+			}
+			if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (l *Library) has(name string) bool {
