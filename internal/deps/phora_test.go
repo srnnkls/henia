@@ -116,7 +116,7 @@ func TestPhoraRejectsChecksumMismatch(t *testing.T) {
 
 func TestPhoraPrefersCompliantPath(t *testing.T) {
 	t.Setenv("HENIA_PHORA", "")
-	fakePhora(t, "0.4.1")
+	fakePhora(t, "0.5.0")
 	requests := serve(t, nil, "")
 	path, err := Phora(t.Context(), t.TempDir(), nil)
 	if err != nil || filepath.Base(path) != "phora" || *requests != 0 {

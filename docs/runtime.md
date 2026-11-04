@@ -144,7 +144,7 @@ packages they declare. `update` moves them to the latest commits. `build` and
 
 [Phora](https://github.com/srnnkls/phora) does the fetching, from a
 `phora.toml` that Henia generates under `$XDG_STATE_HOME/henia/packages/<store>/`.
-Henia runs `HENIA_PHORA` when it is set, else a `phora` 0.4.1 or newer on PATH,
+Henia runs `HENIA_PHORA` when it is set, else a `phora` 0.5.0 or newer on PATH,
 else the Phora release it pins. That release downloads once into
 `$XDG_CACHE_HOME/henia/tools/` and is checked against a SHA-256 built into
 Henia. Pinned releases exist for macOS and Linux. On other platforms, install
