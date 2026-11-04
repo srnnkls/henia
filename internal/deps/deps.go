@@ -168,10 +168,6 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	origin := map[string]string{}
-	for key := range declared {
-		origin[key] = scope.Manifest
-	}
 	var report Report
 	if err := os.MkdirAll(scope.State, 0o755); err != nil {
 		return report, err
@@ -182,6 +178,18 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 	}
 	if err := copyFile(Local(scope.Lock), state("phora.local.lock")); err != nil {
 		return report, err
+	}
+	command := "sync"
+	if update {
+		command = "update"
+	}
+	// The first pass already names the transitive packages the store holds:
+	// phora keeps only the lock entries of the sources a manifest names, and
+	// a dropped entry would resolve to its branch head on the next pass. The
+	// store may predate the manifest, so a conflict in it only drops the seed.
+	top := declared
+	if seeded, err := closure(top, overrides, scope); err == nil {
+		declared = seeded
 	}
 	for {
 		shared := maps.Clone(declared)
@@ -198,39 +206,20 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 		} else if err := writeManifest(state("phora.local.toml"), overrides, scope); err != nil {
 			return report, err
 		}
-		command := "sync"
-		if update {
-			command = "update"
-		}
 		summary, err := run(ctx, phora, command, scope.State)
 		if err != nil {
 			return report, err
 		}
 		report.Deployed += summary.Deployed
 		report.Removed += summary.Removed
-		added := false
-		effective := maps.Clone(declared)
-		maps.Copy(effective, overrides)
-		for _, key := range slices.Sorted(maps.Keys(effective)) {
-			for _, candidate := range []string{filepath.Join(scope.Store, key, "henia.toml"), filepath.Join(scope.Store, key, ".henia", "henia.toml")} {
-				transitive, err := Read(candidate)
-				if err != nil {
-					return report, err
-				}
-				for child, d := range transitive {
-					if existing, ok := declared[child]; ok {
-						if _, overridden := overrides[child]; !overridden && !equal(existing, d) {
-							return report, fmt.Errorf("dependency %s is declared differently by %s and %s", child, origin[child], candidate)
-						}
-						continue
-					}
-					declared[child], origin[child], added = d, candidate, true
-				}
-			}
+		next, err := closure(top, overrides, scope)
+		if err != nil {
+			return report, err
 		}
-		if !added {
+		if maps.EqualFunc(next, declared, equal) {
 			break
 		}
+		declared = next
 	}
 	effective := maps.Clone(declared)
 	maps.Copy(effective, overrides)
@@ -250,6 +239,39 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 	}
 	report.Packages = slices.Sorted(maps.Keys(effective))
 	return report, nil
+}
+
+// closure is top with the packages its deployed packages declare, transitively;
+// a package the store does not hold yet contributes nothing.
+func closure(top, overrides map[string]Dependency, scope Scope) (map[string]Dependency, error) {
+	declared := maps.Clone(top)
+	origin := map[string]string{}
+	for key := range top {
+		origin[key] = scope.Manifest
+	}
+	for added := true; added; {
+		added = false
+		effective := maps.Clone(declared)
+		maps.Copy(effective, overrides)
+		for _, key := range slices.Sorted(maps.Keys(effective)) {
+			for _, candidate := range []string{filepath.Join(scope.Store, key, "henia.toml"), filepath.Join(scope.Store, key, ".henia", "henia.toml")} {
+				transitive, err := Read(candidate)
+				if err != nil {
+					return nil, err
+				}
+				for child, d := range transitive {
+					if existing, ok := declared[child]; ok {
+						if _, overridden := overrides[child]; !overridden && !equal(existing, d) {
+							return nil, fmt.Errorf("dependency %s is declared differently by %s and %s", child, origin[child], candidate)
+						}
+						continue
+					}
+					declared[child], origin[child], added = d, candidate, true
+				}
+			}
+		}
+	}
+	return declared, nil
 }
 
 func writeManifest(path string, dependencies map[string]Dependency, scope Scope) error {
