@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.0-alpha.34](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.33...v0.1.0-alpha.34) (2026-11-06)
+
+
+### Features
+
+* **deps:** declare packages by forge repo and host ([c7868fb](https://github.com/srnnkls/henia/commit/c7868fbc011574af8dae38c8bd3c4351c427f671))
+* **deps:** key project package stores by their lock ([d14edb5](https://github.com/srnnkls/henia/commit/d14edb543ad888fd902011e7789c29c1e609bc00))
+* **lint:** warn on declared slots nothing provides ([66aec6e](https://github.com/srnnkls/henia/commit/66aec6eac276128953a743403ae0200e3441730c))
+* **resources:** deploy package resources into the skills that declare them ([657e7c2](https://github.com/srnnkls/henia/commit/657e7c2f875fe56a84715c338248c65313059096))
+* **resources:** let henia.local.toml set resources.link for a checkout ([24f1137](https://github.com/srnnkls/henia/commit/24f1137c53efef8aaddfe01cb212f4e14ec4a5f1))
+
+
+### Bug Fixes
+
+* **deps:** keep transitive packages at their locked commits ([780db68](https://github.com/srnnkls/henia/commit/780db68a2f3cc411c702e7b61580cafb3bb904c5))
+
 ## [0.1.0-alpha.33](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.32...v0.1.0-alpha.33) (2026-11-03)
 
 
