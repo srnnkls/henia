@@ -440,7 +440,7 @@ skill's values and the harness variables.
 ```scrut
 $ proj lint-partial && printf 'artifacts = ["skills"]\n\n[harness.claude]\nartifacts = ["skills"]\n\n[harness.claude.variables]\nlabel = "Providers"\n' > henia.toml
 > mk .henia/components/context.md '---\nform: leaf\nattributes:\n  slots:\n    type: list\n    of: slot\nbody:\n  kind: none\n---\n{{.label}}:\n\n:slot[{{range .slots}}{{.}} {{end}}]\n'
-> skill git 'henia:\n  slots:\n    git.commits:\n    git.branching:\n' '::context{slots="git.commits"}\n\n# Git\n'
+> skill git 'henia:\n  slots:\n    git.commits:\n    git.branching:\n  provides:\n    git.commits:\n    git.branching:\n' '::context{slots="git.commits"}\n\n# Git\n'
 > lint skills --strict
 skills/git/SKILL.md:7:5: warning [unused-slot] slot git.branching is declared but no scanned skill applies it
 Error: lint found 1 diagnostic(s)
