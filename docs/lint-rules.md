@@ -441,7 +441,7 @@ threshold = 0.35   # calibrate against accepted and rejected examples
 
 `model` names a Model2Vec model by Hugging Face repo id and resolves it in the
 local Hugging Face cache: `$HF_HUB_CACHE`, else `$HF_HOME/hub`, else
-`~/.cache/huggingface/hub`. `revision` selects a ref, `main` by default, or a
+`$XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`. `revision` selects a ref, `main` by default, or a
 commit hash. A model missing from the cache is an error naming the expected
 path; fetch it with `hf download minishlab/potion-retrieval-32M`.
 

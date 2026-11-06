@@ -20,13 +20,17 @@ func IsRepoID(s string) bool {
 }
 
 // HubCache returns the Hugging Face hub cache: $HF_HUB_CACHE, else
-// $HF_HOME/hub, else ~/.cache/huggingface/hub.
+// $HF_HOME/hub, else $XDG_CACHE_HOME/huggingface/hub, else
+// ~/.cache/huggingface/hub.
 func HubCache() (string, error) {
 	if dir := os.Getenv("HF_HUB_CACHE"); dir != "" {
 		return dir, nil
 	}
 	if dir := os.Getenv("HF_HOME"); dir != "" {
 		return filepath.Join(dir, "hub"), nil
+	}
+	if dir := os.Getenv("XDG_CACHE_HOME"); dir != "" {
+		return filepath.Join(dir, "huggingface", "hub"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

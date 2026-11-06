@@ -29,19 +29,23 @@ func cachedModel(t *testing.T, cache, ref string) string {
 }
 
 func TestHubCacheResolutionOrder(t *testing.T) {
-	home, hfHome, hubCache := t.TempDir(), t.TempDir(), t.TempDir()
+	home, xdgCache, hfHome, hubCache := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", xdgCache)
 	t.Setenv("HF_HOME", hfHome)
 	t.Setenv("HF_HUB_CACHE", hubCache)
-	for _, want := range []string{hubCache, filepath.Join(hfHome, "hub"), filepath.Join(home, ".cache", "huggingface", "hub")} {
+	for _, step := range []struct{ want, unset string }{
+		{hubCache, "HF_HUB_CACHE"},
+		{filepath.Join(hfHome, "hub"), "HF_HOME"},
+		{filepath.Join(xdgCache, "huggingface", "hub"), "XDG_CACHE_HOME"},
+		{filepath.Join(home, ".cache", "huggingface", "hub"), ""},
+	} {
 		got, err := HubCache()
-		if err != nil || got != want {
-			t.Fatalf("HubCache() = %q, %v; want %q", got, err, want)
+		if err != nil || got != step.want {
+			t.Fatalf("HubCache() = %q, %v; want %q", got, err, step.want)
 		}
-		if os.Getenv("HF_HUB_CACHE") != "" {
-			t.Setenv("HF_HUB_CACHE", "")
-		} else {
-			t.Setenv("HF_HOME", "")
+		if step.unset != "" {
+			t.Setenv(step.unset, "")
 		}
 	}
 }
