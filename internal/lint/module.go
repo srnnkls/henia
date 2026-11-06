@@ -493,12 +493,12 @@ func (s *spec) try(ex example, options Options) (int, error) {
 	if err := trial.apply(ex.params, fmt.Sprintf("example at line %d", ex.line)); err != nil {
 		return 0, err
 	}
-	ev := &evaluation{corpus: corpus([]library.Document{{Path: path, Kind: "skill"}}, nil, nil)}
+	ev := &evaluation{corpus: corpus([]library.Document{{Path: path, Kind: "skill"}}, nil, nil, nil)}
 	diagnostics, err := ev.run(&trial, options)
 	return len(diagnostics), err
 }
 
-func corpus(docs []library.Document, views map[string]*view, provided []slots.Skill) *library.Corpus {
+func corpus(docs []library.Document, views map[string]*view, provided []slots.Skill, setup *SlotSetup) *library.Corpus {
 	c := library.Documents(docs)
 	var documents []document
 	for _, doc := range docs {
@@ -512,7 +512,7 @@ func corpus(docs []library.Document, views map[string]*view, provided []slots.Sk
 		}
 		documents = append(documents, document{path: doc.Path, source: data, art: art, body: []byte(art.Body), offset: len(data) - len(art.Body), view: views[doc.Path]})
 	}
-	addSlots(c.Root, documents, provided)
+	addSlots(c.Root, documents, provided, setup)
 	return c
 }
 

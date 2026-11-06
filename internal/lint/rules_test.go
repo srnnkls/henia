@@ -89,7 +89,7 @@ func TestInvalidRules(t *testing.T) {
 		{Options{Rules: []InlineRule{{ID: "x", Message: "m", Severity: "fatal", Query: "(heading) @h"}}}, "warning or error"},
 		{Options{Rules: []InlineRule{{ID: "large-skill", Message: "m", Query: "(heading) @h"}}}, "is defined in std/structure and henia.toml"},
 		{Options{Disable: []string{"no-such-rule"}}, `unknown lint rule "no-such-rule"`},
-		{Options{Config: map[string]map[string]any{"large-skill": {"severity": "fatal"}}}, "severity must be warning or error"},
+		{Options{Config: map[string]map[string]any{"large-skill": {"severity": "fatal"}}}, "severity must be info, warning or error"},
 		{Options{Config: map[string]map[string]any{"large-skill": {"max-line": 2}}}, `lint.config.large-skill: large-skill has no param or data "max-line"; did you mean max-lines?`},
 		{Options{Config: map[string]map[string]any{"similar-content": {"similarity": "high"}}}, `lint.config.similar-content.similarity: "high" is not a number`},
 		{Options{Config: map[string]map[string]any{"outdated-reference": {"outdated": "x"}}}, "lint.config.outdated-reference.outdated: must be a table or a list"},

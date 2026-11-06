@@ -78,7 +78,7 @@ func TestDependencySlotDeclarationsCount(t *testing.T) {
 	for _, d := range diagnostics {
 		got = append(got, d.Rule+" "+d.Message)
 	}
-	want := []string{`invalid-slot slot code.style is declared with conflicting types keyed(list), unique`, `unprovided-slot slot code.style is declared but nothing provides it`, `unknown-slot "review.criteria" is not declared by any scanned document`}
+	want := []string{`invalid-slot slot code.style is declared with conflicting types keyed(list), unique`, `unprovided-slot slot code.style is declared but no provider is selected for it`, `unknown-slot "review.criteria" is not declared by any scanned document`}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("diagnostics = %q, want %q", got, want)
 	}

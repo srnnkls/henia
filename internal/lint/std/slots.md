@@ -119,16 +119,17 @@ henia:
 
 ## unprovided-slot
 
-A declared slot needs a provider in a scanned skill or a skill package that
-provides it, a sub-slot of it or an enclosing slot.
+A declared slot needs a provider that slot resolution selects, as
+`henia slots --explain` shows it: one of the slot, a sub-slot of it or an
+enclosing slot, across the scanned skills, the skill packages, the global
+packages and the `[slots]` tables of `henia.toml`. A provider that
+`[slots."<slot>"] disable` turns off does not count.
 
 ```hq
 (rule unprovided-slot
-  :severity warning
-  :message "slot {?name} is declared but nothing provides it"
-  (slot :role declare :slot ?name) @slot
-  (not (slot :role provide :slot (covers ?name)))
-  (not (slot :role provide :slot (within ?name))))
+  :severity info
+  :message "slot {@slot.slot} is declared but no provider is selected for it"
+  (slot :role declare :provided false) @slot)
 ```
 
 ### Matches
@@ -171,7 +172,7 @@ henia:
   slots:
     review.lenses:
   provides:
-    review:
+    review.lenses:
 ---
 # Example
 
