@@ -176,7 +176,10 @@ func TestResourcesSetting(t *testing.T) {
 	if _, leaked := result.Frontmatter["henia"]; leaked {
 		t.Fatal("henia settings reached the output")
 	}
-	for _, bad := range []any{map[string]any{"disclosure": "no"}, map[string]any{"toc": false}, "off"} {
+	if _, err := c.Compile("example", input(map[string]any{"package": map[string]any{"languages/": "languages/"}}), Context{Profile: "claude"}); err != nil {
+		t.Errorf("package resources: %v", err)
+	}
+	for _, bad := range []any{map[string]any{"disclosure": "no"}, map[string]any{"toc": false}, "off", map[string]any{"package": map[string]any{"languages/": "../languages/"}}} {
 		if _, err := c.Compile("example", input(bad), Context{Profile: "claude"}); err == nil {
 			t.Errorf("accepted %v", bad)
 		}

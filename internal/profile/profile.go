@@ -12,6 +12,7 @@ import (
 
 	"github.com/expr-lang/expr/vm"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/canonical"
 	"github.com/srnnkls/henia/internal/expression"
 	"gopkg.in/yaml.v3"
@@ -287,9 +288,12 @@ func (c *Compiler) Compile(directory string, input map[string]any, context Conte
 		return nil, err
 	}
 	for key, value := range resources {
-		if _, ok := value.(bool); key != "disclosure" || !ok {
-			return nil, fmt.Errorf("henia.resources accepts only disclosure, a boolean")
+		if _, ok := value.(bool); key != "package" && (key != "disclosure" || !ok) {
+			return nil, fmt.Errorf("henia.resources accepts only disclosure, a boolean, and package")
 		}
+	}
+	if _, err := (&artifact.Artifact{Frontmatter: input}).PackageResources(); err != nil {
+		return nil, err
 	}
 	for key := range settings {
 		if !slices.Contains([]string{"auto_invoke", "user_invocable", "variables", "targets", "resources", "lint", "slots", "provides", "layout"}, key) {

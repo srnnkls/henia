@@ -72,6 +72,33 @@ func (c *Config) ProvidedSkills() map[string][]string {
 
 type ResourceOptions struct {
 	Disclosure *bool `toml:"disclosure,omitempty"`
+	Link       bool  `toml:"link,omitempty"`
+}
+
+// LinksResources reads only the checkout's layers, never the user henia.toml.
+func LinksResources(path string) (bool, error) {
+	link := false
+	for _, file := range []string{path, deps.Local(path)} {
+		data, err := os.ReadFile(file)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		var layer struct {
+			Resources struct {
+				Link *bool `toml:"link"`
+			} `toml:"resources"`
+		}
+		if err := toml.Unmarshal(data, &layer); err != nil {
+			return false, fmt.Errorf("%s: %w", file, err)
+		}
+		if layer.Resources.Link != nil {
+			link = *layer.Resources.Link
+		}
+	}
+	return link, nil
 }
 
 type BuildOptions struct {

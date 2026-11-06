@@ -2,7 +2,6 @@ package library
 
 import (
 	"errors"
-	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -22,21 +21,30 @@ type Resource struct {
 
 func resourceFiles(root string) []string {
 	var files []string
-	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	seen := map[string]bool{}
+	var visit func(dir string)
+	visit = func(dir string) {
+		real, err := filepath.EvalSymlinks(dir)
+		if err != nil || seen[real] {
+			return
+		}
+		seen[real] = true
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			return nil
+			return
 		}
-		if strings.HasPrefix(d.Name(), ".") && path != root {
-			if d.IsDir() {
-				return filepath.SkipDir
+		for _, entry := range entries {
+			path := filepath.Join(dir, entry.Name())
+			switch info, err := os.Stat(path); {
+			case strings.HasPrefix(entry.Name(), "."):
+			case err == nil && info.IsDir():
+				visit(path)
+			case dir != root || entry.Name() != "SKILL.md":
+				files = append(files, path)
 			}
-			return nil
 		}
-		if !d.IsDir() && !(filepath.Dir(path) == root && d.Name() == "SKILL.md") {
-			files = append(files, path)
-		}
-		return nil
-	})
+	}
+	visit(root)
 	return files
 }
 
@@ -128,11 +136,45 @@ func ResourcePath(skillDir, path string) (string, error) {
 		roots = append(roots, filepath.Dir(main))
 	}
 	for _, root := range roots {
-		if rel, err := filepath.Rel(root, full); err == nil && (rel == "." || filepath.IsLocal(rel)) {
+		if within(root, full) {
 			return filepath.Join(skillDir, clean), nil
 		}
 	}
+	declared, _ := artifact.SkillResources(skillDir)
+	if r, _, ok := artifact.PackageSource(declared, filepath.ToSlash(clean)); ok {
+		for _, root := range roots {
+			source, err := filepath.EvalSymlinks(filepath.Join(filepath.Dir(filepath.Dir(root)), filepath.FromSlash(strings.TrimSuffix(r.Source, "/"))))
+			if err == nil && within(source, full) {
+				return filepath.Join(skillDir, clean), nil
+			}
+		}
+	}
 	return "", errOutsideSkill
+}
+
+// PackageFile maps local, a missing file inside a skill, to the package file
+// a resource the skill declares deploys there.
+func PackageFile(local string) (string, bool) {
+	for dir := filepath.Dir(local); filepath.Dir(dir) != dir; dir = filepath.Dir(dir) {
+		if filepath.Base(filepath.Dir(dir)) != SkillsDir {
+			continue
+		}
+		rel, err := filepath.Rel(dir, local)
+		if err != nil {
+			return "", false
+		}
+		declared, _ := artifact.SkillResources(dir)
+		if _, source, ok := artifact.PackageSource(declared, filepath.ToSlash(rel)); ok {
+			return filepath.Join(filepath.Dir(filepath.Dir(dir)), filepath.FromSlash(source)), true
+		}
+		return "", false
+	}
+	return "", false
+}
+
+func within(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && (rel == "." || filepath.IsLocal(rel))
 }
 
 func ReadResource(full string) (string, error) {

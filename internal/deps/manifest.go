@@ -45,6 +45,9 @@ func Add(manifest, key string, d Dependency) error {
 		}
 		fmt.Fprintf(&b, "skills = [%s]\n", strings.Join(quoted, ", "))
 	}
+	if d.Transitive {
+		b.WriteString("transitive = true\n")
+	}
 	return os.WriteFile(manifest, []byte(b.String()), 0o644)
 }
 

@@ -74,3 +74,34 @@ func TestSlotOptions(t *testing.T) {
 		t.Errorf("provided = %v", got)
 	}
 }
+
+func TestLinksResourcesLayersTheLocalFileOverThePackage(t *testing.T) {
+	user := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", user)
+	if err := os.MkdirAll(filepath.Join(user, "henia"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(user, "henia", "henia.toml"), []byte("[resources]\nlink = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "henia.toml")
+	for _, tc := range []struct {
+		committed, local string
+		want             bool
+	}{
+		{"", "", false},
+		{"[resources]\nlink = true\n", "", true},
+		{"[resources]\nlink = true\n", "[resources]\nlink = false\n", false},
+		{"", "[resources]\nlink = true\n", true},
+	} {
+		for path, content := range map[string]string{manifest: tc.committed, filepath.Join(dir, "henia.local.toml"): tc.local} {
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got, err := LinksResources(manifest); err != nil || got != tc.want {
+			t.Errorf("committed %q, local %q: link = %v (%v), want %v", tc.committed, tc.local, got, err, tc.want)
+		}
+	}
+}

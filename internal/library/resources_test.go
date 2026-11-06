@@ -86,3 +86,44 @@ func TestResourcePath(t *testing.T) {
 		}
 	}
 }
+
+func TestPackageResourcesResolveThroughTheirLinks(t *testing.T) {
+	root := t.TempDir()
+	skill := filepath.Join(root, "skills/loqui")
+	write(t, filepath.Join(skill, "SKILL.md"), "---\nname: loqui\nhenia:\n  resources:\n    package:\n      languages/: languages/\n---\n")
+	write(t, filepath.Join(root, "languages/python/README.md"), "# Python\n")
+	write(t, filepath.Join(root, "unrelated/secret.md"), "secret\n")
+	for _, link := range [][2]string{{"../../languages", "languages"}, {"../../unrelated", "other"}} {
+		if err := os.Symlink(link[0], filepath.Join(skill, link[1])); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := ResourcePath(skill, "languages/python/README.md"); err != nil {
+		t.Errorf("declared resource: %v", err)
+	}
+	if _, err := ResourcePath(skill, "other/secret.md"); err == nil {
+		t.Error("an undeclared link out of the skill resolves")
+	}
+	var paths []string
+	for _, r := range Resources(skill, "languages") {
+		paths = append(paths, r.Path)
+	}
+	if !slices.Equal(paths, []string{"languages/python/README.md"}) {
+		t.Errorf("resources = %v", paths)
+	}
+}
+
+func TestPackageFileMapsAMissingResourceToItsSource(t *testing.T) {
+	root := t.TempDir()
+	skill := filepath.Join(root, "skills/loqui")
+	write(t, filepath.Join(skill, "SKILL.md"), "---\nname: loqui\nhenia:\n  resources:\n    package:\n      guides/: languages/\n---\n")
+
+	got, ok := PackageFile(filepath.Join(skill, "guides/python/README.md"))
+	if want := filepath.Join(root, "languages/python/README.md"); !ok || got != want {
+		t.Errorf("PackageFile = %q %v, want %q", got, ok, want)
+	}
+	if _, ok := PackageFile(filepath.Join(skill, "reference/a.md")); ok {
+		t.Error("an undeclared path maps")
+	}
+}

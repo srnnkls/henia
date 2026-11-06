@@ -1,6 +1,7 @@
 package target
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -123,7 +124,7 @@ func (t *HarnessTarget) Write(art *artifact.Artifact) error {
 		return err
 	}
 	for _, resource := range resources {
-		data, err := os.ReadFile(filepath.Join(art.SourcePath, resource.path))
+		data, err := os.ReadFile(resource.source)
 		if err != nil {
 			return err
 		}
@@ -144,8 +145,9 @@ func (t *HarnessTarget) Write(art *artifact.Artifact) error {
 }
 
 type resourceFile struct {
-	path string
-	mode os.FileMode
+	path   string
+	source string
+	mode   os.FileMode
 }
 
 // resourceFiles lists a directory artifact's resource files by their paths
@@ -170,9 +172,40 @@ func resourceFiles(art *artifact.Artifact) ([]resourceFile, error) {
 			if err != nil {
 				return err
 			}
-			files = append(files, resourceFile{relative, info.Mode().Perm()})
+			files = append(files, resourceFile{relative, path, info.Mode().Perm()})
 			return nil
 		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	resources, err := artifact.SkillResources(art.SourcePath)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("%s: %w", art.SourcePath, err)
+	}
+	root := filepath.Dir(filepath.Dir(art.SourcePath))
+	for _, r := range resources {
+		if _, err := os.Lstat(filepath.Join(art.SourcePath, filepath.FromSlash(r.Path))); err == nil {
+			continue
+		}
+		source := filepath.Join(root, filepath.FromSlash(r.Source))
+		err := artifact.Walk(source, func(path string, info fs.FileInfo) error {
+			if info.IsDir() {
+				return nil
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("resource is not a regular file: %s", path)
+			}
+			relative, err := filepath.Rel(source, path)
+			if err != nil {
+				return err
+			}
+			files = append(files, resourceFile{filepath.Join(filepath.FromSlash(r.Path), relative), path, info.Mode().Perm()})
+			return nil
+		})
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("%s declares the package resource %s, which its package does not hold", art.SourcePath, r.Source)
+		}
 		if err != nil {
 			return nil, err
 		}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/reference"
 	"io"
 	"maps"
@@ -24,14 +25,15 @@ import (
 )
 
 type Dependency struct {
-	Git    string   `toml:"git,omitempty"`
-	Path   string   `toml:"path,omitempty"`
-	Branch string   `toml:"branch,omitempty"`
-	Tag    string   `toml:"tag,omitempty"`
-	Rev    string   `toml:"rev,omitempty"`
-	Root   string   `toml:"root,omitempty"`
-	Skills []string `toml:"skills,omitempty"`
-	Link   bool     `toml:"link,omitempty"`
+	Git        string   `toml:"git,omitempty"`
+	Path       string   `toml:"path,omitempty"`
+	Branch     string   `toml:"branch,omitempty"`
+	Tag        string   `toml:"tag,omitempty"`
+	Rev        string   `toml:"rev,omitempty"`
+	Root       string   `toml:"root,omitempty"`
+	Skills     []string `toml:"skills,omitempty"`
+	Link       bool     `toml:"link,omitempty"`
+	Transitive bool     `toml:"transitive,omitempty"`
 }
 
 func Local(path string) string {
@@ -82,6 +84,9 @@ func (d Dependency) validate(key string) error {
 	}
 	if d.Link && d.Path == "" {
 		return fmt.Errorf("dependency %s: link deploys a path dependency live; it needs path", key)
+	}
+	if d.Transitive && (d.Root != "" || len(d.Skills) > 0) {
+		return fmt.Errorf("dependency %s: a transitive package ships what its phora.toml publishes; it takes no root or skills", key)
 	}
 	return nil
 }
@@ -143,16 +148,118 @@ func phoraManifest(dependencies map[string]Dependency, scope Scope) ([]byte, err
 		if d.Link {
 			b.WriteString("deploy = \"link\"\n")
 		}
+		if d.Transitive {
+			b.WriteString("transitive = true\n")
+		}
+		carried, err := d.resources(key, scope)
+		if err != nil {
+			return nil, err
+		}
 		if len(d.Skills) > 0 {
 			quoted := []string{strconv.Quote("henia.toml"), strconv.Quote(".henia/")}
 			for _, skill := range d.Skills {
 				quoted = append(quoted, strconv.Quote("skills/"+skill+"/"))
 			}
+			for _, c := range carried {
+				quoted = append(quoted, strconv.Quote(c.Source))
+			}
 			fmt.Fprintf(&b, "include = [%s]\n", strings.Join(quoted, ", "))
 		}
-		fmt.Fprintf(&b, "\n[targets.%s]\npath = %s\nsources = [%s]\n", key, strconv.Quote(filepath.ToSlash(filepath.Join(relative, key))), strconv.Quote(key))
+		fmt.Fprintf(&b, "\n[targets.%s]\npath = %s\n", key, strconv.Quote(filepath.ToSlash(filepath.Join(relative, key))))
+		if len(carried) == 0 {
+			fmt.Fprintf(&b, "sources = [%s]\n", strconv.Quote(key))
+			continue
+		}
+		take := []string{strconv.Quote("**")}
+		for _, c := range carried {
+			take = append(take, fmt.Sprintf("{ %s = %s }", strconv.Quote(c.Source), strconv.Quote(strings.TrimSuffix(c.Path, "/"))))
+		}
+		collapse := ""
+		if d.Link {
+			collapse = ", collapse = false"
+		}
+		fmt.Fprintf(&b, "\n[targets.%s.sources]\n%s = { take = [%s]%s }\n", key, key, strings.Join(take, ", "), collapse)
 	}
 	return []byte(b.String()), nil
+}
+
+// resources lists the package resources the skills of d declare, with Path
+// rooted at the package. A path dependency declares them in its working tree,
+// any other in its deployed copy; a package the store does not hold yet
+// declares none.
+func (d Dependency) resources(key string, scope Scope) ([]artifact.PackageResource, error) {
+	root := filepath.Join(scope.Store, key)
+	if d.Path != "" {
+		root = filepath.Join(d.Path, filepath.FromSlash(d.Root))
+	}
+	carried, err := packageResources(root, d.Skills)
+	if err != nil {
+		return nil, fmt.Errorf("dependency %s: %w", key, err)
+	}
+	return carried, nil
+}
+
+// uncollapse removes the directory links a linked deployment holds where
+// package resources land, which phora would write through into the package.
+func uncollapse(root string, carried []artifact.PackageResource) error {
+	for _, c := range carried {
+		segments := strings.Split(strings.TrimSuffix(c.Path, "/"), "/")
+		if !c.Dir() {
+			segments = segments[:len(segments)-1]
+		}
+		at := root
+		for _, segment := range segments {
+			at = filepath.Join(at, segment)
+			info, err := os.Lstat(at)
+			if errors.Is(err, os.ErrNotExist) {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			if info.Mode()&os.ModeSymlink != 0 {
+				if err := os.Remove(at); err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
+	return nil
+}
+
+func packageResources(root string, skills []string) ([]artifact.PackageResource, error) {
+	if len(skills) == 0 {
+		entries, err := os.ReadDir(filepath.Join(root, "skills"))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		for _, entry := range entries {
+			skills = append(skills, entry.Name())
+		}
+	}
+	var carried []artifact.PackageResource
+	for _, skill := range skills {
+		data, err := os.ReadFile(filepath.Join(root, "skills", skill, "SKILL.md"))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		art, err := artifact.Parse(data)
+		if err != nil {
+			continue
+		}
+		resources, err := art.PackageResources()
+		if err != nil {
+			return nil, fmt.Errorf("skill %s: %w", skill, err)
+		}
+		for _, r := range resources {
+			carried = append(carried, artifact.PackageResource{Path: "skills/" + skill + "/" + r.Path, Source: r.Source})
+		}
+	}
+	return carried, nil
 }
 
 func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
@@ -191,19 +298,14 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 	if seeded, err := closure(top, overrides, scope); err == nil {
 		declared = seeded
 	}
+	// A pass repeats while it brings in packages or skill resources that
+	// change what a package ships.
 	for {
-		shared := maps.Clone(declared)
-		for key := range overrides {
-			delete(shared, key)
-		}
-		if err := writeManifest(state("phora.toml"), shared, scope); err != nil {
+		written, err := writeManifests(declared, overrides, scope)
+		if err != nil {
 			return report, err
 		}
-		if len(overrides) == 0 {
-			if err := os.Remove(state("phora.local.toml")); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return report, err
-			}
-		} else if err := writeManifest(state("phora.local.toml"), overrides, scope); err != nil {
+		if err := uncollapseLinked(declared, overrides, scope); err != nil {
 			return report, err
 		}
 		summary, err := run(ctx, phora, command, scope.State)
@@ -217,7 +319,13 @@ func Sync(ctx context.Context, scope Scope, update bool) (Report, error) {
 			return report, err
 		}
 		if maps.EqualFunc(next, declared, equal) {
-			break
+			again, err := manifests(declared, overrides, scope)
+			if err != nil {
+				return report, err
+			}
+			if slices.EqualFunc(again, written, bytes.Equal) {
+				break
+			}
 		}
 		declared = next
 	}
@@ -274,12 +382,60 @@ func closure(top, overrides map[string]Dependency, scope Scope) (map[string]Depe
 	return declared, nil
 }
 
-func writeManifest(path string, dependencies map[string]Dependency, scope Scope) error {
-	manifest, err := phoraManifest(dependencies, scope)
-	if err != nil {
-		return err
+func manifests(declared, overrides map[string]Dependency, scope Scope) ([][]byte, error) {
+	shared := maps.Clone(declared)
+	for key := range overrides {
+		delete(shared, key)
 	}
-	return os.WriteFile(path, manifest, 0o644)
+	main, err := phoraManifest(shared, scope)
+	if err != nil {
+		return nil, err
+	}
+	if len(overrides) == 0 {
+		return [][]byte{main, nil}, nil
+	}
+	local, err := phoraManifest(overrides, scope)
+	if err != nil {
+		return nil, err
+	}
+	return [][]byte{main, local}, nil
+}
+
+func uncollapseLinked(declared, overrides map[string]Dependency, scope Scope) error {
+	effective := maps.Clone(declared)
+	maps.Copy(effective, overrides)
+	for key, d := range effective {
+		if !d.Link {
+			continue
+		}
+		carried, err := d.resources(key, scope)
+		if err != nil {
+			return err
+		}
+		if err := uncollapse(filepath.Join(scope.Store, key), carried); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeManifests(declared, overrides map[string]Dependency, scope Scope) ([][]byte, error) {
+	generated, err := manifests(declared, overrides, scope)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(scope.State, "phora.toml"), generated[0], 0o644); err != nil {
+		return nil, err
+	}
+	local := filepath.Join(scope.State, "phora.local.toml")
+	if generated[1] == nil {
+		if err := os.Remove(local); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	} else if err := os.WriteFile(local, generated[1], 0o644); err != nil {
+		return nil, err
+	}
+	return generated, nil
 }
 
 type lockFile struct {
@@ -347,7 +503,7 @@ func copyFile(from, to string) error {
 }
 
 func equal(a, b Dependency) bool {
-	return a.Git == b.Git && a.Path == b.Path && a.Branch == b.Branch && a.Tag == b.Tag && a.Rev == b.Rev && a.Root == b.Root && slices.Equal(a.Skills, b.Skills)
+	return a.Git == b.Git && a.Path == b.Path && a.Branch == b.Branch && a.Tag == b.Tag && a.Rev == b.Rev && a.Root == b.Root && slices.Equal(a.Skills, b.Skills) && a.Transitive == b.Transitive
 }
 
 type summary struct {

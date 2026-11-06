@@ -129,6 +129,7 @@ fetches it for every project.`,
 	cmd.Flags().StringVar(&d.Rev, "rev", "", "Commit to pin")
 	cmd.Flags().StringVar(&d.Root, "root", "", "Subdirectory of the repository holding the package")
 	cmd.Flags().StringSliceVar(&d.Skills, "skill", nil, "Take only these skills (repeatable)")
+	cmd.Flags().BoolVar(&d.Transitive, "transitive", false, "Fetch the package with the dependencies its phora.toml declares")
 	cmd.Flags().BoolVar(&global, "global", false, "Use the user henia.toml and the shared package store")
 	cmd.Flags().BoolVar(&offline, "no-sync", false, "Only record the dependency")
 	return cmd
@@ -228,6 +229,13 @@ func syncProject(ctx context.Context, project string, log io.Writer, update bool
 		if report, err = deps.Sync(ctx, scope, false); err != nil {
 			return report, scope, err
 		}
+	}
+	link, err := config.LinksResources(scope.Manifest)
+	if err != nil {
+		return report, scope, err
+	}
+	if err := library.LinkResources(projectSource(project), link); err != nil {
+		return report, scope, err
 	}
 	key := filepath.Base(scope.Store)
 	library.Touch(key)
