@@ -541,8 +541,23 @@ func decode(projectRoot, userRoot string, layers []layer, home bool) (*Config, e
 			buildConfig["output"] = filepath.Join(l.root, path)
 		}
 		semantic, _ := lintConfig["semantic"].(map[string]any)
-		if path, ok := semantic["model_path"].(string); ok && path != "" && !filepath.IsAbs(path) {
-			semantic["model_path"] = filepath.Join(l.root, path)
+		if path, ok := semantic["model_path"].(string); ok && path != "" {
+			path, err := layerFile(l.root, os.ExpandEnv(path))
+			if err != nil {
+				return nil, err
+			}
+			semantic["model_path"] = path
+		}
+		_, model := semantic["model"]
+		_, path := semantic["model_path"]
+		if model || path {
+			for _, earlier := range values[:i] {
+				earlierLint, _ := earlier["lint"].(map[string]any)
+				earlierSemantic, _ := earlierLint["semantic"].(map[string]any)
+				delete(earlierSemantic, "model")
+				delete(earlierSemantic, "revision")
+				delete(earlierSemantic, "model_path")
+			}
 		}
 		harnesses, _ := values[i]["harness"].(map[string]any)
 		if err := resolveHarnessFiles(harnesses, l.root); err != nil {

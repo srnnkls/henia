@@ -135,7 +135,9 @@ Compared with a variable:
 - `(near ?t 0.6)` shares at least that Jaccard share of three-word shingles.
 - `(overlap ?t 0.9)` shares at least that share of the shorter text's shingles.
 - `(similar ?t 0.85)` has at least that cosine similarity under a local
-  Model2Vec model: `--model DIR`, else `[lint.semantic] model_path`.
+  Model2Vec model: `--model DIR` or `--model ORG/NAME` (a Hugging Face repo id
+  resolved in the local cache at `main`), else `[lint.semantic] model` or
+  `model_path`.
 
 `near`, `overlap` and `similar` take an optional score capture, as in
 `(near ?t 0.6 @score)`. In lint modules, numbers and thresholds may be

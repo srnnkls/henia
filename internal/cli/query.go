@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -64,13 +65,13 @@ a skill preload never aborts.`,
 			}
 			env := pattern.Environment{Resolve: corpus}
 			if q.Semantic {
-				if model == "" {
-					if cfg, err := config.LoadOptional(configPath); err == nil {
-						model = cfg.Lint.Semantic.ModelPath
-					}
+				dir, err := modelDir(model, configPath)
+				if err != nil {
+					fmt.Fprintf(out, "henia query: %v\n", err)
+					return nil
 				}
-				if model != "" {
-					encode, err := similarity.Model(model)
+				if dir != "" {
+					encode, err := similarity.Model(dir)
 					if err != nil {
 						fmt.Fprintf(out, "henia query: %v\n", err)
 						return nil
@@ -90,13 +91,29 @@ a skill preload never aborts.`,
 	flags.register(cmd)
 	cmd.Flags().BoolVar(&grammar, "grammar", false, "Print the query language")
 	cmd.Flags().BoolVar(&canonical, "canonical", false, "Read skills as authored instead of rendered for the caller")
-	cmd.Flags().StringVar(&model, "model", "", "Local Model2Vec directory for (similar ...) (default: [lint.semantic] model_path)")
+	cmd.Flags().StringVar(&model, "model", "", "Model2Vec directory or Hugging Face repo id for (similar ...) (default: [lint.semantic] model or model_path)")
 	cmd.Flags().BoolVar(&output.text, "text", false, "Print whole nodes")
 	cmd.Flags().BoolVar(&output.json, "json", false, "Print rows as JSON objects keyed by capture")
 	cmd.Flags().BoolVar(&output.count, "count", false, "Print the number of rows")
 	cmd.Flags().StringVar(&sort, "sort", "", "Order rows by ?var or @capture.key, descending with a leading -")
 	cmd.Flags().IntVar(&output.limit, "limit", 0, "Print at most N rows")
 	return cmd
+}
+
+// modelDir resolves --model, a directory or a Hugging Face repo id, falling back
+// to the configured semantic model.
+func modelDir(model, configPath string) (string, error) {
+	if model == "" {
+		cfg, err := config.LoadOptional(configPath)
+		if err != nil {
+			return "", nil
+		}
+		return cfg.Lint.Semantic.Dir()
+	}
+	if info, err := os.Stat(model); (err == nil && info.IsDir()) || !similarity.IsRepoID(model) {
+		return model, nil
+	}
+	return similarity.Snapshot(model, "")
 }
 
 func sortKeys(key string) []string {

@@ -257,6 +257,29 @@ func TestLintSemanticConfigAndJSON(t *testing.T) {
 	}
 }
 
+func TestQueryModelAcceptsRepoID(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("HF_HUB_CACHE", cache)
+	repo := filepath.Join(cache, "models--minishlab--potion-retrieval-32M")
+	snapshot := filepath.Join(repo, "snapshots", "6fc8051fab2a1e0ee76689cf08c853792ac285e7")
+	fixture(t, filepath.Join(snapshot, "config.json"), "{}")
+	fixture(t, filepath.Join(repo, "refs", "main"), "6fc8051fab2a1e0ee76689cf08c853792ac285e7\n")
+	local := t.TempDir()
+	testConfig(t, "[lint.semantic]\nmodel='minishlab/potion-retrieval-32M'\n")
+	for model, want := range map[string]string{
+		"minishlab/potion-retrieval-32M": snapshot,
+		local:                            local,
+		"":                               snapshot,
+	} {
+		if got, err := modelDir(model, configPath); err != nil || got != want {
+			t.Fatalf("modelDir(%q) = %q, %v; want %q", model, got, err, want)
+		}
+	}
+	if _, err := modelDir("minishlab/potion-base-8M", configPath); err == nil || !strings.Contains(err.Error(), "hf download minishlab/potion-base-8M") {
+		t.Fatalf("missing model: %v", err)
+	}
+}
+
 func TestBuildOutputSettingAndCLIOverride(t *testing.T) {
 	source := t.TempDir()
 	fixture(t, filepath.Join(source, "skills/example/SKILL.md"), "---\nname: example\ndescription: Example\n---\n# Example\n")

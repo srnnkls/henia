@@ -98,10 +98,51 @@ func TestSemanticLocalModel(t *testing.T) {
 	}
 }
 
+func TestSemanticHubModel(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("HF_HUB_CACHE", cache)
+	model, err := filepath.Abs("testdata/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshots := filepath.Join(cache, "models--minishlab--potion-retrieval-32M", "snapshots")
+	if err := os.MkdirAll(snapshots, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(model, filepath.Join(snapshots, "6fc8051fab2a1e0ee76689cf08c853792ac285e7")); err != nil {
+		t.Fatal(err)
+	}
+	root := paragraphFiles(t, "Repair broken program.", "Fix faulty code.")
+	options := Options{
+		Config:   map[string]map[string]any{"semantic-content": {"min-words": 1, "threshold": 0.8}},
+		Semantic: SemanticOptions{Enabled: true, Model: "minishlab/potion-retrieval-32M", Revision: "6fc8051fab2a1e0ee76689cf08c853792ac285e7"},
+	}
+	diagnostics, err := Run(t.Context(), []string{root}, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Model != "minishlab/potion-retrieval-32M@6fc8051fab2a1e0ee76689cf08c853792ac285e7" {
+		t.Fatalf("%+v", diagnostics)
+	}
+	options.Semantic.Revision = ""
+	if _, err := Run(t.Context(), []string{root}, options); err == nil || !strings.Contains(err.Error(), "hf download minishlab/potion-retrieval-32M") {
+		t.Fatalf("missing ref: %v", err)
+	}
+}
+
 func TestSemanticModelLoading(t *testing.T) {
 	root := paragraphFiles(t, "repair broken program", "fix faulty code")
 	if err := (Options{Semantic: SemanticOptions{Enabled: true}}).Validate(); err == nil {
 		t.Fatal("accepted missing model configuration")
+	}
+	for _, semantic := range []SemanticOptions{
+		{Model: "minishlab/potion-retrieval-32M", ModelPath: "models/potion"},
+		{Revision: "main", ModelPath: "models/potion"},
+		{Model: "potion"},
+	} {
+		if err := (Options{Semantic: semantic}).Validate(); err == nil {
+			t.Fatalf("accepted %+v", semantic)
+		}
 	}
 	config := map[string]map[string]any{"semantic-content": {"min-words": 1, "threshold": 0.8}}
 	if diagnostics, err := Run(t.Context(), []string{root}, Options{Config: config, Semantic: SemanticOptions{ModelPath: t.TempDir()}}); err != nil || len(diagnostics) != 0 {

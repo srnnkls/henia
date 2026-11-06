@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -66,6 +67,62 @@ func TestSemanticModelPathFollowsDeclaringLayer(t *testing.T) {
 	}
 	if cfg.Lint.Semantic.ModelPath != filepath.Join(projectRoot, "local-model") || cfg.Lint.Semantic.Enabled {
 		t.Fatalf("%+v", cfg.Lint.Semantic)
+	}
+}
+
+func TestSemanticModelPathExpansion(t *testing.T) {
+	projectRoot, userRoot, home := t.TempDir(), t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("HENIA_MODELS", "/opt/models")
+	for path, want := range map[string]string{
+		"~/models/potion":       filepath.Join(home, "models/potion"),
+		"$HENIA_MODELS/potion":  "/opt/models/potion",
+		"${HENIA_MODELS}/x":     "/opt/models/x",
+		"/abs/potion":           "/abs/potion",
+		"$HENIA_UNSET/potion":   "/potion",
+		"rel/$HENIA_MODELS_DIR": filepath.Join(userRoot, "rel"),
+	} {
+		cfg, err := decodeLayers(projectRoot, userRoot, []byte("[lint.semantic]\nmodel_path='"+path+"'\n"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Lint.Semantic.ModelPath != want {
+			t.Fatalf("%s: got %q, want %q", path, cfg.Lint.Semantic.ModelPath, want)
+		}
+	}
+}
+
+func TestSemanticModelSourceFollowsLatestLayer(t *testing.T) {
+	projectRoot, userRoot := t.TempDir(), t.TempDir()
+	user := []byte("[lint.semantic]\nenabled=true\nmodel_path='models/potion'\n")
+	cfg, err := decodeLayers(projectRoot, userRoot, user, []byte("[lint.semantic]\nmodel='minishlab/potion-retrieval-32M'\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := cfg.Lint.Semantic; s.Model != "minishlab/potion-retrieval-32M" || s.ModelPath != "" || !s.Enabled {
+		t.Fatalf("%+v", s)
+	}
+	user = []byte("[lint.semantic]\nmodel='minishlab/potion-retrieval-32M'\nrevision='v1'\n")
+	cfg, err = decodeLayers(projectRoot, userRoot, user, []byte("[lint.semantic]\nmodel_path='local-model'\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := cfg.Lint.Semantic; s.Model != "" || s.Revision != "" || s.ModelPath != filepath.Join(projectRoot, "local-model") {
+		t.Fatalf("%+v", s)
+	}
+	cfg, err = decodeLayers(projectRoot, userRoot, user, []byte("[lint.semantic]\nenabled=true\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := cfg.Lint.Semantic; s.Model != "minishlab/potion-retrieval-32M" || s.Revision != "v1" {
+		t.Fatalf("%+v", s)
+	}
+}
+
+func TestSemanticModelAndModelPathConflict(t *testing.T) {
+	_, err := decodeLayers(t.TempDir(), t.TempDir(), []byte("[lint.semantic]\nmodel='minishlab/potion-retrieval-32M'\nmodel_path='models/potion'\n"), nil)
+	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("conflict: %v", err)
 	}
 }
 
