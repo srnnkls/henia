@@ -394,7 +394,8 @@ layout. In the package's own checkout those links point at files that are not
 there; `lint` checks them against the package path they deploy from.
 
 To work on the package with the deployed layout in place, set this in its
-committed `henia.toml`:
+committed `henia.toml`, or in that checkout's `henia.local.toml` to flip it on
+one machine; the user `henia.toml` does not set it:
 
 ```toml
 [resources]

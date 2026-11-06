@@ -75,23 +75,30 @@ type ResourceOptions struct {
 	Link       bool  `toml:"link,omitempty"`
 }
 
-// LinksResources reports whether the package henia.toml at path, without
-// any other layer, asks for its package resources to be linked.
+// LinksResources reads only the checkout's layers, never the user henia.toml.
 func LinksResources(path string) (bool, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+	link := false
+	for _, file := range []string{path, deps.Local(path)} {
+		data, err := os.ReadFile(file)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		var layer struct {
+			Resources struct {
+				Link *bool `toml:"link"`
+			} `toml:"resources"`
+		}
+		if err := toml.Unmarshal(data, &layer); err != nil {
+			return false, fmt.Errorf("%s: %w", file, err)
+		}
+		if layer.Resources.Link != nil {
+			link = *layer.Resources.Link
+		}
 	}
-	if err != nil {
-		return false, err
-	}
-	var file struct {
-		Resources ResourceOptions `toml:"resources"`
-	}
-	if err := toml.Unmarshal(data, &file); err != nil {
-		return false, fmt.Errorf("%s: %w", path, err)
-	}
-	return file.Resources.Link, nil
+	return link, nil
 }
 
 type BuildOptions struct {
