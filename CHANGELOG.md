@@ -6,22 +6,15 @@
 ### Features
 
 * **deps:** declare packages by forge repo and host ([c7868fb](https://github.com/srnnkls/henia/commit/c7868fbc011574af8dae38c8bd3c4351c427f671))
-* **deps:** declare packages by forge repo and host ([e89e82d](https://github.com/srnnkls/henia/commit/e89e82d18ecaadcb1d343a0032220a2aecd0dcf4))
 * **deps:** key project package stores by their lock ([d14edb5](https://github.com/srnnkls/henia/commit/d14edb543ad888fd902011e7789c29c1e609bc00))
-* **deps:** key project package stores by their lock ([e6bc986](https://github.com/srnnkls/henia/commit/e6bc9868484e9c2ec477dd07a3458caac5a3cec4))
-* **lint:** judge unprovided-slot on the resolved setup, at info severity ([45f3f3b](https://github.com/srnnkls/henia/commit/45f3f3bc6be1ff826dc294ff09702e4ebf58fc32))
 * **lint:** warn on declared slots nothing provides ([66aec6e](https://github.com/srnnkls/henia/commit/66aec6eac276128953a743403ae0200e3441730c))
-* **lint:** warn on declared slots nothing provides ([c2ff979](https://github.com/srnnkls/henia/commit/c2ff9791be35b07244e709917b07f20b0e6716ec))
 * **resources:** deploy package resources into the skills that declare them ([657e7c2](https://github.com/srnnkls/henia/commit/657e7c2f875fe56a84715c338248c65313059096))
-* **resources:** deploy package resources into the skills that declare them ([695469c](https://github.com/srnnkls/henia/commit/695469ca941ca0b8518bf6ff81d1b0161a8aa18b))
 * **resources:** let henia.local.toml set resources.link for a checkout ([24f1137](https://github.com/srnnkls/henia/commit/24f1137c53efef8aaddfe01cb212f4e14ec4a5f1))
 
 
 ### Bug Fixes
 
 * **deps:** keep transitive packages at their locked commits ([780db68](https://github.com/srnnkls/henia/commit/780db68a2f3cc411c702e7b61580cafb3bb904c5))
-* **deps:** keep transitive packages at their locked commits ([10dc149](https://github.com/srnnkls/henia/commit/10dc149f5c06157e2ac5f1cada6c6b9fc1774e34))
-* **lint:** report unprovided-slot as a warning, without an info severity ([eb291f5](https://github.com/srnnkls/henia/commit/eb291f55d44f2e581c8451b229b1619c4a3f613a))
 
 ## [0.1.0-alpha.33](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.32...v0.1.0-alpha.33) (2026-11-03)
 
