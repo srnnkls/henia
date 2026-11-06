@@ -225,8 +225,8 @@ func (r *reader) rule(open token) (*Rule, error) {
 		value := r.next()
 		switch key.text {
 		case "severity":
-			if value.text != "info" && value.text != "warning" && value.text != "error" {
-				return nil, &Error{Offset: value.pos, Message: ":severity is info, warning or error"}
+			if value.text != "warning" && value.text != "error" {
+				return nil, &Error{Offset: value.pos, Message: ":severity is warning or error"}
 			}
 			rule.Severity = value.text
 		case "message":

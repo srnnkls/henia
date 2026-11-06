@@ -81,7 +81,7 @@ func newLintCommand() *cobra.Command {
 				}
 			}
 			for _, d := range diagnostics {
-				if d.Severity == "error" || strict && d.Severity == "warning" {
+				if d.Severity == "error" || strict {
 					return fmt.Errorf("lint found %d diagnostic(s)", len(diagnostics))
 				}
 			}

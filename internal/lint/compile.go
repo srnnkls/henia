@@ -108,8 +108,8 @@ func (s *spec) apply(config map[string]any, origin string) error {
 		raw := config[key]
 		if key == "severity" {
 			severity, ok := raw.(string)
-			if !ok || !slices.Contains([]string{"info", "warning", "error"}, severity) {
-				return fmt.Errorf("%s.severity must be info, warning or error, not %v", origin, raw)
+			if !ok || severity != "warning" && severity != "error" {
+				return fmt.Errorf("%s.severity must be warning or error, not %v", origin, raw)
 			}
 			rules := make([]*pattern.Rule, len(s.rules))
 			for i, rule := range s.rules {

@@ -127,7 +127,7 @@ packages and the `[slots]` tables of `henia.toml`. A provider that
 
 ```hq
 (rule unprovided-slot
-  :severity info
+  :severity warning
   :message "slot {@slot.slot} is declared but no provider is selected for it"
   (slot :role declare :provided false) @slot)
 ```

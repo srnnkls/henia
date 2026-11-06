@@ -36,8 +36,7 @@ skills/deploy/SKILL.md:14:4: warning [duplicate-heading] heading repeated; first
 Error: lint found 2 diagnostic(s)
 ```
 
-Errors fail lint. Warnings fail it only under `--strict`. Info diagnostics are
-reported and never fail it. `--disable` turns
+Errors fail lint. Warnings fail it only under `--strict`. `--disable` turns
 rules off by id, and `--format json` prints the diagnostics with their `related`
 locations and, for similarity findings, `similarity`, `method`,
 `shared_phrases` and `model`.
@@ -295,7 +294,7 @@ up in the `sigils` table, gives the kind: `skill`, `command`, `agent`, `file` or
 
 | Key | Meaning |
 |---|---|
-| `:severity` | `info`, `warning` (default) or `error` |
+| `:severity` | `warning` (default) or `error` |
 | `:message` | text with `{@c}` (path:line), `{@c.line}`, `{@c.text}`, `{@c.KEY}`, a value capture `{@n}`, `{@n.percent}` or `{@n.3}`, `{?var}`, `{$param}` and `{shared}`; a `{?var}` counts as a use of the variable, and rows that print different values stay separate diagnostics |
 | `:at @a @b` | location: the first of these captures that matched; else the first capture |
 | `:related @c ...` | related location, chosen the same way |

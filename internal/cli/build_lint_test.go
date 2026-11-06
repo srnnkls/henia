@@ -621,11 +621,11 @@ func TestLintReportsSlotsResolutionLeavesUnprovided(t *testing.T) {
 	}
 
 	fixture(t, filepath.Join(project, "henia.toml"), "[slots.\"review.lenses\"]\ndisable = [\"lenses:go-lens\"]\n")
-	rules, err := lintRules(t, "--strict")
+	rules, err := lintRules(t)
 	if err != nil {
-		t.Fatalf("an info diagnostic fails lint: %v", err)
+		t.Fatalf("a warning fails lint: %v", err)
 	}
-	if want := []string{"info unprovided-slot"}; !slices.Equal(rules, want) {
+	if want := []string{"warning unprovided-slot"}; !slices.Equal(rules, want) {
 		t.Fatalf("with the provider disabled: %v, want %v", rules, want)
 	}
 }
