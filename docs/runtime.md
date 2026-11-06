@@ -122,7 +122,7 @@ Runtime commands take `--project DIR` to read another project's library, and
 ## Dependencies
 
 ```
-henia add <name> (--git URL | --path DIR) [--branch B | --tag T | --rev R] [--root DIR] [--skill S]... [--transitive] [--global] [--no-sync]
+henia add <name> (--repo OWNER/REPO [--host HOST] | --git URL | --path DIR) [--branch B | --tag T | --rev R] [--root DIR] [--skill S]... [--transitive] [--global] [--no-sync]
 henia rm <name> [--global] [--no-install]
 henia sync [--global] [--no-install]
 henia update [--global] [--no-install]
@@ -133,10 +133,20 @@ only records it.
 
 ```toml
 [dependencies.gestalt]
-git = "https://github.com/srnnkls/gestalt.git"
+host = "github"        # optional; github when omitted
+repo = "srnnkls/gestalt"
 branch = "main"
 skills = ["gestalt"]   # optional; every skill when omitted
 ```
+
+A package comes from exactly one of `repo`, `git` and `path`. `repo` names it
+on a forge, `host` picks the forge (`github`, `gitlab`, `codeberg`, `sr.ht`
+or `bitbucket`), and Phora resolves the remote. `git` takes any Git URL, and
+`path` a local directory. `--repo` reads the shorthands `phora add` does:
+`srnnkls/gestalt`, `gitlab:group/repo` or `codeberg.org/me/skills`. Segments
+past owner/repo name the package `root`. It records `host` and `repo`, never
+an expanded URL. Switching a package between `git` and `repo` for the same
+repository keeps its locked commit.
 
 `transitive = true` (`--transitive`) hands Phora a package that is itself a
 Phora project: Phora deploys what that package's `phora.toml` publishes, its

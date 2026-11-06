@@ -33,7 +33,7 @@ func Add(manifest, key string, d Dependency) error {
 		b.WriteString("\n")
 	}
 	fmt.Fprintf(&b, "[dependencies.%s]\n", key)
-	for _, field := range []struct{ key, value string }{{"git", d.Git}, {"path", d.Path}, {"branch", d.Branch}, {"tag", d.Tag}, {"rev", d.Rev}, {"root", d.Root}} {
+	for _, field := range []struct{ key, value string }{{"host", d.Host}, {"repo", d.Repo}, {"git", d.Git}, {"path", d.Path}, {"branch", d.Branch}, {"tag", d.Tag}, {"rev", d.Rev}, {"root", d.Root}} {
 		if field.value != "" {
 			fmt.Fprintf(&b, "%s = %s\n", field.key, strconv.Quote(field.value))
 		}
@@ -79,4 +79,36 @@ func Remove(manifest, key string) error {
 		head += "\n"
 	}
 	return os.WriteFile(manifest, []byte(head+rest), 0o644)
+}
+
+var forges = map[string]string{
+	"github.com":    "github",
+	"gitlab.com":    "gitlab",
+	"codeberg.org":  "codeberg",
+	"git.sr.ht":     "sr.ht",
+	"bitbucket.org": "bitbucket",
+}
+
+// Forge reads the shorthands phora 0.5.0 add accepts; plain owner/repo names no host.
+func Forge(shorthand string) (host, repo, root string, err error) {
+	if strings.Contains(shorthand, "://") || strings.Contains(shorthand, "@") {
+		return "", "", "", fmt.Errorf("%s is a URL, not a forge shorthand; pass it as git", shorthand)
+	}
+	host, rest, aliased := strings.Cut(shorthand, ":")
+	if !aliased {
+		host, rest = "", shorthand
+	}
+	if aliased && host == "" {
+		return "", "", "", fmt.Errorf("%s names no forge before the colon", shorthand)
+	}
+	segments := strings.FieldsFunc(rest, func(r rune) bool { return r == '/' })
+	if len(segments) > 0 && !aliased {
+		if forge, ok := forges[segments[0]]; ok {
+			host, segments = forge, segments[1:]
+		}
+	}
+	if len(segments) < 2 {
+		return "", "", "", fmt.Errorf("%s is not <owner>/<repo>, <host>:<owner>/<repo> or <domain>/<owner>/<repo>", shorthand)
+	}
+	return host, segments[0] + "/" + segments[1], strings.Join(segments[2:], "/"), nil
 }

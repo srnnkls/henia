@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -98,14 +99,32 @@ func newAddCommand() *cobra.Command {
 	var d deps.Dependency
 	var global, offline bool
 	cmd := &cobra.Command{
-		Use:   "add <name> (--git URL | --path DIR)",
+		Use:   "add <name> (--repo OWNER/REPO | --git URL | --path DIR)",
 		Short: "Declare a skill package dependency and fetch it",
 		Long: `Declare a skill package dependency in henia.toml and fetch it with phora.
 A package is a folder holding skills/, its own henia.toml and, optionally,
 lint modules in .henia/lint/. --global records it in the user henia.toml and
-fetches it for every project.`,
+fetches it for every project.
+
+--repo takes a forge shorthand as phora add does: owner/repo on GitHub,
+<host>:<owner>/<repo>, or <domain>/<owner>/<repo> for a built-in forge such
+as gitlab.com. Segments past owner/repo name the package root. It is
+recorded as host and repo, never as an expanded URL.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if d.Repo != "" {
+				host, repo, root, err := deps.Forge(d.Repo)
+				if err != nil {
+					return err
+				}
+				if host != "" && d.Host != "" && host != d.Host {
+					return fmt.Errorf("--repo %s names the forge %s, not %s", d.Repo, host, d.Host)
+				}
+				if root != "" && d.Root != "" {
+					return fmt.Errorf("--repo %s names the root %s; drop --root", d.Repo, root)
+				}
+				d.Host, d.Repo, d.Root = cmp.Or(host, d.Host, "github"), repo, cmp.Or(d.Root, root)
+			}
 			scope, err := packageScope(cmd, global)
 			if err != nil {
 				return err
@@ -122,6 +141,8 @@ fetches it for every project.`,
 			return syncThenInstall(cmd, scope, false, global, false)
 		},
 	}
+	cmd.Flags().StringVar(&d.Repo, "repo", "", "Forge repository of the package: owner/repo, <host>:<owner>/<repo> or <domain>/<owner>/<repo>")
+	cmd.Flags().StringVar(&d.Host, "host", "", "Forge of --repo owner/repo (default github)")
 	cmd.Flags().StringVar(&d.Git, "git", "", "Git URL of the package")
 	cmd.Flags().StringVar(&d.Path, "path", "", "Local directory of the package")
 	cmd.Flags().StringVar(&d.Branch, "branch", "", "Branch to follow")
