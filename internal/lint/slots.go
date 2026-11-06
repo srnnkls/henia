@@ -48,6 +48,15 @@ func addSlots(root *markup.Element, documents []document, provided []slots.Skill
 			for _, declared := range metadata.Declared {
 				add(map[string]string{"role": "declare", "slot": declared.Slot, "type": declared.Type.String()}, inFrontmatter(declared.Slot))
 			}
+			offered := metadata.Offered
+			for _, s := range provided {
+				if same(s.Path, d.path) {
+					offered = append(offered, s.Offered...)
+				}
+			}
+			for _, o := range offered {
+				add(map[string]string{"role": "provide", "slot": o.Slot, "priority": o.Priority.String()}, inFrontmatter(o.Slot))
+			}
 			continue
 		}
 		for _, problem := range metadata.Problems {

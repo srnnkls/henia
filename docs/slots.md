@@ -271,7 +271,8 @@ given, `--explain` covers every slot.
 items, or the providers' content.
 
 `henia lint` warns `unused-slot` on a declared slot that no scanned skill
-applies, directly, through a sub-slot or through an enclosing slot.
+applies, directly, through a sub-slot or through an enclosing slot, and
+`unprovided-slot` on one that nothing provides in any of those ways.
 
 ## Lineage
 

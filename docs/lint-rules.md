@@ -141,7 +141,7 @@ concern.
 | `std/metadata` | `metadata`, `stale-review`, `invalid-markup` (source) | `max-age-days` (180) |
 | `std/references` | `broken-link`, `missing-reference`, `outdated-reference` (rendered); define `reference` | `outdated` map; `sigils` from Henia |
 | `std/duplicates` | `duplicate-skill`, `duplicate-content` (source) | `min-words` (12) |
-| `std/slots` | `invalid-slot` (source); `unused-slot`, `unknown-slot`, `missing-section` (rendered) | |
+| `std/slots` | `invalid-slot` (source); `unused-slot`, `unprovided-slot`, `unknown-slot`, `missing-section` (rendered) | |
 | `std/similarity` | `similar-content`, `semantic-content` (source) | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
 
 The modules live under `internal/lint/std/`, readable like any other module.
@@ -150,7 +150,7 @@ included:
 
 ```console
 $ henia lint test
-32 lint examples passed
+35 lint examples passed
 ```
 
 ## Configuration
