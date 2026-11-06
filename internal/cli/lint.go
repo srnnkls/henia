@@ -150,6 +150,9 @@ func lintOptions(cmd *cobra.Command) (lint.Options, *config.Config, error) {
 		}
 	}
 	options.Provided = slots.Provide(slots.Discover(lib), cfg.ProvidedSkills(), configPath)
+	if options.Slots, err = slotSetup(project, lib); err != nil {
+		return lint.Options{}, nil, err
+	}
 	for _, entry := range lib.Entries {
 		if entry.Tier == library.Dependency {
 			options.Dependencies = append(options.Dependencies, entry.Path)

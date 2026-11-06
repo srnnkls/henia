@@ -78,7 +78,7 @@ func TestDependencySlotDeclarationsCount(t *testing.T) {
 	for _, d := range diagnostics {
 		got = append(got, d.Rule+" "+d.Message)
 	}
-	want := []string{`invalid-slot slot code.style is declared with conflicting types keyed(list), unique`, `unknown-slot "review.criteria" is not declared by any scanned document`}
+	want := []string{`invalid-slot slot code.style is declared with conflicting types keyed(list), unique`, `unprovided-slot slot code.style is declared but no provider is selected for it`, `unknown-slot "review.criteria" is not declared by any scanned document`}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("diagnostics = %q, want %q", got, want)
 	}
@@ -320,5 +320,18 @@ func TestConfiguredProvidersAreLinted(t *testing.T) {
 	want := []string{`missing-section slot code.style.rust offers section #rust, which the skill does not render`, `unknown-slot "git.commits" is not declared by any scanned document`}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("diagnostics = %q, want %q", got, want)
+	}
+}
+
+func TestDependencyProvidersCountForDeclaredSlots(t *testing.T) {
+	root, sources := t.TempDir(), t.TempDir()
+	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\nhenia:\n  slots:\n    code.style:\n---\n\n# One\n\n:slot[code.style]\n")
+	dependency := write(t, sources, "loqui/skills/loqui/SKILL.md", "---\nname: loqui\ndescription: A dependency\nhenia:\n  provides:\n    code.style.go:\n---\n\n# Loqui\n")
+	diagnostics, err := lint.Run(t.Context(), []string{root}, lint.Options{Dependencies: []string{dependency}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v, want none", diagnostics)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -586,5 +587,45 @@ Stop = [{ hooks = [{ type = "command", command = "project" }] }]
 		if got := hookCommands(t, settings, event); strings.Join(got, " ") != strings.Join(want, " ") {
 			t.Errorf("%s hooks = %v, want %v", event, got, want)
 		}
+	}
+}
+
+func TestLintReportsSlotsResolutionLeavesUnprovided(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	fixture(t, filepath.Join(project, "skills", "review", "SKILL.md"), "---\nname: review\ndescription: Review skill for tests.\nhenia:\n  slots:\n    review.lenses:\n---\n\n# Review\n\n:slot[review.lenses]\n")
+	fixture(t, filepath.Join(library.PackagesDir("global"), "lenses", "skills", "go-lens", "SKILL.md"), "---\nname: go-lens\ndescription: A global provider.\nhenia:\n  provides:\n    review.lenses.go:\n---\n\n# Go lens\n")
+	lintRules := func(t *testing.T, args ...string) ([]string, error) {
+		t.Helper()
+		cmd := newLintCommand()
+		cmd.SilenceUsage = true
+		out := &bytes.Buffer{}
+		cmd.SetOut(out)
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs(append([]string{"skills", "--format", "json"}, args...))
+		err := cmd.Execute()
+		var diagnostics []lint.Diagnostic
+		if jsonErr := json.Unmarshal(out.Bytes(), &diagnostics); jsonErr != nil {
+			t.Fatalf("%v: %s", jsonErr, out)
+		}
+		var rules []string
+		for _, d := range diagnostics {
+			rules = append(rules, d.Severity+" "+d.Rule)
+		}
+		return rules, err
+	}
+
+	if rules, err := lintRules(t); err != nil || len(rules) != 0 {
+		t.Fatalf("with a global provider: %v (%v)", rules, err)
+	}
+
+	fixture(t, filepath.Join(project, "henia.toml"), "[slots.\"review.lenses\"]\ndisable = [\"lenses:go-lens\"]\n")
+	rules, err := lintRules(t)
+	if err != nil {
+		t.Fatalf("a warning fails lint: %v", err)
+	}
+	if want := []string{"warning unprovided-slot"}; !slices.Equal(rules, want) {
+		t.Fatalf("with the provider disabled: %v, want %v", rules, want)
 	}
 }

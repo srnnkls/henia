@@ -141,7 +141,7 @@ concern.
 | `std/metadata` | `metadata`, `stale-review`, `invalid-markup` (source) | `max-age-days` (180) |
 | `std/references` | `broken-link`, `missing-reference`, `outdated-reference` (rendered); define `reference` | `outdated` map; `sigils` from Henia |
 | `std/duplicates` | `duplicate-skill`, `duplicate-content` (source) | `min-words` (12) |
-| `std/slots` | `invalid-slot` (source); `unused-slot`, `unknown-slot`, `missing-section` (rendered) | |
+| `std/slots` | `invalid-slot` (source); `unused-slot`, `unprovided-slot`, `unknown-slot`, `missing-section` (rendered) | |
 | `std/similarity` | `similar-content`, `semantic-content` (source) | `min-words` (12), `similarity`, `containment`, `threshold` (0, off) |
 
 The modules live under `internal/lint/std/`, readable like any other module.
@@ -150,7 +150,7 @@ included:
 
 ```console
 $ henia lint test
-32 lint examples passed
+35 lint examples passed
 ```
 
 ## Configuration
@@ -406,7 +406,9 @@ Lint rules see the document tree that queries see, plus these facts:
   `:value`, `:index` for list items, and `:tag` (YAML type, as in `!!str`).
 - `slot` nodes for `henia.slots` and `henia.provides` entries and `:slot[...]`
   directives, with `:role` (`declare`, `provide` or `apply`), `:slot`, `:type`,
-  `:priority` and `:error`.
+  `:priority` and `:error`. A declaration's `:provided` is `true` when slot
+  resolution, as `henia slots --explain` runs it, selects a provider of the
+  slot, a sub-slot or an enclosing slot.
 - `link` and `image` facts:
   - `:dest` is the destination as written;
   - `:exists`, `:anchored` and `:valid` are `true` or `false`;

@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
+	"github.com/srnnkls/henia/internal/lint"
 	"github.com/srnnkls/henia/internal/slots"
 )
 
@@ -87,6 +88,14 @@ section body, a command, a text or a file. A :slot[...] directive renders as
 }
 
 func resolveSlots(project string, lib *library.Library) (*slots.Resolution, error) {
+	setup, err := slotSetup(project, lib)
+	if err != nil {
+		return nil, err
+	}
+	return slots.Evaluate(setup.Skills, setup.Disabled), nil
+}
+
+func slotSetup(project string, lib *library.Library) (*lint.SlotSetup, error) {
 	path, err := config.Find(project)
 	if errors.Is(err, os.ErrNotExist) {
 		path, err = filepath.Join(project, library.ConfigFile), nil
@@ -115,7 +124,7 @@ func resolveSlots(project string, lib *library.Library) (*slots.Resolution, erro
 			}
 		}
 	}
-	return slots.Evaluate(append(skills, provided...), cfg.DisabledProviders()), nil
+	return &lint.SlotSetup{Skills: append(skills, provided...), Disabled: cfg.DisabledProviders()}, nil
 }
 
 func projectRoot(cmd *cobra.Command) string {

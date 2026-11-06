@@ -3,6 +3,7 @@ description: Slot declarations, providers and applications in skills.
 stage:
   invalid-slot: source
   unused-slot: rendered
+  unprovided-slot: rendered
   unknown-slot: rendered
   missing-section: rendered
 ---
@@ -114,6 +115,68 @@ henia:
 # Example
 
 :slot[review]
+```
+
+## unprovided-slot
+
+A declared slot needs a provider that slot resolution selects, as
+`henia slots --explain` shows it: one of the slot, a sub-slot of it or an
+enclosing slot, across the scanned skills, the skill packages, the global
+packages and the `[slots]` tables of `henia.toml`. A provider that
+`[slots."<slot>"] disable` turns off does not count.
+
+```hq
+(rule unprovided-slot
+  :severity warning
+  :message "slot {@slot.slot} is declared but no provider is selected for it"
+  (slot :role declare :provided false) @slot)
+```
+
+### Matches
+
+```md
+---
+name: example
+description: An example skill.
+henia:
+  slots:
+    review.lenses:
+---
+# Example
+
+:slot[review.lenses]
+```
+
+### Passes
+
+```md
+---
+name: example
+description: An example skill.
+henia:
+  slots:
+    review.lenses:
+  provides:
+    review.lenses.go:
+---
+# Example
+
+:slot[review.lenses]
+```
+
+```md
+---
+name: example
+description: An example skill.
+henia:
+  slots:
+    review.lenses:
+  provides:
+    review.lenses:
+---
+# Example
+
+:slot[review.lenses]
 ```
 
 ## unknown-slot

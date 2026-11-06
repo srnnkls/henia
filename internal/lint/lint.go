@@ -61,6 +61,7 @@ type Options struct {
 	Packages     []pipeline.Dependency     `toml:"-"`
 	Configured   map[string]henia.Harness  `toml:"-"`
 	Provided     []slots.Skill             `toml:"-"`
+	Slots        *SlotSetup                `toml:"-"`
 	Artifacts    []string                  `toml:"-"`
 	ConfigFiles  []string                  `toml:"-"`
 	Schemas      *profile.Schemas          `toml:"-"`

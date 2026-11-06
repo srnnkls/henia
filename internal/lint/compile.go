@@ -198,7 +198,7 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 		return nil, err
 	}
 	diagnostics := append(expanded.diagnostics, config...)
-	sources := []*evaluation{{corpus: corpus(docs, nil, p.options.Provided)}}
+	sources := []*evaluation{{corpus: corpus(docs, nil, p.options.Provided, p.options.Slots)}}
 	staged := map[string][]*evaluation{}
 	harnessOf := map[*evaluation]string{}
 	var specific perHarness
@@ -218,7 +218,7 @@ func (p *Plan) Run(ctx context.Context, paths []string) ([]Diagnostic, error) {
 					if s.stage == StageRendered {
 						stageDocs = renderedDocuments(docs, views)
 					}
-					ev := &evaluation{corpus: corpus(stageDocs, views, p.options.Provided)}
+					ev := &evaluation{corpus: corpus(stageDocs, views, p.options.Provided, p.options.Slots)}
 					stageFiles(ev.corpus.Root, views, s.stage)
 					resolveAlternates(ev.corpus.Root, p.options.Builtin)
 					staged[s.stage] = append(staged[s.stage], ev)
