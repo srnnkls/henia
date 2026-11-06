@@ -25,6 +25,8 @@ import (
 )
 
 type Dependency struct {
+	Repo       string   `toml:"repo,omitempty"`
+	Host       string   `toml:"host,omitempty"`
 	Git        string   `toml:"git,omitempty"`
 	Path       string   `toml:"path,omitempty"`
 	Branch     string   `toml:"branch,omitempty"`
@@ -60,6 +62,8 @@ var ErrNoPhora = errors.New("henia needs phora to fetch dependencies, and no rel
 
 var name = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
+var forgeRepo = regexp.MustCompile(`^[^/:@\s]+(/[^/:@\s]+)+$`)
+
 func (d Dependency) validate(key string) error {
 	if !name.MatchString(key) {
 		return fmt.Errorf("dependency %q: names are lowercase letters, digits, dots, underscores and hyphens", key)
@@ -67,8 +71,20 @@ func (d Dependency) validate(key string) error {
 	if reference.Reserved(key) {
 		return fmt.Errorf("dependency %q: %s is an address kind, not a package name", key, key)
 	}
-	if (d.Git == "") == (d.Path == "") {
-		return fmt.Errorf("dependency %s needs exactly one of git or path", key)
+	kinds := 0
+	for _, kind := range []string{d.Repo, d.Git, d.Path} {
+		if kind != "" {
+			kinds++
+		}
+	}
+	if kinds != 1 {
+		return fmt.Errorf("dependency %s needs exactly one of repo, git and path", key)
+	}
+	if d.Host != "" && d.Repo == "" {
+		return fmt.Errorf("dependency %s: host names the forge of a repo; it needs repo", key)
+	}
+	if d.Repo != "" && !forgeRepo.MatchString(d.Repo) {
+		return fmt.Errorf("dependency %s: repo %q is not <owner>/<repo> on a forge; give a URL as git", key, d.Repo)
 	}
 	refs := 0
 	for _, ref := range []string{d.Branch, d.Tag, d.Rev} {
@@ -135,9 +151,15 @@ func phoraManifest(dependencies map[string]Dependency, scope Scope) ([]byte, err
 	for _, key := range slices.Sorted(maps.Keys(dependencies)) {
 		d := dependencies[key]
 		fmt.Fprintf(&b, "\n[sources.%s]\n", key)
-		if d.Git != "" {
+		switch {
+		case d.Repo != "":
+			if d.Host != "" {
+				fmt.Fprintf(&b, "host = %s\n", strconv.Quote(d.Host))
+			}
+			fmt.Fprintf(&b, "repo = %s\n", strconv.Quote(d.Repo))
+		case d.Git != "":
 			fmt.Fprintf(&b, "git = %s\n", strconv.Quote(d.Git))
-		} else {
+		default:
 			fmt.Fprintf(&b, "path = %s\n", strconv.Quote(d.Path))
 		}
 		for _, ref := range []struct{ key, value string }{{"branch", d.Branch}, {"tag", d.Tag}, {"rev", d.Rev}, {"root", d.Root}} {
@@ -503,7 +525,7 @@ func copyFile(from, to string) error {
 }
 
 func equal(a, b Dependency) bool {
-	return a.Git == b.Git && a.Path == b.Path && a.Branch == b.Branch && a.Tag == b.Tag && a.Rev == b.Rev && a.Root == b.Root && slices.Equal(a.Skills, b.Skills) && a.Transitive == b.Transitive
+	return a.Repo == b.Repo && a.Host == b.Host && a.Git == b.Git && a.Path == b.Path && a.Branch == b.Branch && a.Tag == b.Tag && a.Rev == b.Rev && a.Root == b.Root && slices.Equal(a.Skills, b.Skills) && a.Transitive == b.Transitive
 }
 
 type summary struct {

@@ -89,3 +89,54 @@ func TestTransitivePassesThrough(t *testing.T) {
 		}
 	}
 }
+
+func TestForgeShorthands(t *testing.T) {
+	for shorthand, want := range map[string][3]string{
+		"srnnkls/loqui":                  {"", "srnnkls/loqui", ""},
+		"github:srnnkls/tropos":          {"github", "srnnkls/tropos", ""},
+		"gitlab:group/repo/sub/pkg":      {"gitlab", "group/repo", "sub/pkg"},
+		"codeberg.org/me/dotfiles":       {"codeberg", "me/dotfiles", ""},
+		"github.com/srnnkls/loqui/skill": {"github", "srnnkls/loqui", "skill"},
+	} {
+		host, repo, root, err := Forge(shorthand)
+		if err != nil || [3]string{host, repo, root} != want {
+			t.Errorf("Forge(%q) = %q %q %q (%v), want %q", shorthand, host, repo, root, err, want)
+		}
+	}
+	for _, bad := range []string{"https://github.com/me/x.git", "git@github.com:me/x.git", "loqui", ":me/x", "github.com/me"} {
+		if _, _, _, err := Forge(bad); err == nil {
+			t.Errorf("Forge(%q) accepted", bad)
+		}
+	}
+}
+
+func TestForgeDependencies(t *testing.T) {
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "henia.toml")
+	if err := Add(manifest, "loqui", Dependency{Host: "github", Repo: "srnnkls/loqui", Branch: "main", Skills: []string{"loqui"}}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(manifest)
+	if want := "[dependencies.loqui]\nhost = \"github\"\nrepo = \"srnnkls/loqui\"\nbranch = \"main\"\nskills = [\"loqui\"]\n"; err != nil || string(data) != want {
+		t.Fatalf("manifest:\n%s (%v)\nwant:\n%s", data, err, want)
+	}
+	declared, err := Read(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, err := phoraManifest(declared, Scope{State: dir, Store: filepath.Join(dir, "store")})
+	if err != nil || !strings.Contains(string(generated), "[sources.loqui]\nhost = \"github\"\nrepo = \"srnnkls/loqui\"\nbranch = \"main\"\n") {
+		t.Fatalf("phora.toml:\n%s (%v)", generated, err)
+	}
+	for _, d := range []Dependency{
+		{Repo: "srnnkls/loqui", Git: "https://github.com/srnnkls/loqui.git"},
+		{Repo: "srnnkls/loqui", Path: "/tmp/loqui"},
+		{Host: "gitlab", Git: "https://gitlab.com/x/y.git"},
+		{Repo: "https://github.com/srnnkls/loqui"},
+		{Repo: "loqui"},
+	} {
+		if err := d.validate("loqui"); err == nil {
+			t.Errorf("%+v validates", d)
+		}
+	}
+}
