@@ -163,3 +163,118 @@ func TestUpdatePastAStaleStoreThatDeclaresADependencyDifferently(t *testing.T) {
 		t.Fatalf("update must get past the stale store's declaration of leaf: %v", err)
 	}
 }
+
+func TestSyncPlacesPackageResourcesInsideTheirSkill(t *testing.T) {
+	realPhora(t)
+	root := t.TempDir()
+	pkg := filepath.Join(root, "loqui")
+	commitPackage(t, pkg, map[string]string{
+		"henia.toml":                 "",
+		".henia/lint/rule.md":        "rule\n",
+		"skills/loqui/SKILL.md":      "---\nname: loqui\nhenia:\n  resources:\n    package:\n      languages/: languages/\n      principles.md: shared/principles.md\n---\n",
+		"skills/other/SKILL.md":      "---\nname: other\n---\n",
+		"languages/python/README.md": "# Python\n",
+		"shared/principles.md":       "# Principles\n",
+		"unrelated/notes.md":         "notes\n",
+	})
+	for _, tc := range []struct {
+		name     string
+		declared string
+		want     []string
+		absent   []string
+	}{
+		{
+			name:     "whole package",
+			declared: "",
+			want:     []string{"henia.toml", ".henia/lint/rule.md", "skills/other/SKILL.md", "unrelated/notes.md"},
+			absent:   []string{"languages", "shared"},
+		},
+		{
+			name:     "taken skills",
+			declared: "skills = [\"loqui\"]\n",
+			want:     []string{"henia.toml", ".henia/lint/rule.md"},
+			absent:   []string{"languages", "shared", "skills/other", "unrelated"},
+		},
+		{
+			name:     "linked",
+			declared: "link = true\n",
+			want:     []string{"skills/other/SKILL.md"},
+			absent:   []string{"languages", "shared"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			manifest := filepath.Join(dir, "henia.toml")
+			source := "git = \"file://" + pkg + "\"\nbranch = \"main\"\n"
+			if strings.Contains(tc.declared, "link") {
+				source = "path = \"" + pkg + "\"\n"
+			}
+			if err := os.WriteFile(manifest, []byte("[dependencies.loqui]\n"+source+tc.declared), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			scope := Scope{
+				Manifest: manifest,
+				Lock:     filepath.Join(dir, "henia.lock"),
+				State:    filepath.Join(dir, "state"),
+				Store:    filepath.Join(dir, "store"),
+				Tools:    filepath.Join(dir, "tools"),
+			}
+			if _, err := Sync(context.Background(), scope, false); err != nil {
+				t.Fatal(err)
+			}
+			deployed := filepath.Join(scope.Store, "loqui")
+			for _, path := range append(tc.want, "skills/loqui/SKILL.md", "skills/loqui/languages/python/README.md", "skills/loqui/principles.md") {
+				if _, err := os.Stat(filepath.Join(deployed, path)); err != nil {
+					t.Errorf("%s is not deployed: %v", path, err)
+				}
+			}
+			for _, path := range tc.absent {
+				if _, err := os.Lstat(filepath.Join(deployed, path)); err == nil {
+					t.Errorf("%s is deployed outside its skill", path)
+				}
+			}
+			if status := git(t, pkg, "status", "--porcelain", "--untracked-files=all"); status != "" {
+				t.Errorf("sync changed the package checkout:\n%s", status)
+			}
+		})
+	}
+}
+
+func TestSyncLinkedPackageGainingResourcesLeavesItsCheckoutAlone(t *testing.T) {
+	realPhora(t)
+	root := t.TempDir()
+	pkg := filepath.Join(root, "loqui")
+	commitPackage(t, pkg, map[string]string{
+		"henia.toml":                 "",
+		"skills/loqui/SKILL.md":      "---\nname: loqui\n---\n",
+		"languages/python/README.md": "# Python\n",
+	})
+	manifest := filepath.Join(root, "henia.toml")
+	if err := os.WriteFile(manifest, []byte("[dependencies.loqui]\npath = \""+pkg+"\"\nlink = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scope := Scope{
+		Manifest: manifest,
+		Lock:     filepath.Join(root, "henia.lock"),
+		State:    filepath.Join(root, "state"),
+		Store:    filepath.Join(root, "store"),
+		Tools:    filepath.Join(root, "tools"),
+	}
+	if _, err := Sync(context.Background(), scope, false); err != nil {
+		t.Fatal(err)
+	}
+	commitPackage(t, pkg, map[string]string{
+		"skills/loqui/SKILL.md": "---\nname: loqui\nhenia:\n  resources:\n    package:\n      languages/: languages/\n---\n",
+	})
+
+	if _, err := Sync(context.Background(), scope, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(scope.Store, "loqui", "skills", "loqui", "languages", "python", "README.md")); err != nil {
+		t.Errorf("the resource is not deployed into its skill: %v", err)
+	}
+	if status := git(t, pkg, "status", "--porcelain", "--untracked-files=all"); status != "" {
+		t.Errorf("sync changed the linked checkout:\n%s", status)
+	}
+}

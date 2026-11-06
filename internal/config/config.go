@@ -72,6 +72,26 @@ func (c *Config) ProvidedSkills() map[string][]string {
 
 type ResourceOptions struct {
 	Disclosure *bool `toml:"disclosure,omitempty"`
+	Link       bool  `toml:"link,omitempty"`
+}
+
+// LinksResources reports whether the package henia.toml at path, without
+// any other layer, asks for its package resources to be linked.
+func LinksResources(path string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var file struct {
+		Resources ResourceOptions `toml:"resources"`
+	}
+	if err := toml.Unmarshal(data, &file); err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	return file.Resources.Link, nil
 }
 
 type BuildOptions struct {

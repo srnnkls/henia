@@ -467,6 +467,12 @@ func (c *Corpus) skillLink(ref reference.Reference) map[string]string {
 
 func (c *Corpus) inspect(attrs map[string]string, local, anchor string) {
 	_, err := os.Stat(local)
+	if errors.Is(err, os.ErrNotExist) {
+		if source, ok := PackageFile(local); ok {
+			local = source
+			_, err = os.Stat(local)
+		}
+	}
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		attrs["exists"] = "false"

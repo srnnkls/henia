@@ -46,6 +46,10 @@ directory:
 post_sync = "henia --config ../../../.henia/canonical/henia.toml build ../../../.henia/canonical --output ../../../.henia/build --clean && (cd ../deploy && phora sync --prune)"
 ```
 
+A skill that declares [package resources](runtime.md#package-resources) builds
+from a tree that holds them: stage the package paths it names beside
+`skills/`, and the build copies them into the skill.
+
 The `&&` means a compiler error stops the deployment. The hook is a global
 `post_sync` because that also runs after a sync that only removed files, which
 `on_change` would miss. No source `build` setting, generated Git package or

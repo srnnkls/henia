@@ -217,3 +217,41 @@ func TestFlatWriteWithResources(t *testing.T) {
 		t.Errorf("reference/guide.md not copied to sibling dir: %v", err)
 	}
 }
+
+func TestWriteCarriesPackageResourcesIntoTheSkill(t *testing.T) {
+	tmpDir := t.TempDir()
+	pkg := filepath.Join(tmpDir, "src")
+	srcDir := filepath.Join(pkg, "skills", "loqui")
+	for path, content := range map[string]string{
+		filepath.Join(srcDir, "SKILL.md"):                      "---\nname: loqui\nhenia:\n  resources:\n    package:\n      languages/: languages/\n      principles.md: shared/principles.md\n---\n",
+		filepath.Join(pkg, "languages", "python", "README.md"): "# Python",
+		filepath.Join(pkg, "shared", "principles.md"):          "# Principles",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	targetDir := filepath.Join(tmpDir, "target")
+	art := &artifact.Artifact{
+		Name:        "loqui",
+		Type:        artifact.TypeSkill,
+		SourcePath:  srcDir,
+		IsDirectory: true,
+		Frontmatter: map[string]any{"name": "loqui"},
+		Body:        "# Skill\n",
+	}
+
+	if err := New(targetDir).Write(art); err != nil {
+		t.Fatal(err)
+	}
+
+	for path, want := range map[string]string{"languages/python/README.md": "# Python", "principles.md": "# Principles"} {
+		data, err := os.ReadFile(filepath.Join(targetDir, "skills", "loqui", path))
+		if err != nil || string(data) != want {
+			t.Errorf("%s = %q (%v), want %q", path, data, err, want)
+		}
+	}
+}

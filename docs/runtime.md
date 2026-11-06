@@ -122,7 +122,7 @@ Runtime commands take `--project DIR` to read another project's library, and
 ## Dependencies
 
 ```
-henia add <name> (--git URL | --path DIR) [--branch B | --tag T | --rev R] [--root DIR] [--skill S]... [--global] [--no-sync]
+henia add <name> (--git URL | --path DIR) [--branch B | --tag T | --rev R] [--root DIR] [--skill S]... [--transitive] [--global] [--no-sync]
 henia rm <name> [--global] [--no-install]
 henia sync [--global] [--no-install]
 henia update [--global] [--no-install]
@@ -138,8 +138,13 @@ branch = "main"
 skills = ["gestalt"]   # optional; every skill when omitted
 ```
 
+`transitive = true` (`--transitive`) hands Phora a package that is itself a
+Phora project: Phora deploys what that package's `phora.toml` publishes, its
+own Phora dependencies included. Such a package takes no `root` or `skills`.
+
 `sync` fetches the declared packages at their locked commits, along with the
-packages they declare. `update` moves them to the latest commits. `build` and
+packages they declare, and places the [package resources](#package-resources)
+their skills declare. `update` moves them to the latest commits. `build` and
 `lint` sync first when a declared package is missing.
 
 [Phora](https://github.com/srnnkls/phora) does the fetching, from a
@@ -361,6 +366,46 @@ scripts or names with dots, are read by path: `henia show pr/scripts/pr-context`
 
 To turn the list off, set `resources.disclosure = false` under `[resources]` in
 a user or project `henia.toml`, or under `henia:` in one skill's frontmatter.
+
+### Package resources
+
+A skill can take resources from elsewhere in its package, the directory that
+holds `skills/`. `henia.resources.package` maps a path inside the skill to a
+path in the package; a trailing slash marks a directory, on both sides or
+neither:
+
+```yaml
+---
+name: loqui
+henia:
+  resources:
+    package:
+      languages/: languages/
+      principles.md: shared/principles.md
+---
+```
+
+Each one is a resource of the skill wherever the skill is deployed. `sync`
+places `languages/` of the package at `skills/loqui/languages/` in the store,
+even under a `skills` list, and nowhere else. `build` copies it into static
+output, and `henia show loqui.languages.python.README`, slot `path` offers and
+links from `SKILL.md` such as `languages/python/README.md` resolve against that
+layout. In the package's own checkout those links point at files that are not
+there; `lint` checks them against the package path they deploy from.
+
+To work on the package with the deployed layout in place, set this in its
+committed `henia.toml`:
+
+```toml
+[resources]
+link = true
+```
+
+`henia sync` in that checkout then links each declared resource into its skill,
+`skills/loqui/languages -> ../../languages`, and lists the links in the
+repository's `.git/info/exclude`. Without the setting, or once it is removed,
+sync removes the links it made. A resource read through such a link stays
+inside the skill; any other link out of a skill is still refused.
 
 ## Preloads
 

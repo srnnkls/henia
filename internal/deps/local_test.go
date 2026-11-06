@@ -68,3 +68,24 @@ func TestMergeLockKeepsOverriddenEntries(t *testing.T) {
 		t.Fatalf("merged lock:\n%s", data)
 	}
 }
+
+func TestTransitivePassesThrough(t *testing.T) {
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "henia.toml")
+	if err := Add(manifest, "tropos", Dependency{Git: "https://example.test/tropos.git", Transitive: true}); err != nil {
+		t.Fatal(err)
+	}
+	declared, err := Read(manifest)
+	if err != nil || !declared["tropos"].Transitive {
+		t.Fatalf("tropos = %+v (%v)", declared["tropos"], err)
+	}
+	generated, err := phoraManifest(declared, Scope{State: dir, Store: filepath.Join(dir, "store")})
+	if err != nil || !strings.Contains(string(generated), "[sources.tropos]\ngit = \"https://example.test/tropos.git\"\ntransitive = true\n") {
+		t.Fatalf("manifest:\n%s (%v)", generated, err)
+	}
+	for _, d := range []Dependency{{Git: "https://example.test/tropos.git", Transitive: true, Skills: []string{"git"}}, {Git: "https://example.test/tropos.git", Transitive: true, Root: "pkg"}} {
+		if err := d.validate("tropos"); err == nil {
+			t.Errorf("%+v validates", d)
+		}
+	}
+}
