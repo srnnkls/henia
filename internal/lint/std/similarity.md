@@ -63,8 +63,8 @@ Simmer the vegetable soup slowly over low heat.
 
 ## semantic-content
 
-Needs `[lint.semantic]` with `enabled = true` and a `model_path`; paragraphs
-that already match lexically are left out.
+Needs `[lint.semantic]` with `enabled = true` and a `model` or `model_path`;
+paragraphs that already match lexically are left out.
 
 ```hq
 (rule semantic-content

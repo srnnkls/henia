@@ -433,16 +433,24 @@ containment = 0.9  # shared shingles over the shorter paragraph
 
 [lint.semantic]
 enabled = true
-model_path = "models/potion-retrieval-32M"
+model = "minishlab/potion-retrieval-32M"
 
 [lint.config.semantic-content]
 threshold = 0.35   # calibrate against accepted and rejected examples
 ```
 
-`model_path` names a local Model2Vec directory holding `tokenizer.json`,
-`config.json` and `model.safetensors`. A relative path resolves against the
-configuration file that declares it. Lint downloads no models, calls no servers
-and runs no subprocesses. Inference uses the pure Go
+`model` names a Model2Vec model by Hugging Face repo id and resolves it in the
+local Hugging Face cache: `$HF_HUB_CACHE`, else `$HF_HOME/hub`, else
+`$XDG_CACHE_HOME/huggingface/hub`, else `~/.cache/huggingface/hub`. `revision` selects a ref, `main` by default, or a
+commit hash. A model missing from the cache is an error naming the expected
+path; fetch it with `hf download minishlab/potion-retrieval-32M`.
+
+`model_path` instead names a local Model2Vec directory holding
+`tokenizer.json`, `config.json` and `model.safetensors`. `~` and `$VAR` expand
+first; a relative path then resolves against the configuration file that
+declares it. `model` and `model_path` exclude each other; a later
+configuration layer that sets either replaces both. Lint downloads no models,
+calls no servers and runs no subprocesses. Inference uses the pure Go
 [aikit Model2Vec implementation](https://github.com/townsendmerino/aikit/tree/v1.16.0/embed)
 and loads the model once, only when a semantic rule runs.
 

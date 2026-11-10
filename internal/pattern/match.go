@@ -21,7 +21,7 @@ const (
 
 var ErrTooMany = errors.New("the query produces too many combinations; anchor it to a skill or section")
 
-var ErrNoModel = errors.New("similar needs a local Model2Vec model; pass --model or set [lint.semantic] model_path")
+var ErrNoModel = errors.New("similar needs a local Model2Vec model; pass --model or set [lint.semantic] model or model_path")
 
 type Resolver interface {
 	Skill(ref string) *markup.Element

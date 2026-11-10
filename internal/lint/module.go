@@ -298,7 +298,10 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 			return nil, nil
 		}
 		if ev.embed == nil && ev.failed == nil {
-			ev.embed, ev.failed = similarity.Model(options.Semantic.ModelPath)
+			var dir string
+			if dir, ev.failed = options.Semantic.Dir(); ev.failed == nil {
+				ev.embed, ev.failed = similarity.Model(dir)
+			}
 		}
 		if ev.failed != nil {
 			return nil, ev.failed
@@ -335,7 +338,7 @@ func (ev *evaluation) clause(s *spec, rule *pattern.Rule, options Options) ([]Di
 		}
 		d.Method = rule.Method
 		if rule.Query.Semantic {
-			d.Model = options.Semantic.ModelPath
+			d.Model = options.Semantic.Name()
 		}
 		if len(rule.Shared) == 2 {
 			if a, b := capture(row, rule.Shared[0]), capture(row, rule.Shared[1]); a != nil && b != nil {
