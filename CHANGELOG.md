@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.0-alpha.35](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.34...v0.1.0-alpha.35) (2026-11-10)
+
+
+### Features
+
+* **lint:** consult XDG_CACHE_HOME for the Hugging Face cache ([0b3ffc3](https://github.com/srnnkls/henia/commit/0b3ffc3debba14e8c6a60366a0054177d5921ff2))
+* **lint:** resolve [lint.semantic] model from a Hugging Face repo id ([cb4ecf4](https://github.com/srnnkls/henia/commit/cb4ecf4ae75f62a354ea4c20824d7fb8abb3341e))
+* **lint:** resolve [lint.semantic] model from a Hugging Face repo id ([467193d](https://github.com/srnnkls/henia/commit/467193d633c8588dda7f12782697a7b6e7ab17c2))
+
 ## [0.1.0-alpha.34](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.33...v0.1.0-alpha.34) (2026-11-06)
 
 
