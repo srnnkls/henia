@@ -277,6 +277,12 @@ func withLocal(path string, projectData []byte) ([]byte, error) {
 	if err := toml.Unmarshal(localData, &local); err != nil {
 		return nil, fmt.Errorf("%s: %w", deps.Local(path), err)
 	}
+	if err := flattenSlots(project); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if err := flattenSlots(local); err != nil {
+		return nil, fmt.Errorf("%s: %w", deps.Local(path), err)
+	}
 	root, err := layerRoot(path)
 	if err != nil {
 		return nil, err
@@ -480,6 +486,47 @@ func extendArrays(merged, left, right map[string]any, path []string) {
 	merged[key] = items
 }
 
+// flattenSlots keys a layer's [slots] table by full slot name, so a nested
+// [slots.code.style] names the same slot as [slots."code.style"]. Arrays are
+// slot options; tables extend the slot name.
+func flattenSlots(layer map[string]any) error {
+	slots, ok := layer["slots"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	flat := map[string]any{}
+	var walk func(name string, table map[string]any) error
+	walk = func(name string, table map[string]any) error {
+		options := map[string]any{}
+		for key, value := range table {
+			sub, ok := value.(map[string]any)
+			switch {
+			case ok:
+				if err := walk(strings.TrimPrefix(name+"."+key, "."), sub); err != nil {
+					return err
+				}
+			case name == "":
+				return fmt.Errorf("slots.%s: want a slot table", key)
+			default:
+				options[key] = value
+			}
+		}
+		if len(options) == 0 {
+			return nil
+		}
+		if _, ok := flat[name]; ok {
+			return fmt.Errorf("slots.%s: configured twice; use one table per slot", name)
+		}
+		flat[name] = options
+		return nil
+	}
+	if err := walk("", slots); err != nil {
+		return err
+	}
+	layer["slots"] = flat
+	return nil
+}
+
 // layer is one henia.toml above the bundled defaults, with the directory its
 // relative paths resolve against.
 type layer struct {
@@ -501,6 +548,9 @@ func decode(projectRoot, userRoot string, layers []layer, home bool) (*Config, e
 	values := make([]map[string]any, len(layers))
 	for i, l := range layers {
 		if err := toml.Unmarshal(l.data, &values[i]); err != nil {
+			return nil, err
+		}
+		if err := flattenSlots(values[i]); err != nil {
 			return nil, err
 		}
 	}
