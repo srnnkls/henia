@@ -75,6 +75,55 @@ func TestSlotOptions(t *testing.T) {
 	}
 }
 
+func TestSlotOptionsNestedTables(t *testing.T) {
+	user := []byte("[slots.code.style]\ndisable = [\"loqui:loqui\"]\n[slots.code.style.python]\ndisable = [\"loqui:py\"]\n")
+	project := []byte("[slots.implement.approach]\nprovide = [\"ponytail:ponytail\"]\n[slots.\"code.style\"]\ndisable = [\"tropos:style\"]\n")
+	cfg, err := decodeLayers(t.TempDir(), t.TempDir(), user, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][]string{"code.style": {"loqui:loqui", "tropos:style"}, "code.style.python": {"loqui:py"}}
+	if got := cfg.DisabledProviders(); !reflect.DeepEqual(got, want) {
+		t.Errorf("disabled = %v, want %v", got, want)
+	}
+	if got := cfg.ProvidedSkills(); !reflect.DeepEqual(got, map[string][]string{"implement.approach": {"ponytail:ponytail"}}) {
+		t.Errorf("provided = %v", got)
+	}
+}
+
+func TestSlotOptionsRejectsBothSpellingsInOneLayer(t *testing.T) {
+	project := []byte("[slots.\"code.style\"]\ndisable = [\"a:a\"]\n[slots.code.style]\nprovide = [\"b:b\"]\n")
+	if _, err := decodeLayers(t.TempDir(), t.TempDir(), nil, project); err == nil || !strings.Contains(err.Error(), "slots.code.style: configured twice") {
+		t.Fatalf("err = %v; want a duplicate slot error", err)
+	}
+}
+
+func TestSlotOptionsLocalLayerUsesEitherSpelling(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dir := t.TempDir()
+	path := filepath.Join(dir, "henia.toml")
+	if err := os.WriteFile(path, []byte("[slots.\"code.style\"]\ndisable = [\"a:a\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "henia.local.toml"), []byte("[slots.code.style]\ndisable = [\"b:b\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.DisabledProviders()["code.style"]; !reflect.DeepEqual(got, []string{"a:a", "b:b"}) {
+		t.Errorf("disabled = %v", got)
+	}
+}
+
+func TestSlotOptionsRejectsUnknownOption(t *testing.T) {
+	project := []byte("[slots.code.style]\ndisbale = [\"a:a\"]\n")
+	if _, err := decodeLayers(t.TempDir(), t.TempDir(), nil, project); err == nil || !strings.Contains(err.Error(), "disbale") {
+		t.Fatalf("err = %v; want an unknown key error", err)
+	}
+}
+
 func TestLinksResourcesLayersTheLocalFileOverThePackage(t *testing.T) {
 	user := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", user)
