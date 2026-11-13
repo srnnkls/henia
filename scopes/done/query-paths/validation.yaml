@@ -1,0 +1,84 @@
+metadata:
+  issue_type: Task
+  created: 2026-11-13
+  questions_used: 4
+  questions_limit: 4
+  depth: standard
+  approach: "Repeatable --path replaces the library corpus; lint's walker shared with a file filter; library.Documents builds the corpus"
+  source: scope
+ambiguity_scan:
+  scope: {status: clear, gaps: []}
+  behavior: {status: clear, gaps: []}
+  data_model: {status: clear, gaps: []}
+  constraints: {status: clear, gaps: []}
+  edge_cases: {status: clear, gaps: []}
+  integration: {status: clear, gaps: []}
+  terminology: {status: clear, gaps: []}
+  conventions: {status: clear, gaps: []}
+clarification_sessions:
+  - id: S001
+    timestamp: 2026-11-13
+    questions:
+      - {id: Q001, question: "Validation depth?", answer: "Standard", area: scope, doc_updates: []}
+      - {id: Q002, question: "Work type?", answer: "Task", area: scope, doc_updates: [{file: scope.md, section: frontmatter, action: set}]}
+      - {id: Q003, question: "How are arbitrary trees passed?", answer: "--path flag", area: behavior, doc_updates: [{file: scope.md, section: Decisions, action: AD-1}]}
+      - {id: Q004, question: "Which files does a directory yield?", answer: "All .md, skills grouped", area: data_model, doc_updates: [{file: scope.md, section: Decisions, action: AD-3, AD-4: ''}]}
+  - id: S002
+    timestamp: 2026-11-13
+    questions:
+      - {id: Q005, question: "Two --path skills share a directory name: reject, qualify or last wins?", answer: "Qualify ids", area: data_model, doc_updates: [{file: scope.md, section: Decisions, action: AD-6, AD-7: ''}, {file: scope.md, section: Requirements, action: FR-6, TR-2: ''}]}
+      - {id: Q006, question: "Library flags and a missing path among several under --path?", answer: "Strict: library not opened, --package/--harness/--canonical conflict, any missing path aborts", area: behavior, doc_updates: [{file: scope.md, section: Decisions, action: AD-2, AD-8: ''}, {file: scope.md, section: Requirements, action: FR-8, FR-9: ''}]}
+assumptions:
+  - id: A001
+    area: behavior
+    question: "Does --path replace the library or add to it?"
+    assumed: "Replaces it; --package beside --path is an error message"
+    load_bearing: true
+    status: confirmed
+    source: scope
+  - id: A002
+    area: integration
+    question: "Where does the shared walker live?"
+    assumed: "internal/artifact beside artifact.Walk, with gitIgnored; lint and query both call it"
+    load_bearing: true
+    status: revised
+    source: scope
+  - id: A003
+    area: behavior
+    question: "Are --path files rendered for the harness?"
+    assumed: "No; read as authored, and --canonical beside --path is a conflict (FR-9)"
+    load_bearing: false
+    status: revised
+    source: scope
+  - id: A004
+    area: data_model
+    question: "What is a colliding skill's qualified id?"
+    assumed: "Its collected directory path in FR-5 form; bare name resolves to no skill"
+    load_bearing: true
+    status: confirmed
+    source: scope-review
+  - id: A005
+    area: integration
+    question: "Does the address function move to internal/library for lint?"
+    assumed: "No; no consumer in this scope, so it stays in internal/cli"
+    load_bearing: false
+    status: confirmed
+    source: scope-review
+review_config:
+  reasoning_effort: medium
+  reviewers: [peer-terra, opus, peer-luna]
+review_gate:
+  status: passed
+  reviewers: [claude-opus, peer-gpt5.6-terra, peer-gpt5.6-luna]
+  reviewed_at: "2026-11-13"
+  blocking_resolved: 1
+  deferred_nits: []
+  rounds:
+    - {round: 1, report_dir: .tropos/peer/scope-query-paths/20261113T145831Z-b77028/review, high: 1, medium: 9, folded: "walker directory filter and root exemption; skill id collisions; overlap dedupe; missing-path and library-flag strictness; omitted named files; FR-5 path form; AC-1 Beta; artifact tests in verification; address move dropped"}
+    - round: 2
+      kind: targeted re-review
+      report_dir: .tropos/peer/scope-query-paths/20261113T150411Z-90b02c/rereview
+      reviewer: claude-opus
+      high: 0
+      medium: 4
+      folded: --project in FR-9; root exemption owned by the query filter (AD-5) with lint vendor pin (AC-9); root skill id and owner search (FR-4, TR-3, AC-10); first argument sets the collected path (FR-7); FR-6 narrowed to bare-name keys

@@ -1,0 +1,41 @@
+batches:
+  - batch: 1
+    tasks: [QPT-001]
+    run: 20261113T154532Z-ea7084
+    initial_review:
+      reviewer: claude-opus
+      reports: {general: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-general, architecture: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-architecture, compliance: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-compliance, abstractions: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-abstractions}
+      gates: {correctness: fail, security: pass, performance: pass, architecture: fail, style: pass, abstractions: fail}
+    findings:
+      - {id: G1, severity: medium, gate: correctness, summary: "named file reached first through a directory --path printed no omitted message", disposition: fixed}
+      - {id: A1, severity: medium, gate: architecture, summary: "pathCorpus restated Corpus.file drop rule; unreadable file got the limits cause", disposition: fixed}
+      - {id: B1, severity: medium, gate: abstractions, summary: "Document.ID reused to rename root skill dropped its frontmatter-name key", disposition: fixed, decision: "user: separate Document.Name (AD-9, TR-4)"}
+    fix_rounds: 1
+    rereview: {reviewer: claude-opus, report: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-rereview, result: "G1, A1, B1 no longer reproduce"}
+    residual:
+      - "omitted message shows the first collected path, not the argument as typed (FR-3 as specified)"
+    deferred: []
+    test_budget: "user authorized tests beyond three for fix round 1"
+  - batch: 2
+    tasks: [QPT-002]
+    run: 20261113T154532Z-ea7084
+    initial_review:
+      reviewer: claude-opus
+      reports: {general: .tropos/peer/query-paths/20261113T154532Z-ea7084/b2-review-general}
+      gates: {correctness: fail, style: pass, performance: pass, security: pass}
+    findings:
+      - {id: D1, severity: medium, gate: correctness, summary: "root-skill id described as base name of the root as given, not the absolute root", disposition: fixed}
+    fix_rounds: 1
+    rereview: {reviewer: orchestrator, result: "D1 trigger reproduced against the built binary: --path . yields id myskill, :id \".\" matches nothing, matching the corrected wording; reviewer confirmation folded into the integration review"}
+    residual: []
+    deferred: []
+integration:
+  run: 20261113T154532Z-ea7084
+  reviewer: claude-opus
+  report: .tropos/peer/query-paths/20261113T154532Z-ea7084/integration
+  gates: {correctness: pass, style: pass, performance: pass, security: pass, architecture: pass, abstractions: pass}
+  validation: "go build/vet ./... clean; go test -count=1 ./... ok; henia query --path docs ok; scope lint clean; 0 behind origin/main"
+  acceptance: "AC-1..AC-12 each have direct test or run evidence"
+  residual:
+    - "a root skill whose directory name collides takes id '.' (e.g. --path . --path ../x/tool); matches FR-6 as written"
+  readiness: ready
