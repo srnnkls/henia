@@ -1,0 +1,22 @@
+scope: query-paths
+code: QPT
+next_id: 3
+tasks:
+  - id: QPT-001
+    content: "henia query --path: shared walker with directory and file filters plus gitIgnored moved from lint collect into internal/artifact; Document.ID for colliding skill ids; corpus from library.Documents without opening the library; path addresses, omitted-file, missing-path and flag-conflict messages (AD-2..AD-8, FR-1..FR-9, TR-1..TR-3, AC-1..AC-10)"
+    status: done
+    active_form: "Querying arbitrary Markdown trees"
+    depends_on: []
+    files: [internal/artifact/walk.go, internal/artifact/walk_test.go, internal/lint/lint.go, internal/lint/lint_test.go, internal/library/corpus.go, internal/library/corpus_test.go, internal/cli/query.go, internal/cli/cli_test.go]
+    domain: go
+  - id: QPT-002
+    content: "Document --path in docs/query.md and the query guide"
+    status: pending
+    active_form: "Documenting henia query --path"
+    depends_on: [QPT-001]
+    files: [docs/query.md]
+meta:
+  created: 2026-11-13
+  last_updated: 2026-11-13
+  progress: 1/2
+phases: []

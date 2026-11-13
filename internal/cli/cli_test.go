@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -261,5 +262,135 @@ func TestQuerySortKeepsRowsDifferingInSortVariable(t *testing.T) {
 	}
 	if got, want := strings.Join(vars, " "), "?l=bash ?l=go"; got != want {
 		t.Errorf("--sort ?l variable lines = %q, want %q:\n%s", got, want, out)
+	}
+}
+
+func pathWorkspace(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	dir := t.TempDir()
+	t.Chdir(dir)
+	return dir
+}
+
+func runPathQuery(t *testing.T, args ...string) string {
+	t.Helper()
+	cmd := newQueryCommand()
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs(args)
+	if err := cmd.Execute(); err != nil {
+		t.Errorf("query %v: %v", args, err)
+	}
+	return out.String()
+}
+
+func addresses(output, capture string) []string {
+	var got []string
+	for _, line := range captureLines(output, capture) {
+		got = append(got, strings.Fields(line)[0])
+	}
+	slices.Sort(got)
+	return got
+}
+
+func TestQueryPathCollects(t *testing.T) {
+	dir := pathWorkspace(t)
+	fixture(t, filepath.Join(dir, "notes", "a.md"), "# Alpha\n")
+	fixture(t, filepath.Join(dir, "notes", ".hidden", "b.md"), "# Beta\n")
+	fixture(t, filepath.Join(dir, ".henia", "skills", "lib", "SKILL.md"), "---\nname: lib\ndescription: lib.\n---\n# Library\n")
+	fixture(t, filepath.Join(dir, "docs", "guide.md"), "# Guide\n\n## Usage\n\n```bash\nrun\n```\n")
+	fixture(t, filepath.Join(dir, "misc", "log.txt"), "first paragraph\n\nsecond paragraph\n")
+	fixture(t, filepath.Join(dir, "big.md"), "# Big\n\n"+strings.Repeat("a", 1<<20)+"\n")
+
+	if out := runPathQuery(t, "(heading) @h", "--path", "notes"); !slices.Equal(addresses(out, "h"), []string{"notes/a.md#alpha"}) || !strings.Contains(out, "Alpha") {
+		t.Errorf("--path notes: want one Alpha row at notes/a.md#alpha, got:\n%s", out)
+	}
+	if out := runPathQuery(t, "(heading :level 1) @h", "--path", "."); !strings.Contains(out, "Alpha") || strings.Contains(out, "Beta") || strings.Contains(out, "Library") {
+		t.Errorf("--path .: want Alpha without dot entries or library skills, got:\n%s", out)
+	}
+	if out := runPathQuery(t, "(code :lang \"bash\") @c", "--path", "./docs"); !slices.Equal(addresses(out, "c"), []string{"docs/guide.md#usage"}) {
+		t.Errorf("--path ./docs: want address docs/guide.md#usage, got:\n%s", out)
+	}
+	if out := runPathQuery(t, "(paragraph) @p", "--path", "misc/log.txt"); len(captureLines(out, "p")) != 2 {
+		t.Errorf("--path misc/log.txt: want two paragraph rows, got:\n%s", out)
+	}
+	out := runPathQuery(t, "(heading) @h", "--path", "big.md", "--path", "notes")
+	if !strings.Contains(out, "henia query: big.md: omitted: over 1 MiB, invalid UTF-8 or contains NUL") || !slices.Equal(addresses(out, "h"), []string{"notes/a.md#alpha"}) {
+		t.Errorf("oversized named file: want the omitted message and the notes row, got:\n%s", out)
+	}
+	if out := runPathQuery(t, "(file) @f", "--path", "./docs", "--path", "docs/guide.md"); !slices.Equal(addresses(out, "f"), []string{"docs/guide.md"}) {
+		t.Errorf("overlapping paths: want docs/guide.md once, got:\n%s", out)
+	}
+
+	fixture(t, filepath.Join(dir, "heavy", "a.md"), "# Light\n")
+	fixture(t, filepath.Join(dir, "heavy", "big.md"), "# Heavy\n\n"+strings.Repeat("a", 1<<20)+"\n")
+	out = runPathQuery(t, "(heading) @h", "--path", "heavy", "--path", "heavy/big.md")
+	if !strings.Contains(out, "henia query: heavy/big.md: omitted: over 1 MiB, invalid UTF-8 or contains NUL") || !slices.Equal(addresses(out, "h"), []string{"heavy/a.md#light"}) {
+		t.Errorf("oversized file named after its directory: want the omitted message for heavy/big.md and the heavy/a.md row, got:\n%s", out)
+	}
+}
+
+func TestQueryPathSkillGrouping(t *testing.T) {
+	dir := pathWorkspace(t)
+	skill := "---\nname: tool\ndescription: tool.\n---\n# Tool\n"
+	fixture(t, filepath.Join(dir, "tree", "tool", "SKILL.md"), skill)
+	fixture(t, filepath.Join(dir, "tree", "tool", "ref", "x.md"), "# X\n")
+	fixture(t, filepath.Join(dir, "twin", "a", "tool", "SKILL.md"), skill)
+	fixture(t, filepath.Join(dir, "twin", "b", "tool", "SKILL.md"), skill)
+
+	owned := "(skill :id \"tool\" (file :path \"ref/x.md\")) @s"
+	if out := runPathQuery(t, owned, "--path", "tree"); len(captureLines(out, "s")) != 1 {
+		t.Errorf("--path tree: want the skill owning ref/x.md, got:\n%s", out)
+	}
+	if out := runPathQuery(t, "(skill) @s", "--path", "twin"); !slices.Equal(addresses(out, "s"), []string{"twin/a/tool", "twin/b/tool"}) {
+		t.Errorf("colliding skills: want refs twin/a/tool and twin/b/tool, got:\n%s", out)
+	}
+	if out := runPathQuery(t, "(skill :id \"twin/a/tool\") @s", "--path", "twin"); len(captureLines(out, "s")) != 1 {
+		t.Errorf("colliding skills: want id twin/a/tool, got:\n%s", out)
+	}
+	if out := runPathQuery(t, "(skill :id \"tool\") @s", "--path", "twin"); len(captureLines(out, "s")) != 0 {
+		t.Errorf("colliding skills: bare id must match nothing, got:\n%s", out)
+	}
+
+	t.Chdir(filepath.Join(dir, "tree", "tool"))
+	if out := runPathQuery(t, owned, "--path", "."); len(captureLines(out, "s")) != 1 {
+		t.Errorf("--path . inside the skill: want the skill named after the root, got:\n%s", out)
+	}
+
+	fixture(t, filepath.Join(dir, "bench", "tool", "SKILL.md"), "---\nname: hammer\ndescription: hammer.\n---\n# Hammer\n")
+	fixture(t, filepath.Join(dir, "bench", "other", "SKILL.md"), "---\nname: other\ndescription: other.\n---\n# Other\n\nUse `$hammer`.\n")
+	t.Chdir(filepath.Join(dir, "bench", "tool"))
+	if out := runPathQuery(t, "(skill :id \"other\" (reaches (skill) @t))", "--path", ".", "--path", "../other"); len(captureLines(out, "t")) != 1 {
+		t.Errorf("root skill: want its frontmatter name hammer to resolve the link from other, got:\n%s", out)
+	}
+}
+
+func TestQueryPathMessages(t *testing.T) {
+	dir := pathWorkspace(t)
+	fixture(t, filepath.Join(dir, "notes", "a.md"), "# Alpha\n")
+	if err := os.MkdirAll(filepath.Join(dir, "project"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--path", "notes", "--path", "missing"}, "henia query: missing: no such file or directory"},
+		{[]string{"--path", "notes", "--project", "project"}, "henia query: --path replaces the library; drop --project"},
+		{[]string{"--path", "notes", "--package", "project"}, "henia query: --path replaces the library; drop --package"},
+		{[]string{"--path", "notes", "--harness", "claude"}, "henia query: --path replaces the library; drop --harness"},
+		{[]string{"--path", "notes", "--canonical"}, "henia query: --path replaces the library; drop --canonical"},
+	}
+	for _, c := range cases {
+		out := runPathQuery(t, append([]string{"(heading) @h"}, c.args...)...)
+		if !strings.Contains(out, c.want) || len(captureLines(out, "h")) != 0 {
+			t.Errorf("%v: want %q and no rows, got:\n%s", c.args, c.want, out)
+		}
 	}
 }

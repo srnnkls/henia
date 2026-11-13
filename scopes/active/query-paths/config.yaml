@@ -1,0 +1,9 @@
+version: 1
+epoch:
+  id: 20261113T154532Z-ea7084
+  started_at: "2026-11-13T15:45:42Z"
+  updated_at: "2026-11-13T15:45:42Z"
+routing:
+  tester: {agent: inherit, effort: inherit}
+  implementer: {agent: inherit, effort: inherit}
+  reviewer: {agents: [claude-opus], effort: inherit}

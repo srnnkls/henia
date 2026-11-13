@@ -1,0 +1,18 @@
+batches:
+  - batch: 1
+    tasks: [QPT-001]
+    run: 20261113T154532Z-ea7084
+    initial_review:
+      reviewer: claude-opus
+      reports: {general: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-general, architecture: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-architecture, compliance: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-compliance, abstractions: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-abstractions}
+      gates: {correctness: fail, security: pass, performance: pass, architecture: fail, style: pass, abstractions: fail}
+    findings:
+      - {id: G1, severity: medium, gate: correctness, summary: "named file reached first through a directory --path printed no omitted message", disposition: fixed}
+      - {id: A1, severity: medium, gate: architecture, summary: "pathCorpus restated Corpus.file drop rule; unreadable file got the limits cause", disposition: fixed}
+      - {id: B1, severity: medium, gate: abstractions, summary: "Document.ID reused to rename root skill dropped its frontmatter-name key", disposition: fixed, decision: "user: separate Document.Name (AD-9, TR-4)"}
+    fix_rounds: 1
+    rereview: {reviewer: claude-opus, report: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-rereview, result: "G1, A1, B1 no longer reproduce"}
+    residual:
+      - "omitted message shows the first collected path, not the argument as typed (FR-3 as specified)"
+    deferred: []
+    test_budget: "user authorized tests beyond three for fix round 1"

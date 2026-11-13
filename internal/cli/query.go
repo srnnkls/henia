@@ -6,14 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 	henia "github.com/srnnkls/henia"
+	"github.com/srnnkls/henia/internal/artifact"
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/markup"
@@ -32,6 +35,7 @@ func newQueryCommand() *cobra.Command {
 	var grammar, canonical bool
 	var model string
 	var sort string
+	var paths []string
 	cmd := &cobra.Command{
 		Use:     "query '<pattern>...'",
 		Aliases: []string{"q"},
@@ -53,13 +57,26 @@ a skill preload never aborts.`,
 				fmt.Fprint(out, explain(args[0], err))
 				return nil
 			}
-			lib := flags.open(cmd)
-			var rendering *library.Rendering
-			if !canonical {
-				r := newRenderer(detectHarness(flags.harness), lib)
-				rendering = &library.Rendering{Body: r.body, Reference: r.reference, Providers: provisions(flags.project, lib)}
+			var corpus *library.Corpus
+			if len(paths) > 0 {
+				for _, name := range []string{"project", "package", "harness", "canonical"} {
+					if cmd.Flags().Changed(name) {
+						fmt.Fprintf(out, "henia query: --path replaces the library; drop --%s\n", name)
+						return nil
+					}
+				}
+				if corpus = pathCorpus(cmd, paths); corpus == nil {
+					return nil
+				}
+			} else {
+				lib := flags.open(cmd)
+				var rendering *library.Rendering
+				if !canonical {
+					r := newRenderer(detectHarness(flags.harness), lib)
+					rendering = &library.Rendering{Body: r.body, Reference: r.reference, Providers: provisions(flags.project, lib)}
+				}
+				corpus = lib.Corpus(rendering)
 			}
-			corpus := lib.Corpus(rendering)
 			for _, problem := range corpus.Problems {
 				fmt.Fprintf(cmd.ErrOrStderr(), "henia: %s\n", problem)
 			}
@@ -97,7 +114,94 @@ a skill preload never aborts.`,
 	cmd.Flags().BoolVar(&output.count, "count", false, "Print the number of rows")
 	cmd.Flags().StringVar(&sort, "sort", "", "Order rows by ?var or @capture.key, descending with a leading -")
 	cmd.Flags().IntVar(&output.limit, "limit", 0, "Print at most N rows")
+	cmd.Flags().StringArrayVar(&paths, "path", nil, "Markdown directory or file to query instead of the library (repeatable)")
 	return cmd
+}
+
+// pathCorpus builds the corpus from the files under paths, printing problems
+// to the command's output. It returns nil when the query must not run.
+func pathCorpus(cmd *cobra.Command, paths []string) *library.Corpus {
+	out := cmd.OutOrStdout()
+	missing := false
+	for _, p := range paths {
+		if _, err := os.Stat(p); err != nil {
+			fmt.Fprintf(out, "henia query: %s: %v\n", p, cmp.Or(errors.Unwrap(err), err))
+			missing = true
+		}
+	}
+	if missing {
+		return nil
+	}
+	keepDir := func(root, path string, info fs.FileInfo) bool {
+		return path == root || !strings.HasPrefix(info.Name(), ".") && !artifact.SkippedDir(info.Name())
+	}
+	keepFile := func(root, path string, info fs.FileInfo) bool {
+		return path == root || !strings.HasPrefix(info.Name(), ".") && strings.EqualFold(filepath.Ext(path), ".md")
+	}
+	collected := map[string]string{}
+	named := map[string]bool{}
+	var docs []library.Document
+	for _, root := range paths {
+		found, err := artifact.Files(cmd.Context(), root, keepDir, keepFile)
+		if err != nil {
+			fmt.Fprintf(out, "henia query: %v\n", err)
+			return nil
+		}
+		for _, path := range found {
+			absolute, err := filepath.Abs(path)
+			if err != nil {
+				continue
+			}
+			if path == root {
+				named[absolute] = true
+			}
+			if _, seen := collected[absolute]; seen {
+				continue
+			}
+			doc := library.Document{Path: filepath.Clean(path)}
+			collected[absolute] = doc.Path
+			if filepath.Base(path) == "SKILL.md" {
+				doc.Kind = "skill"
+			}
+			docs = append(docs, doc)
+		}
+	}
+	skillIDs(docs)
+	corpus := library.Documents(docs)
+	for _, o := range corpus.Omitted {
+		absolute, err := filepath.Abs(o.Path)
+		if err != nil || !named[absolute] {
+			continue
+		}
+		fmt.Fprintf(out, "henia query: %s: omitted: %v\n", collected[absolute], cmp.Or(errors.Unwrap(o.Cause), o.Cause))
+	}
+	return corpus
+}
+
+// skillIDs names each skill after its absolute directory, qualifying skills
+// whose names collide by their collected directory path.
+func skillIDs(docs []library.Document) {
+	names := map[string]int{}
+	name := func(d library.Document) string {
+		dir, _ := filepath.Abs(filepath.Dir(d.Path))
+		return filepath.Base(dir)
+	}
+	for _, d := range docs {
+		if d.Kind == "skill" {
+			names[name(d)]++
+		}
+	}
+	for i, d := range docs {
+		if d.Kind != "skill" {
+			continue
+		}
+		switch dir := filepath.Dir(d.Path); {
+		case names[name(d)] > 1:
+			docs[i].ID = filepath.ToSlash(dir)
+		case name(d) != filepath.Base(dir):
+			docs[i].Name = name(d)
+		}
+	}
 }
 
 // modelDir resolves --model, a directory or a Hugging Face repo id, falling back
@@ -293,13 +397,18 @@ func describe(e *markup.Element) string {
 }
 
 func address(e *markup.Element) string {
-	skill := e.Enclosing("skill")
-	if skill == nil {
+	var addr string
+	file := e.Enclosing("file")
+	switch skill := e.Enclosing("skill"); {
+	case skill != nil:
+		addr = skill.Attrs["ref"]
+		if file != nil && file.Attrs["main"] != "true" {
+			addr += "/" + file.Attrs["path"]
+		}
+	case file != nil:
+		addr = file.Attrs["path"]
+	default:
 		return ""
-	}
-	addr := skill.Attrs["ref"]
-	if file := e.Enclosing("file"); file != nil && file.Attrs["main"] != "true" {
-		addr += "/" + file.Attrs["path"]
 	}
 	if section := e.Enclosing("section"); section != nil && section.Attrs["id"] != "" {
 		addr += "#" + section.Attrs["id"]

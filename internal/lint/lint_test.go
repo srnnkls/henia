@@ -261,6 +261,15 @@ func TestShownSectionLinks(t *testing.T) {
 	}
 }
 
+func TestVendorRootYieldsNothing(t *testing.T) {
+	vendor := filepath.Join(t.TempDir(), "vendor")
+	write(t, vendor, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\n[broken](absent.md)\n")
+	diagnostics, err := lint.Run(t.Context(), []string{vendor}, lint.Options{})
+	if err == nil || !strings.Contains(err.Error(), "no skills, commands, agents or skill resources found") || len(diagnostics) != 0 {
+		t.Fatalf("lint vendor: want nothing collected, got %+v, %v", diagnostics, err)
+	}
+}
+
 func TestWalkLintsArtifactsAndSkillResources(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "skills/one/SKILL.md", "---\nname: one\ndescription: First skill\n---\n\n[broken](absent.md)\n")
