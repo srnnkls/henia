@@ -11,12 +11,12 @@ tasks:
     domain: go
   - id: QPT-002
     content: "Document --path in docs/query.md and the query guide"
-    status: pending
+    status: done
     active_form: "Documenting henia query --path"
     depends_on: [QPT-001]
     files: [docs/query.md]
 meta:
   created: 2026-11-13
   last_updated: 2026-11-13
-  progress: 1/2
+  progress: 2/2
 phases: []

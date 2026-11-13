@@ -2,14 +2,13 @@ checkpoint:
   scope_name: query-paths
   scope_path: scopes/active/query-paths
   branch: feat/query-paths
-  last_commit: 7854e81
+  last_commit: 7e20d86
   updated_at: "2026-11-13T15:45:42Z"
   base_drift: {base: origin/main, behind: 0, ahead: 0, checked_at: "2026-11-13T15:45:42Z"}
 
   batch:
-    number: 1
-    next: {batch: 2, tasks: [QPT-002], phase: red}
-    tasks: [QPT-001]
+    number: 2
+    tasks: [QPT-002]
     phase: complete
     status: completed
 
@@ -22,14 +21,8 @@ checkpoint:
         - {agent: claude-opus, effort: inherit, class: native}
 
   reports:
-    tester:
-      QPT-001: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-tester-QPT-001
     implementer:
-      QPT-001: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-implementer-QPT-001
-    review:
-      general: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-general
-      architecture: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-architecture
-      compliance: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-compliance
-      abstractions: .tropos/peer/query-paths/20261113T154532Z-ea7084/b1-review-abstractions
+      QPT-002: /Users/srnnkls/projects/henia/.tropos/peer/query-paths/20261113T154532Z-ea7084/b2-implementer-QPT-002
 
-      rereview: /Users/srnnkls/projects/henia/.tropos/peer/query-paths/20261113T154532Z-ea7084/b1-rereview
+    review:
+      general: /Users/srnnkls/projects/henia/.tropos/peer/query-paths/20261113T154532Z-ea7084/b2-review-general
