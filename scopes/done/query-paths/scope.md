@@ -1,6 +1,6 @@
 ---
 created: 2026-11-13
-status: active
+status: done
 issue_type: Task
 ---
 
