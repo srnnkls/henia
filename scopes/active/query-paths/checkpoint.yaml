@@ -9,7 +9,7 @@ checkpoint:
   batch:
     number: 2
     tasks: [QPT-002]
-    phase: complete
+    phase: integration
     status: completed
 
   routing_snapshot:
