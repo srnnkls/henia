@@ -326,3 +326,34 @@ from the top of the rendered text. `--harness` picks another harness.
 `--canonical` reads skills as authored, with lines as in the files on disk;
 there, a template action that opens a code fence or heading in one branch leaves
 the Markdown after it unstructured. Resources are never rendered.
+
+## Paths
+
+`--path DIR` or `--path FILE` queries a Markdown tree in place of the library,
+with the same patterns and output. It repeats, like `--package`:
+
+```console
+$ henia query '(heading :level 1) @h' --path docs --limit 3
+@h  docs/build.md#building  L1  heading  Building
+@h  docs/components.md#components  L1  heading  Components
+@h  docs/lint-rules.md#lint-rules  L1  heading  Lint rules
+henia query: 3 of 10 rows shown
+```
+
+- A directory yields every `.md` file below it. Below it, dot entries,
+  git-ignored paths, `.git`, `node_modules` and `vendor` are skipped.
+- A file is read whatever its extension or location. One over 1 MiB, not
+  valid UTF-8, containing NUL or unreadable is omitted with a
+  `henia query: <path>: omitted: …` line, and the query runs over the rest.
+- A file's path is its `--path` argument, cleaned, joined with the path below
+  it. A capture outside any skill prints that path as its address.
+- A directory holding `SKILL.md` is a `skill` owning the Markdown below it as
+  its resources, with the directory name as its id; a skill at the root of a
+  `--path` takes the name of the root directory, so `--path .` names it after
+  the working directory. Skills that share a directory name each take their
+  directory path instead.
+- A file reached through several arguments is read once, under the first.
+- A missing path, or `--project`, `--package`, `--harness` or `--canonical`
+  beside `--path`, stops the query with a message.
+
+Files under `--path` are read as authored, never rendered.

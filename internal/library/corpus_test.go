@@ -234,3 +234,34 @@ func TestDirectiveNumberAndListAttributesTypedByDeclaration(t *testing.T) {
 		t.Errorf(":tags \"beta\" matched lines %v, want [8]: a declared list matches by element, the undeclared other stays a string", got)
 	}
 }
+
+func TestDocumentsIDKeysSkillOnlyByID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tool", "SKILL.md")
+	write(t, path, "---\nname: hammer\ndescription: h.\n---\n# Tool\n")
+	corpus := Documents([]Document{{Path: path, Kind: "skill", ID: "tree/tool"}})
+	skill := corpus.Skill("tree/tool")
+	if skill == nil || skill.Attrs["id"] != "tree/tool" || skill.Attrs["ref"] != "tree/tool" {
+		t.Fatalf("Skill(tree/tool) = %+v, want id and ref tree/tool", skill)
+	}
+	for _, key := range []string{"tool", "hammer"} {
+		if corpus.Skill(key) != nil {
+			t.Errorf("Skill(%q) resolved; a set ID keys the skill only by it", key)
+		}
+	}
+}
+
+func TestDocumentsNameReplacesDirectoryKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tool", "SKILL.md")
+	write(t, path, "---\nname: hammer\ndescription: h.\n---\n# Tool\n")
+	corpus := Documents([]Document{{Path: path, Kind: "skill", Name: "workbench"}})
+	skill := corpus.Skill("workbench")
+	if skill == nil || skill.Attrs["id"] != "workbench" || skill.Attrs["ref"] != "workbench" {
+		t.Fatalf("Skill(workbench) = %+v, want id and ref workbench", skill)
+	}
+	if corpus.Skill("hammer") != skill {
+		t.Errorf("Skill(hammer) does not resolve to the named skill; Name keeps the frontmatter-name key")
+	}
+	if corpus.Skill("tool") != nil {
+		t.Errorf("Skill(tool) resolved; Name replaces the directory-name key")
+	}
+}

@@ -27,6 +27,7 @@ const maxCorpusFile = 1 << 20
 type Corpus struct {
 	Root      *markup.Element
 	Problems  []string
+	Omitted   []Omission
 	lib       *Library
 	skills    map[string]*markup.Element
 	rendering *Rendering
@@ -34,6 +35,15 @@ type Corpus struct {
 	decls     map[*markup.Element]map[string]components.Declaration
 	typed     map[*markup.Element]map[string]any
 }
+
+// Omission is a file the corpus leaves out, with its cause.
+type Omission struct {
+	Path  string
+	Cause error
+}
+
+// ErrLimits is the cause of a file left out for its size or encoding.
+var ErrLimits = errors.New("over 1 MiB, invalid UTF-8 or contains NUL")
 
 type Rendering struct {
 	Body      func(Entry) string
@@ -57,8 +67,14 @@ func sectionAddress(ref, section string) string {
 var slotPreload = regexp.MustCompile("`henia slots --(?:markdown|inline)((?: [A-Za-z0-9_.-]+)+)`")
 
 type Document struct {
-	Path       string
-	Kind       string
+	Path string
+	Kind string
+	// ID replaces the directory name as the id and ref of the skill a SKILL.md
+	// document opens, which is keyed only by it.
+	ID string
+	// Name replaces the directory name as the id and ref of the skill a SKILL.md
+	// document opens, keeping its frontmatter-name key.
+	Name       string
 	Dependency bool
 	Render     func() (string, *regexp.Regexp)
 }
@@ -102,13 +118,15 @@ func Documents(docs []Document) *Corpus {
 		if filepath.Base(d.Path) != "SKILL.md" {
 			continue
 		}
-		id := filepath.Base(filepath.Dir(d.Path))
+		id := cmp.Or(d.ID, d.Name, filepath.Base(filepath.Dir(d.Path)))
 		skill := &markup.Element{Type: "skill", Attrs: map[string]string{"id": id, "name": id, "ref": id, "dir": filepath.Dir(d.Path)}}
 		if data, err := os.ReadFile(d.Path); err == nil {
 			if art, err := artifact.Parse(data); err == nil {
 				if name, ok := art.Frontmatter["name"].(string); ok && name != "" {
 					skill.Attrs["name"] = name
-					c.skills[name] = skill
+					if d.ID == "" {
+						c.skills[name] = skill
+					}
 				}
 			}
 		}
@@ -140,9 +158,12 @@ func Documents(docs []Document) *Corpus {
 			continue
 		}
 		owner := ""
-		for dir := filepath.Dir(d.Path); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+		for dir := filepath.Dir(d.Path); ; dir = filepath.Dir(dir) {
 			if dirs[dir] != nil {
 				owner = dir
+				break
+			}
+			if dir == filepath.Dir(dir) {
 				break
 			}
 		}
@@ -220,7 +241,12 @@ func (c *Corpus) Skill(ref string) *markup.Element {
 
 func (c *Corpus) file(parent *markup.Element, physical, rel, kind string, render func() (string, *regexp.Regexp)) {
 	data, err := os.ReadFile(physical)
-	if err != nil || len(data) > maxCorpusFile || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
+	if err != nil {
+		c.Omitted = append(c.Omitted, Omission{Path: physical, Cause: err})
+		return
+	}
+	if len(data) > maxCorpusFile || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
+		c.Omitted = append(c.Omitted, Omission{Path: physical, Cause: ErrLimits})
 		return
 	}
 	attrs := map[string]string{"path": rel, "main": fmt.Sprint(rel == "SKILL.md"), "kind": kind, "file": physical}

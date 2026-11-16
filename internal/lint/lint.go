@@ -4,10 +4,8 @@ package lint
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -111,47 +109,32 @@ func collect(ctx context.Context, paths []string) ([]string, error) {
 		skillDirs[dir] = found
 		return found
 	}
+	keepDir := func(_, path string, info fs.FileInfo) bool {
+		return !artifact.SkippedDir(info.Name()) &&
+			!(filepath.Base(filepath.Dir(path)) == ".henia" && slices.Contains([]string{"build", "cache", "state", "lint"}, info.Name()))
+	}
+	keepFile := func(root, path string, _ fs.FileInfo) bool {
+		if !strings.EqualFold(filepath.Ext(path), ".md") {
+			return false
+		}
+		absolute, err := filepath.Abs(path)
+		return err == nil && (path == root || artifactKind(path) != artifact.TypeUnknown || inSkill(filepath.Dir(absolute)))
+	}
 	var files []string
 	for _, root := range paths {
-		ignored, err := gitIgnored(ctx, root)
+		found, err := artifact.Files(ctx, root, keepDir, keepFile)
 		if err != nil {
 			return nil, err
 		}
-		err = artifact.Walk(root, func(path string, info fs.FileInfo) error {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			if absolute, err := filepath.Abs(path); err == nil && path != root && ignored[absolute] {
-				if info.IsDir() {
-					return fs.SkipDir
-				}
-				return nil
-			}
-			if info.IsDir() {
-				if slices.Contains([]string{".git", "node_modules", "vendor"}, info.Name()) ||
-					filepath.Base(filepath.Dir(path)) == ".henia" && slices.Contains([]string{"build", "cache", "state", "lint"}, info.Name()) {
-					return fs.SkipDir
-				}
-				return nil
-			}
-			if !info.Mode().IsRegular() || !strings.EqualFold(filepath.Ext(path), ".md") {
-				return nil
-			}
+		for _, path := range found {
 			absolute, err := filepath.Abs(path)
 			if err != nil {
-				return err
-			}
-			if path != root && artifactKind(path) == artifact.TypeUnknown && !inSkill(filepath.Dir(absolute)) {
-				return nil
+				return nil, err
 			}
 			if !seen[absolute] {
 				files = append(files, path)
 				seen[absolute] = true
 			}
-			return nil
-		})
-		if err != nil {
-			return nil, fmt.Errorf("scan %s: %w", root, err)
 		}
 	}
 	slices.Sort(files)
@@ -165,31 +148,4 @@ func artifactKind(path string) artifact.Type {
 		}
 	}
 	return artifact.TypeUnknown
-}
-
-// gitIgnored returns the absolute paths Git ignores below root. Ignored
-// directories are reported once rather than per file. Outside a repository,
-// or without git, nothing is ignored.
-func gitIgnored(ctx context.Context, root string) (map[string]bool, error) {
-	dir, err := filepath.Abs(root)
-	if err != nil {
-		return nil, err
-	}
-	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
-		dir = filepath.Dir(dir)
-	}
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory").Output()
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
-		}
-		return nil, nil
-	}
-	ignored := make(map[string]bool)
-	for entry := range strings.SplitSeq(string(out), "\x00") {
-		if entry != "" {
-			ignored[filepath.Join(dir, filepath.FromSlash(strings.TrimSuffix(entry, "/")))] = true
-		}
-	}
-	return ignored, nil
 }
