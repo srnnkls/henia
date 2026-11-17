@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-alpha.36](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.35...v0.1.0-alpha.36) (2026-11-17)
+
+
+### Features
+
+* **config:** accept nested [slots] tables as dotted slot names ([#94](https://github.com/srnnkls/henia/issues/94)) ([44edb83](https://github.com/srnnkls/henia/commit/44edb832af62fbd41475e345747e370273486d5d))
+* **query:** query arbitrary Markdown trees with --path ([#95](https://github.com/srnnkls/henia/issues/95)) ([16020cb](https://github.com/srnnkls/henia/commit/16020cb42c0f7f575b8b7810c3fae1e06d1a58e1))
+
 ## [0.1.0-alpha.35](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.34...v0.1.0-alpha.35) (2026-11-10)
 
 
