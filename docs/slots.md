@@ -205,6 +205,10 @@ $ henia slots implement.approach
 implement.approach	dependency	henia show ponytail:ponytail
 ```
 
+A slot table may also nest by segment: `[slots.implement.approach]` names the
+same slot as `[slots."implement.approach"]`. One file configures each slot
+once, in either spelling.
+
 A reference that names no skill in the library is an `invalid` row whose path
 is the configuration file. The user and project `henia.toml` concatenate their
 `provide` lists; a reference both name provides once.
