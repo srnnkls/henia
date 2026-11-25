@@ -343,6 +343,26 @@ test.approach.mobile invalid data/henia/packages/global/acme/henia.toml
 exit 0
 ```
 
+## Skill slots
+
+`--skill` adds every slot a skill applies, and each `--key` requests those
+slots keyed, so a slot's own providers and the key's resolve together.
+
+```scrut
+$ skill "$G/tropos/skills/applier" '' '\nStyle:\n\n:slot[code.style]\n\nCommits:\n\n:slot[git.commits]{.inline}\n'
+> slots "$T" --skill tropos:applier --key go
+code.style global henia show acme:style
+git.commits global henia show tropos:gcommits
+code.style.go global henia show tropos:loqui
+exit 0
+```
+
+```scrut
+$ slots "$T" --key go
+Error: --key needs --skill
+exit 1
+```
+
 ## Harness files
 
 A Markdown harness file renders its slots when it is built, since nothing
