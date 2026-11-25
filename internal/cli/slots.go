@@ -14,12 +14,14 @@ import (
 	"github.com/srnnkls/henia/internal/config"
 	"github.com/srnnkls/henia/internal/library"
 	"github.com/srnnkls/henia/internal/lint"
+	"github.com/srnnkls/henia/internal/preload"
 	"github.com/srnnkls/henia/internal/slots"
 )
 
 func newSlotsCommand() *cobra.Command {
 	var flags runtimeFlags
 	var check, explain, asJSON, markdown, inline bool
+	var skills, keys []string
 	cmd := &cobra.Command{
 		Use:   "slots [slot...]",
 		Short: "Resolve the providers of skill slots across the library",
@@ -37,7 +39,10 @@ types it, or of every slot without any; --json emits the same as JSON.
 --markdown lists the providers as Markdown items naming the command or value
 each one points to, and --inline prints their content instead: a skill or
 section body, a command, a text or a file. A :slot[...] directive renders as
---markdown, or as --inline when it carries {.inline}.`,
+--markdown, or as --inline when it carries {.inline}.
+--skill adds every slot the named skills apply, and each --key requests every
+added slot as <slot>.<key>, so a slot's own providers and those keyed by the
+key resolve together.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if check && (len(args) > 0 || explain || asJSON || markdown || inline) {
 				return fmt.Errorf("--check takes no slots, --explain, --json, --markdown or --inline")
@@ -45,10 +50,23 @@ section body, a command, a text or a file. A :slot[...] directive renders as
 			if moreThanOne(explain, asJSON, markdown, inline) {
 				return fmt.Errorf("--explain, --json, --markdown and --inline are exclusive")
 			}
-			if !check && !explain && !asJSON && len(args) == 0 {
+			if check && len(skills) > 0 {
+				return fmt.Errorf("--check takes no --skill")
+			}
+			if len(keys) > 0 && len(skills) == 0 {
+				return fmt.Errorf("--key needs --skill")
+			}
+			if !check && !explain && !asJSON && len(args) == 0 && len(skills) == 0 {
 				return nil
 			}
 			lib := flags.open(cmd)
+			if len(skills) > 0 {
+				applied, err := appliedSlots(lib, newRenderer(detectHarness(flags.harness), lib), skills)
+				if err != nil {
+					return err
+				}
+				args = append(args, keyedSlots(applied, keys)...)
+			}
 			resolution, err := resolveSlots(flags.project, lib)
 			if err != nil {
 				return err
@@ -83,8 +101,44 @@ section body, a command, a text or a file. A :slot[...] directive renders as
 	cmd.Flags().BoolVar(&explain, "explain", false, "Show why each provider of the requested slots is selected, shadowed, disabled or unknown")
 	cmd.Flags().BoolVar(&markdown, "markdown", false, "List the providers of the requested slots as Markdown pointers")
 	cmd.Flags().BoolVar(&inline, "inline", false, "Print the content of the providers of the requested slots")
+	cmd.Flags().StringArrayVar(&skills, "skill", nil, "Add every slot the skill applies (repeatable)")
+	cmd.Flags().StringArrayVar(&keys, "key", nil, "Request each slot --skill adds as <slot>.<key> (repeatable)")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "Emit declarations, providers and problems of the requested slots, or of all, as JSON")
 	return cmd
+}
+
+func appliedSlots(lib *library.Library, r *renderer, refs []string) ([]string, error) {
+	var found []string
+	for _, ref := range refs {
+		entry, err := lib.Resolve(ref)
+		if err != nil {
+			return nil, err
+		}
+		preload.Substitute(r.body(entry), func(command string) (string, bool) {
+			if m := preload.SlotsCommand.FindStringSubmatch(command); m != nil {
+				for _, slot := range strings.Fields(m[2]) {
+					if !slices.Contains(found, slot) {
+						found = append(found, slot)
+					}
+				}
+			}
+			return "", false
+		})
+	}
+	return found, nil
+}
+
+func keyedSlots(applied, keys []string) []string {
+	if len(keys) == 0 {
+		return applied
+	}
+	var out []string
+	for _, slot := range applied {
+		for _, key := range keys {
+			out = append(out, slot+"."+key)
+		}
+	}
+	return out
 }
 
 func resolveSlots(project string, lib *library.Library) (*slots.Resolution, error) {
