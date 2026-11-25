@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-alpha.37](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.36...v0.1.0-alpha.37) (2026-11-25)
+
+
+### Features
+
+* **slots:** resolve the slots of skills with --skill and --key ([#97](https://github.com/srnnkls/henia/issues/97)) ([d982be8](https://github.com/srnnkls/henia/commit/d982be88a77ffe9a20c37bd2ee8b613d432abd3e))
+
 ## [0.1.0-alpha.36](https://github.com/srnnkls/henia/compare/v0.1.0-alpha.35...v0.1.0-alpha.36) (2026-11-17)
 
 
